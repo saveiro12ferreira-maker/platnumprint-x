@@ -36,6 +36,8 @@ const Acesso = (() => {
 
   function show(on) {
     document.body.classList.toggle('travado', on);
+    // Esconde direto pelo código também, para valer mesmo se o navegador ainda estiver com o visual antigo em cache.
+    document.querySelectorAll('body > header, body > main').forEach(e => { e.style.display = on ? 'none' : ''; });
     $('#login').hidden = !on;
     const u = logged();
     $('#quem').textContent = u ? u : '';
