@@ -4,110 +4,201 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>platnumprint-x</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400&family=Orbitron:wght@600;700&display=swap">
 <link rel="stylesheet" href="css/app.css">
 <script src="https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
 <body>
 <header class="top">
-  <div class="brand">platnumprint-x <span class="muted">· motor de grade</span></div>
-  <nav class="steps" id="steps">
-    <a href="#s1">1 Arquivo</a><a href="#s2">2 Peças</a><a href="#s3">3 Estampa</a><a href="#s4">4 Grade</a><a href="#s5">5 Gerar</a>
-  </nav>
+  <div class="top-in">
+    <div class="brand"><b>PLATNUMPRINT-X</b><span>motor de grade</span></div>
+    <nav class="tabs" id="tabs" role="tablist">
+      <button class="tab on" data-tab="arquivo" role="tab"><span class="n">1</span>Arquivo</button>
+      <button class="tab locked" data-tab="pecas" role="tab"><span class="n">2</span>Peças</button>
+      <button class="tab locked" data-tab="estampa" role="tab"><span class="n">3</span>Estampa</button>
+      <button class="tab locked" data-tab="grade" role="tab"><span class="n">4</span>Grade</button>
+      <button class="tab locked" data-tab="gerar" role="tab"><span class="n">5</span>Gerar</button>
+      <button class="tab locked" data-tab="provador" role="tab"><span class="n">6</span>Provador <span class="new">novo</span></button>
+    </nav>
+  </div>
 </header>
 
 <main>
-  <section id="s1" class="card">
-    <h2>1. Arquivo base</h2>
-    <p class="hint">Envie o encaixe de um tamanho que já está pronto, exportado do Corel em TIFF (ou PNG), com o contorno das peças e o fundo do papel branco ou transparente.</p>
-    <div class="row">
-      <label class="file">Escolher arquivo<input type="file" id="fBase" accept=".tif,.tiff,.png,.jpg,.jpeg"></label>
-      <span id="fBaseName" class="muted">Nenhum arquivo escolhido</span>
-    </div>
-    <div class="row">
-      <label>Tamanhos da grade <input id="sizes" value="P, M, G, GG, XG" style="width:200px"></label>
-      <label>Este arquivo é o tamanho <select id="baseSize"></select></label>
-      <label>Resolução <input id="dpi" type="number" min="50" max="1200" step="1" value="200" style="width:80px"> dpi</label>
-    </div>
-    <div class="row">
-      <button id="btnLer" class="primary" disabled>Ler arquivo</button>
-      <span id="status1" class="muted"></span>
-    </div>
-    <ol id="log1" class="log"></ol>
-  </section>
-
-  <section id="s2" class="card locked">
-    <h2>2. Peças reconhecidas</h2>
-    <p class="hint">Confira se cada peça foi reconhecida certo. Se o tipo ou a regra estiverem errados, corrija aqui antes de gerar.</p>
-    <div id="check" class="check"></div>
-    <div id="preview" class="preview"></div>
-    <div class="scroll"><table id="tblPecas"></table></div>
-    <details class="hint"><summary>O que cada regra faz</summary>
-      <ul>
-        <li><b>Segue a barra</b>: as flores ficam presas na borda da peça (barra da saia) e acompanham a curva nova. A altura das flores não muda; a largura acompanha a peça.</li>
-        <li><b>Estampa fixa</b>: a estampa não muda de tamanho. Ela fica no mesmo lado da peça e o fundo cresce ou diminui em volta.</li>
-        <li><b>Estica com a peça</b>: a estampa aumenta ou diminui junto com a peça.</li>
-        <li><b>Só fundo</b>: a peça recebe só a cor de fundo.</li>
-      </ul>
-    </details>
-  </section>
-
-  <section id="s3" class="card locked">
-    <h2>3. Estampa</h2>
-    <div class="row">
-      <label>Cor de fundo <input type="color" id="bgColor"></label>
-      <span id="bgHex" class="mono"></span>
-      <label>Contorno de corte <input id="thick" type="number" min="0" max="10" step="0.05" placeholder="original" style="width:90px"> mm</label>
-      <span class="muted">Vazio = mantém o contorno original de cada peça.</span>
-    </div>
-    <p class="hint" id="info3"></p>
-  </section>
-
-  <section id="s4" class="card locked">
-    <h2>4. Grade</h2>
-    <div class="row seg" role="radiogroup">
-      <label><input type="radio" name="mode" value="auto" checked> Automática</label>
-      <label><input type="radio" name="mode" value="pdf"> Grade da modelista (PDF)</label>
-    </div>
-    <div id="autoBox">
-      <p class="hint">O motor parte do tamanho lido e soma um percentual a cada tamanho para cima (e tira a cada tamanho para baixo).</p>
-      <div class="scroll"><table id="tblAuto"></table></div>
-    </div>
-    <div id="pdfBox" hidden>
-      <p class="hint">Envie o PDF com a tabela de medidas da modelista. O motor lê a tabela, você confere os números e escolhe qual medida comanda cada peça.</p>
+  <section class="panel on" data-panel="arquivo">
+    <div class="card">
+      <h2>Arquivo base</h2>
+      <p class="hint">Envie o encaixe de um tamanho que já está pronto, exportado do Corel em TIFF (ou PNG), com o contorno das peças e o fundo do papel branco ou transparente.</p>
       <div class="row">
-        <label class="file">Escolher PDF<input type="file" id="fPdf" accept=".pdf"></label>
-        <span id="pdfName" class="muted">Nenhum PDF escolhido</span>
+        <label class="file">Escolher arquivo<input type="file" id="fBase" accept=".tif,.tiff,.png,.jpg,.jpeg"></label>
+        <span id="fBaseName" class="chip empty">Nenhum arquivo escolhido</span>
       </div>
-      <div id="pdfInfo"></div>
-      <div class="scroll"><table id="tblPdf"></table></div>
-      <div class="scroll"><table id="tblMap"></table></div>
+      <div class="row">
+        <label>Tamanhos da grade <input id="sizes" value="P, M, G, GG, XG" style="width:200px"></label>
+        <label>Este arquivo é o tamanho <select id="baseSize"></select></label>
+        <label>Resolução <input id="dpi" type="number" min="50" max="1200" step="1" value="200" style="width:80px"> dpi</label>
+      </div>
+      <div class="row">
+        <label><input type="checkbox" id="autoGerar" checked> Gerar a grade completa logo depois de ler</label>
+      </div>
+      <div class="row">
+        <button id="btnLer" class="primary" disabled>Ler arquivo</button>
+        <span id="status1" class="muted"></span>
+      </div>
+      <ol id="log1" class="log"></ol>
     </div>
-    <h3>Medidas de cada peça por tamanho (cm)</h3>
-    <p class="hint">Largura × altura do contorno de cada peça. Pode ajustar qualquer número na mão; o ajuste fica marcado e vale por cima da grade.</p>
-    <div class="scroll"><table id="tblGrade"></table></div>
-    <div class="row"><button id="btnLimpar">Limpar ajustes manuais</button></div>
   </section>
 
-  <section id="s5" class="card locked">
-    <h2>5. Gerar e exportar</h2>
-    <div class="row">
-      <label>Largura do rolo <input id="roll" type="number" min="20" max="500" step="1" value="150" style="width:80px"> cm</label>
-      <label>Margem <input id="margin" type="number" min="0" max="100" step="1" value="5" style="width:70px"> mm</label>
-      <label>Espaço entre peças <input id="gap" type="number" min="0" max="100" step="1" value="5" style="width:70px"> mm</label>
-      <label>Sangria <input id="bleed" type="number" min="0" max="20" step="0.5" value="0" style="width:70px"> mm</label>
+  <section class="panel" data-panel="pecas">
+    <div class="card">
+      <h2>Peças reconhecidas</h2>
+      <p class="hint">Confira se cada peça foi reconhecida certo. Se o tipo ou a regra estiverem errados, corrija aqui antes de gerar.</p>
+      <div id="check" class="check"></div>
+      <div id="preview" class="preview"></div>
+      <div class="scroll"><table id="tblPecas"></table></div>
+      <details class="hint"><summary>O que cada regra faz</summary>
+        <ul>
+          <li><b>Segue a barra</b>: as flores ficam presas na borda da peça (barra da saia) e acompanham a curva nova. A altura das flores não muda; a largura acompanha a peça.</li>
+          <li><b>Estampa fixa</b>: a estampa não muda de tamanho. Ela fica no mesmo lado da peça e o fundo cresce ou diminui em volta.</li>
+          <li><b>Estica com a peça</b>: a estampa aumenta ou diminui junto com a peça.</li>
+          <li><b>Só fundo</b>: a peça recebe só a cor de fundo.</li>
+        </ul>
+      </details>
     </div>
-    <div class="row">
-      <label><input type="checkbox" id="incBase" checked> Refazer também o tamanho base</label>
-      <label><input type="checkbox" id="allowRot" checked> Permitir girar peças 180° no encaixe</label>
-      <label><input type="checkbox" id="splitLong"> Dividir em partes as peças só de fundo (viés) mais longas que o rolo</label>
+  </section>
+
+  <section class="panel" data-panel="estampa">
+    <div class="card">
+      <h2>Estampa</h2>
+      <div class="row">
+        <label>Cor de fundo <input type="color" id="bgColor"></label>
+        <span id="bgHex" class="mono"></span>
+        <label>Contorno de corte <input id="thick" type="number" min="0" max="10" step="0.05" placeholder="original" style="width:90px"> mm</label>
+        <span class="muted">Vazio = mantém o contorno original de cada peça.</span>
+      </div>
+      <p class="hint" id="info3"></p>
     </div>
-    <div class="row">
-      <button id="btnGerar" class="primary">Gerar grade</button>
-      <button id="btnTodos" disabled>Baixar todos os TIFF</button>
-      <span id="status5" class="muted"></span>
+  </section>
+
+  <section class="panel" data-panel="grade">
+    <div class="card">
+      <h2>Grade</h2>
+      <div class="row">
+        <div class="seg" role="radiogroup">
+          <label><input type="radio" name="mode" value="auto" checked> Automática</label>
+          <label><input type="radio" name="mode" value="pdf"> Grade da modelista (PDF)</label>
+        </div>
+      </div>
+      <div id="autoBox">
+        <p class="hint">O motor parte do tamanho lido e soma um percentual a cada tamanho para cima (e tira a cada tamanho para baixo).</p>
+        <div class="scroll"><table id="tblAuto"></table></div>
+      </div>
+      <div id="pdfBox" hidden>
+        <p class="hint">Envie o PDF com a tabela de medidas da modelista. O motor lê a tabela, você confere os números e escolhe qual medida comanda cada peça.</p>
+        <div class="row">
+          <label class="file">Escolher PDF<input type="file" id="fPdf" accept=".pdf"></label>
+          <span id="pdfName" class="chip empty">Nenhum PDF escolhido</span>
+        </div>
+        <div id="pdfInfo"></div>
+        <div class="scroll"><table id="tblPdf"></table></div>
+        <div class="scroll"><table id="tblMap"></table></div>
+      </div>
+      <h3>Medidas de cada peça por tamanho (cm)</h3>
+      <p class="hint">Largura × altura do contorno de cada peça. Pode ajustar qualquer número na mão; o ajuste fica marcado e vale por cima da grade.</p>
+      <div class="scroll"><table id="tblGrade"></table></div>
+      <div class="row"><button id="btnLimpar">Limpar ajustes manuais</button></div>
     </div>
-    <div id="results" class="results"></div>
+  </section>
+
+  <section class="panel" data-panel="gerar">
+    <div class="card">
+      <h2>Gerar e exportar</h2>
+      <div class="row">
+        <label>Largura do rolo <input id="roll" type="number" min="20" max="500" step="1" value="150" style="width:80px"> cm</label>
+        <label>Margem <input id="margin" type="number" min="0" max="100" step="1" value="5" style="width:70px"> mm</label>
+        <label>Espaço entre peças <input id="gap" type="number" min="0" max="100" step="1" value="5" style="width:70px"> mm</label>
+        <label>Sangria <input id="bleed" type="number" min="0" max="20" step="0.5" value="0" style="width:70px"> mm</label>
+      </div>
+      <div class="row">
+        <label><input type="checkbox" id="incBase" checked> Refazer também o tamanho base</label>
+        <label><input type="checkbox" id="allowRot" checked> Permitir girar peças 180° no encaixe</label>
+        <label><input type="checkbox" id="splitLong"> Dividir em partes as peças só de fundo (viés) mais longas que o rolo</label>
+      </div>
+      <div class="row">
+        <button id="btnGerar" class="primary">Gerar grade</button>
+        <button id="btnTodos" disabled>Baixar todos os TIFF</button>
+        <span id="status5" class="muted"></span>
+      </div>
+      <div id="results" class="results"></div>
+    </div>
+  </section>
+
+  <section class="panel" data-panel="provador">
+    <div class="grid2">
+      <div>
+        <div class="card">
+          <h2>Modelo</h2>
+          <p class="hint">A modelo que vai vestir a roupa. A padrão já vem carregada; você pode enviar outras.</p>
+          <div class="models" id="pvModels"></div>
+          <div class="row"><label class="file">Enviar outra modelo<input type="file" id="pvModelFile" accept=".png,.jpg,.jpeg,.webp"></label></div>
+        </div>
+        <div class="card">
+          <h2>Manequim</h2>
+          <p class="hint">Fotos do manequim vestido com a roupa impressa a partir do arquivo lido na aba Arquivo. As três são obrigatórias: <b>frente, lateral e costas</b>.</p>
+          <div class="slots" id="pvSlots"></div>
+          <p class="muted" id="pvNeed"></p>
+          <div class="row">
+            <button id="pvLer" class="primary" disabled>Ler manequim</button>
+            <span id="pvStatus" class="muted"></span>
+          </div>
+          <div class="scroll"><table class="found" id="pvFound"></table></div>
+        </div>
+        <div class="card">
+          <h2>Estampas do arquivo</h2>
+          <p class="hint">Clique numa peça para colocá-la na vista atual da modelo.</p>
+          <div class="pieces" id="pvPieces"></div>
+        </div>
+      </div>
+      <div>
+        <div class="card">
+          <div class="row" style="justify-content:space-between;margin-top:0">
+            <h2 style="margin:0">Modelo vestida</h2>
+            <div class="views" id="pvViews"></div>
+          </div>
+          <div class="row" style="margin-bottom:0">
+            <div class="seg" role="radiogroup">
+              <label><input type="radio" name="pvMode" value="el" checked> Mover elemento</label>
+              <label><input type="radio" name="pvMode" value="peca"> Mover peça inteira</label>
+            </div>
+            <span class="muted" id="pvSel">Nada selecionado.</span>
+          </div>
+          <div class="toolbar">
+            <button data-act="centro">Centralizar no corpo</button>
+            <button data-act="centroH">Centralizar na horizontal</button>
+            <button data-act="espelhar">Espelhar</button>
+            <button data-act="frente">Trazer para frente</button>
+            <button data-act="tras">Enviar para trás</button>
+            <button data-act="remover" class="x">Remover estampa</button>
+          </div>
+          <div class="row" style="margin-top:0">
+            <label>Opacidade <input type="range" id="pvOp" min="20" max="100" step="1" value="100"></label>
+            <label><input type="checkbox" id="pvMult"> Mesclar com o tecido</label>
+            <label><input type="checkbox" id="pvShowMq"> Ver manequim</label>
+          </div>
+          <div class="stage" id="pvStage"><canvas id="pvCanvas"></canvas></div>
+          <p class="hint">Clique num elemento da estampa (uma flor, um motivo) para selecionar só ele. Arraste para mover, puxe o quadradinho do canto para aumentar ou diminuir e a bolinha de cima para girar. As setas do teclado movem 1 ponto (com Shift, 10). Para mexer na peça toda de uma vez, escolha "Mover peça inteira".</p>
+          <div class="row">
+            <button id="pvCopy">Copiar posições da frente para a lateral</button>
+            <button id="pvExport" class="primary">Baixar prévia (PNG)</button>
+          </div>
+          <div class="notice ai">
+            <b>Foto realista com IA.</b> A prévia acima coloca a estampa do arquivo na posição certa, por cima da roupa da modelo. Para gerar a foto final com caimento e dobras de tecido de verdade, o motor precisa ser ligado a um serviço de IA de imagem (conta e chave do serviço). Essa etapa ainda não está ligada.
+          </div>
+        </div>
+      </div>
+    </div>
   </section>
 </main>
 
@@ -117,5 +208,6 @@
 <script src="js/grade.js"></script>
 <script src="js/pdfgrade.js"></script>
 <script src="js/app.js"></script>
+<script src="js/provador.js"></script>
 </body>
 </html>

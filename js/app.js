@@ -38,8 +38,53 @@ const App = (() => {
 
   function setFile(file) {
     st.file = file;
-    $('#fBaseName').textContent = file ? `${file.name} · ${U.fmt(file.size / 1048576)} MB` : 'Nenhum arquivo escolhido';
+    const chip = $('#fBaseName');
+    if (file) {
+      chip.className = 'chip';
+      chip.replaceChildren(`${file.name} · ${U.fmt(file.size / 1048576)} MB`, el('button', { class: 'x', type: 'button', title: 'Remover arquivo', text: '✕ Remover', onclick: removeFile }));
+    } else {
+      chip.className = 'chip empty';
+      chip.textContent = 'Nenhum arquivo escolhido';
+    }
     $('#btnLer').disabled = !file;
+  }
+
+  // Tira o arquivo base e tudo que foi lido dele; as abas voltam a ficar travadas.
+  function removeFile() {
+    if (busy) return;
+    $('#fBase').value = '';
+    setFile(null);
+    Object.assign(st, { an: null, pieces: [], groups: [], targets: {}, overrides: {}, results: {} });
+    $('#log1').replaceChildren();
+    $('#status1').textContent = '';
+    ['#preview', '#tblPecas', '#tblAuto', '#tblGrade', '#results'].forEach(s => $(s).replaceChildren());
+    $('#check').className = 'check'; $('#check').textContent = '';
+    $('#status5').textContent = '';
+    lockTabs(true);
+    showTab('arquivo');
+    window.dispatchEvent(new CustomEvent('pp:limpo'));
+  }
+
+  function removePdf() {
+    $('#fPdf').value = '';
+    st.pdf = null; st.mapping = {};
+    $('#pdfName').className = 'chip empty'; $('#pdfName').textContent = 'Nenhum PDF escolhido';
+    ['#pdfInfo', '#tblPdf', '#tblMap'].forEach(s => $(s).replaceChildren());
+    if (st.an) { computeTargets(); renderGrade(); }
+  }
+
+  // ---------- Abas ----------
+  function showTab(name) {
+    const tab = document.querySelector(`.tab[data-tab="${name}"]`);
+    if (!tab || tab.classList.contains('locked')) return;
+    document.querySelectorAll('.tab').forEach(t => { t.classList.toggle('on', t === tab); t.setAttribute('aria-selected', t === tab); });
+    document.querySelectorAll('.panel').forEach(p => p.classList.toggle('on', p.dataset.panel === name));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.dispatchEvent(new CustomEvent('pp:aba', { detail: name }));
+  }
+
+  function lockTabs(lock) {
+    document.querySelectorAll('.tab').forEach(t => { if (t.dataset.tab !== 'arquivo') t.classList.toggle('locked', lock); });
   }
 
   function logStep(txt) {
@@ -69,9 +114,16 @@ const App = (() => {
       $('#status1').textContent = `Leitura completa em ${U.secs(U.now() - t0)}`;
       regroup();
       renderAll();
-      document.querySelectorAll('.card.locked').forEach(c => c.classList.remove('locked'));
+      lockTabs(false);
       runCheck();
-      $('#s2').scrollIntoView({ behavior: 'smooth' });
+      window.dispatchEvent(new CustomEvent('pp:lido'));
+      if ($('#autoGerar').checked) {
+        // Um clique só: lê e já monta todos os tamanhos da grade.
+        showTab('gerar');
+        busy = false;
+        await gerar();
+        $('#status1').textContent = `Leitura e grade completa em ${U.secs(U.now() - t0)}. ${$('#check').textContent}`;
+      } else showTab('pecas');
     } catch (e) {
       console.error(e);
       $('#log1').append(el('li', { class: 'err', text: 'Não consegui ler o arquivo: ' + e.message }));
@@ -187,7 +239,8 @@ const App = (() => {
   }
 
   async function onPdf(file) {
-    $('#pdfName').textContent = file.name;
+    $('#pdfName').className = 'chip';
+    $('#pdfName').replaceChildren(file.name, el('button', { class: 'x', type: 'button', title: 'Remover PDF', text: '✕ Remover', onclick: removePdf }));
     $('#pdfInfo').replaceChildren(el('p', { class: 'muted', text: 'Lendo o PDF…' }));
     try {
       const rows = await PdfGrade.readRows(file);
@@ -344,6 +397,10 @@ const App = (() => {
   // ---------- Início ----------
   function init() {
     readSizes();
+    document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
+      if (t.classList.contains('locked')) { $('#status1').textContent = 'Leia um arquivo primeiro para liberar as outras abas.'; showTab('arquivo'); return; }
+      showTab(t.dataset.tab);
+    }));
     $('#fBase').addEventListener('change', e => setFile(e.target.files[0] || null));
     $('#sizes').addEventListener('change', () => { readSizes(); if (st.an) { computeTargets(); renderGrade(); } });
     $('#baseSize').addEventListener('change', () => { st.base = $('#baseSize').value; if (st.an) { computeTargets(); renderGrade(); runCheck(); } });
@@ -370,5 +427,5 @@ const App = (() => {
   }
 
   init();
-  return { st, onPdf, gerar, ler };
+  return { st, onPdf, gerar, ler, showTab, removeFile, removePdf, el };
 })();
