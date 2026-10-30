@@ -115,16 +115,19 @@ const Provador = (() => {
     const grade = App.st.an && App.st.pieces.length;
     $('#pvUseGrade').disabled = !grade || (src.fromGrade && src.pieces === App.st.pieces);
     $('#pvUseGrade').title = grade ? '' : 'Leia um arquivo na aba Arquivo para usar este atalho.';
+    if (!src.pieces.length) renderPieces();
   }
 
   function resetFromSource() {
     if (src.pieces.length) buildArt(); else { pv.art = {}; pv.base = {}; pv.only = {}; }
-    pv.found = []; pv.layers = { frente: [], costas: [], lado: [] }; pv.sel = null;
+    pv.found = []; pv.auto = []; pv.layers = { frente: [], costas: [], lado: [] }; pv.sel = null;
     renderSource(); renderPieces(); renderSlots(); renderFound(); draw();
   }
 
   async function loadSource(file) {
     const inp = $('#pvSrcInput'); inp.disabled = true;
+    $('#pvPieces').replaceChildren(el('p', { class: 'muted', text: 'Lendo o arquivo da estampa…' }));
+    $('#pvSrcFile').scrollIntoView({ behavior: 'smooth', block: 'center' });
     const t0 = U.now();
     try {
       $('#pvSrcStatus').textContent = 'Abrindo o arquivo…'; await U.tick();
@@ -157,7 +160,14 @@ const Provador = (() => {
 
   function renderPieces() {
     const box = $('#pvPieces');
-    if (!src.pieces.length) { box.replaceChildren(el('p', { class: 'muted', text: 'Escolha o arquivo da estampa no alto desta aba para ver as peças aqui.' })); return; }
+    if (!src.pieces.length) {
+      // Sem arquivo: o próprio quadro já oferece escolher, além do quadro "Arquivo da estampa" no alto.
+      const pick = el('label', { class: 'file' }, 'Escolher arquivo da estampa',
+        el('input', { type: 'file', accept: '.tif,.tiff,.png,.jpg,.jpeg', onchange: e => { if (e.target.files[0]) loadSource(e.target.files[0]); } }));
+      const grade = el('button', { type: 'button', text: 'Usar o arquivo da grade', disabled: !(App.st.an && App.st.pieces.length), onclick: useGrade });
+      box.replaceChildren(el('div', { class: 'pieces-empty' }, el('p', { class: 'muted', text: 'Nenhum arquivo de estampa escolhido ainda.' }), pick, grade));
+      return;
+    }
     box.replaceChildren(...src.pieces.map(p => {
       const th = document.createElement('canvas'), a = pv.art[p.n], f = Math.min(1, 160 / a.width);
       th.width = Math.round(a.width * f); th.height = Math.round(a.height * f);
@@ -206,9 +216,12 @@ const Provador = (() => {
     }));
     // As três fotos são obrigatórias: com frente, lateral e costas o motor enxerga a estampa inteira.
     const falta = MQ_VIEWS.filter(v => !pv.mq[v]);
-    $('#pvLer').disabled = falta.length > 0 || !src.pieces.length;
-    $('#pvNeed').textContent = !src.pieces.length ? 'Escolha o arquivo da estampa primeiro.'
-      : falta.length ? `Falta a foto: ${falta.map(v => VIEWS[v].toLowerCase()).join(', ')}.` : 'As três fotos estão prontas.';
+    // Sem arquivo próprio no Provador, a leitura usa sozinha o arquivo da grade (se houver).
+    const temArquivo = src.pieces.length || (App.st.an && App.st.pieces.length);
+    $('#pvLer').disabled = falta.length > 0 || !temArquivo;
+    $('#pvNeed').textContent = !temArquivo ? 'Escolha o arquivo da estampa primeiro.'
+      : falta.length ? `Falta a foto: ${falta.map(v => VIEWS[v].toLowerCase()).join(', ')}.`
+      : src.pieces.length ? 'As três fotos estão prontas.' : 'As três fotos estão prontas. Será usado o arquivo da grade.';
   }
 
   // Foto reduzida em canais de cor, para comparar com as estampas.
@@ -333,6 +346,8 @@ const Provador = (() => {
   };
 
   async function readMannequin() {
+    if (!src.pieces.length && App.st.an && App.st.pieces.length) useGrade();
+    if (!src.pieces.length) { $('#pvStatus').textContent = 'Escolha o arquivo da estampa primeiro.'; return; }
     const btn = $('#pvLer'); btn.disabled = true;
     // Frente e costas primeiro; a lateral usa a escala medida nelas (as três fotos são tiradas da mesma distância).
     const t0 = U.now(), cands = [], views = ['frente', 'costas', 'lado'].filter(v => pv.mq[v]), measured = [];
@@ -399,8 +414,12 @@ const Provador = (() => {
       pv.found = found;
       const miss = withArt.filter(p => !usedFC.has(p.n) && !usedL.has(p.n)).map(p => p.n);
       const porVista = views.map(v => `${VIEWS[v].toLowerCase()} ${found.filter(f => f.view === v).length}`).join(', ');
-      $('#pvStatus').textContent = `Leitura em ${U.secs(U.now() - t0)}. Peças achadas por foto: ${porVista}.` + (miss.length ? ` Não achei em nenhuma foto: ${miss.join(', ')}. Coloque essas à mão.` : ' Todas as peças com estampa foram achadas.');
       placeFromMannequin();
+      pv.auto = placeMissing(miss);
+      $('#pvStatus').textContent = `Leitura em ${U.secs(U.now() - t0)}. Peças achadas por foto: ${porVista}.`
+        + (pv.auto.length === 1 ? ` A peça ${pv.auto[0].n} não apareceu no manequim e foi colocada automaticamente na modelo: confira a posição dela.`
+          : pv.auto.length ? ` As peças ${pv.auto.map(a => a.n).join(', ')} não apareceram no manequim e foram colocadas automaticamente na modelo: confira a posição delas.`
+          : ' Todas as peças com estampa foram achadas.');
       renderFound();
       if (found.length) setView(found.some(f => f.view === pv.view) ? pv.view : found[0].view);
     } catch (e) {
@@ -410,13 +429,18 @@ const Provador = (() => {
   }
 
   function renderFound() {
-    if (!pv.found.length) { $('#pvFound').replaceChildren(); return; }
+    if (!pv.found.length && !(pv.auto || []).length) { $('#pvFound').replaceChildren(); return; }
     const head = el('tr', {}, ['Peça', 'Vista', 'Lugar no manequim', 'Confiança'].map(t => el('th', { text: t })));
     const rows = pv.found.map(f => el('tr', {},
       el('td', {}, el('span', { class: 'tag', text: f.n }), ' ' + pieceName(f.n)),
       el('td', { text: VIEWS[f.view] + (f.rot ? ' (girada)' : '') }),
       el('td', { text: `${Math.round((f.box.x + f.box.w / 2) * 100)}% × ${Math.round((f.box.y + f.box.h / 2) * 100)}%` }),
       el('td', { text: `${Math.round(f.score * 100)}%` })));
+    for (const a of pv.auto || []) rows.push(el('tr', {},
+      el('td', {}, el('span', { class: 'tag', text: a.n }), ' ' + pieceName(a.n)),
+      el('td', { text: VIEWS[a.view] }),
+      el('td', { class: 'muted', text: 'não aparece no manequim' }),
+      el('td', {}, el('span', { class: 'src manual', text: 'colocada automaticamente' }))));
     $('#pvFound').replaceChildren(el('thead', {}, head), el('tbody', {}, rows));
   }
 
@@ -442,6 +466,38 @@ const Provador = (() => {
       }
     }
     pv.sel = null;
+  }
+
+  // Peças do arquivo que não apareceram em nenhuma foto do manequim também vão para a modelo.
+  // Se a peça igual a ela (mesmo grupo: o outro círculo, o outro peito) foi achada na frente, esta vai
+  // nas costas, no lado espelhado (e vice-versa). Sem par, vai no centro da frente. O tamanho segue
+  // a escala das peças já colocadas, pelas medidas reais em cm.
+  function placeMissing(missNs) {
+    const auto = [];
+    const kOf = v => {
+      const b = pv.layers[v].find(L => L.kind === 'base');
+      if (!b) return null;
+      const p = src.pieces.find(q => q.n === b.n);
+      return p ? b.w / U.cm(p.w, src.dpi) : null;
+    };
+    for (const n of missNs) {
+      const p = src.pieces.find(q => q.n === n), g = src.groups.find(gr => gr.items.includes(p));
+      const twin = g && pv.found.find(f => f.view !== 'lado' && g.items.some(q => q.n === f.n));
+      const view = twin ? (twin.view === 'frente' ? 'costas' : 'frente') : 'frente';
+      const model = cur().views[view];
+      if (!model) continue;
+      const W = model.naturalWidth, H = model.naturalHeight, A = AREA[view];
+      const k = kOf(view) || kOf(twin ? twin.view : 'frente') || kOf('costas') || kOf('frente');
+      const w = k ? U.cm(p.w, src.dpi) * k : A.w * W * 0.5;
+      let x = (A.x + A.w / 2) * W, y = (A.y + A.h / 2) * H;
+      if (twin) {
+        const tb = pv.layers[twin.view].find(L => L.kind === 'base' && L.n === (twin.srcN || twin.n));
+        if (tb) { x = W - tb.x; y = tb.y; }
+      }
+      placePiece(view, n, twin ? !!twin.rot : false, x, y, w);
+      auto.push({ n, view });
+    }
+    return auto;
   }
 
   // ---------- Editor ----------
@@ -636,8 +692,8 @@ const Provador = (() => {
     window.addEventListener('resize', draw);
     window.addEventListener('pp:aba', e => { if (e.detail === 'provador') draw(); });
     // A grade não mexe no Provador: só libera ou trava o atalho "Usar o arquivo da grade".
-    window.addEventListener('pp:lido', renderSource);
-    window.addEventListener('pp:limpo', renderSource);
+    window.addEventListener('pp:lido', () => { renderSource(); renderSlots(); });
+    window.addEventListener('pp:limpo', () => { renderSource(); renderSlots(); });
     $('#pvSrcInput').addEventListener('change', e => { if (e.target.files[0]) loadSource(e.target.files[0]); });
     $('#pvUseGrade').addEventListener('click', useGrade);
     renderSource();
