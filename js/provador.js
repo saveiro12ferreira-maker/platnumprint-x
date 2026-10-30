@@ -15,6 +15,8 @@ const Provador = (() => {
     disp: 1, drag: null, mode: 'el', gid: 0,
   };
   const MQ_VIEWS = ['frente', 'lado', 'costas'];
+  // Arquivo de estampa do Provador: separado da grade. Pode ser qualquer arquivo, ou o mesmo da grade.
+  let src = { name: '', pieces: [], groups: [], bg: [255, 255, 255], dpi: 200, fromGrade: false };
   const cur = () => pv.models.find(m => m.id === pv.model);
   const layers = () => pv.layers[pv.view];
 
@@ -26,7 +28,7 @@ const Provador = (() => {
   // só o fundo, e só a estampa (fundo transparente), que depois é separada em elementos.
   function buildArt() {
     pv.art = {}; pv.base = {}; pv.only = {};
-    for (const p of st.pieces) {
+    for (const p of src.pieces) {
       const f = Math.min(1, 900 / Math.max(p.w, p.h)), w = Math.max(1, Math.round(p.w * f)), h = Math.max(1, Math.round(p.h * f));
       const mk = () => { const c = document.createElement('canvas'); c.width = w; c.height = h; const ctx = c.getContext('2d'); return { c, ctx, id: ctx.createImageData(w, h) }; };
       const full = mk(), base = mk(), only = mk();
@@ -35,9 +37,9 @@ const Provador = (() => {
         for (let x = 0; x < w; x++) {
           const sx = Math.min(p.w - 1, Math.floor((x + .5) / f)), i = sy * p.w + sx, q = (y * w + x) * 4;
           if (!p.mask[i]) continue;
-          const isArt = !!p.art[i], c = isArt ? [p.rgba[i * 4], p.rgba[i * 4 + 1], p.rgba[i * 4 + 2]] : st.bg;
+          const isArt = !!p.art[i], c = isArt ? [p.rgba[i * 4], p.rgba[i * 4 + 1], p.rgba[i * 4 + 2]] : src.bg;
           full.id.data.set([c[0], c[1], c[2], 255], q);
-          base.id.data.set([st.bg[0], st.bg[1], st.bg[2], 255], q);
+          base.id.data.set([src.bg[0], src.bg[1], src.bg[2], 255], q);
           if (isArt) only.id.data.set([c[0], c[1], c[2], 255], q);
         }
       }
@@ -101,12 +103,62 @@ const Provador = (() => {
     return r;
   }
 
-  const pieceName = n => { const p = st.pieces.find(q => q.n === n); const g = st.groups.find(g => g.items.includes(p)); return g ? st.groupName(g) : 'Peça ' + n; };
+  const pieceName = n => { const p = src.pieces.find(q => q.n === n); const g = src.groups.find(g => g.items.includes(p)); return g ? st.groupName(g) : 'Peça ' + n; };
+
+  // ---------- Arquivo da estampa ----------
+  function renderSource() {
+    const chip = $('#pvSrcName');
+    if (src.pieces.length) {
+      chip.className = 'chip';
+      chip.replaceChildren(`${src.name} · ${src.pieces.length} peças`, el('button', { class: 'x', type: 'button', title: 'Remover arquivo', text: '✕ Remover', onclick: removeSource }));
+    } else { chip.className = 'chip empty'; chip.textContent = 'Nenhum arquivo escolhido'; }
+    const grade = App.st.an && App.st.pieces.length;
+    $('#pvUseGrade').disabled = !grade || (src.fromGrade && src.pieces === App.st.pieces);
+    $('#pvUseGrade').title = grade ? '' : 'Leia um arquivo na aba Arquivo para usar este atalho.';
+  }
+
+  function resetFromSource() {
+    if (src.pieces.length) buildArt(); else { pv.art = {}; pv.base = {}; pv.only = {}; }
+    pv.found = []; pv.layers = { frente: [], costas: [], lado: [] }; pv.sel = null;
+    renderSource(); renderPieces(); renderSlots(); renderFound(); draw();
+  }
+
+  async function loadSource(file) {
+    const inp = $('#pvSrcInput'); inp.disabled = true;
+    const t0 = U.now();
+    try {
+      $('#pvSrcStatus').textContent = 'Abrindo o arquivo…'; await U.tick();
+      const img = await Tiff.readImage(file);
+      const dpi = img.dpi || 200;
+      const an = await Analyze.run(img, dpi, txt => { $('#pvSrcStatus').textContent = txt; });
+      img.data = null;
+      src = { name: file.name, pieces: an.pieces, groups: Analyze.group(an.pieces), bg: an.bg, dpi, fromGrade: false };
+      $('#pvSrcStatus').textContent = `${an.pieces.length} peças lidas em ${U.secs(U.now() - t0)}` + (img.dpi ? '' : ' (sem resolução no arquivo: usei 200 dpi)') + '.';
+      resetFromSource();
+    } catch (e) {
+      console.error(e);
+      $('#pvSrcStatus').textContent = 'Não consegui ler o arquivo: ' + e.message;
+    } finally { inp.disabled = false; inp.value = ''; }
+  }
+
+  function useGrade() {
+    const s = App.st;
+    if (!s.an) return;
+    src = { name: (s.file ? s.file.name : 'arquivo da grade') + ' (da grade)', pieces: s.pieces, groups: s.groups, bg: s.bg, dpi: s.dpi, fromGrade: true };
+    $('#pvSrcStatus').textContent = 'Usando o mesmo arquivo lido na aba Arquivo.';
+    resetFromSource();
+  }
+
+  function removeSource() {
+    src = { name: '', pieces: [], groups: [], bg: [255, 255, 255], dpi: 200, fromGrade: false };
+    $('#pvSrcStatus').textContent = '';
+    resetFromSource();
+  }
 
   function renderPieces() {
     const box = $('#pvPieces');
-    if (!st.pieces.length) { box.replaceChildren(el('p', { class: 'muted', text: 'Leia um arquivo na aba Arquivo para ver as estampas aqui.' })); return; }
-    box.replaceChildren(...st.pieces.map(p => {
+    if (!src.pieces.length) { box.replaceChildren(el('p', { class: 'muted', text: 'Escolha o arquivo da estampa no alto desta aba para ver as peças aqui.' })); return; }
+    box.replaceChildren(...src.pieces.map(p => {
       const th = document.createElement('canvas'), a = pv.art[p.n], f = Math.min(1, 160 / a.width);
       th.width = Math.round(a.width * f); th.height = Math.round(a.height * f);
       th.getContext('2d').drawImage(a, 0, 0, th.width, th.height);
@@ -154,8 +206,8 @@ const Provador = (() => {
     }));
     // As três fotos são obrigatórias: com frente, lateral e costas o motor enxerga a estampa inteira.
     const falta = MQ_VIEWS.filter(v => !pv.mq[v]);
-    $('#pvLer').disabled = falta.length > 0 || !st.pieces.length;
-    $('#pvNeed').textContent = !st.pieces.length ? 'Leia um arquivo na aba Arquivo primeiro.'
+    $('#pvLer').disabled = falta.length > 0 || !src.pieces.length;
+    $('#pvNeed').textContent = !src.pieces.length ? 'Escolha o arquivo da estampa primeiro.'
       : falta.length ? `Falta a foto: ${falta.map(v => VIEWS[v].toLowerCase()).join(', ')}.` : 'As três fotos estão prontas.';
   }
 
@@ -284,7 +336,7 @@ const Provador = (() => {
     const btn = $('#pvLer'); btn.disabled = true;
     // Frente e costas primeiro; a lateral usa a escala medida nelas (as três fotos são tiradas da mesma distância).
     const t0 = U.now(), cands = [], views = ['frente', 'costas', 'lado'].filter(v => pv.mq[v]), measured = [];
-    const withArt = st.pieces.filter(p => p.artFrac > 0.005);
+    const withArt = src.pieces.filter(p => p.artFrac > 0.005);
     try {
       for (const v of views) {
         // Passada 1: foto pequena, todos os tamanhos, para achar a escala (na lateral, só se ainda não houver medida).
@@ -298,7 +350,7 @@ const Provador = (() => {
           for (const p of withArt) {
             $('#pvStatus').textContent = `Lendo o manequim (${VIEWS[v].toLowerCase()}): medindo a escala com a peça ${p.n}…`;
             await U.tick();
-            results.push({ p, arr: scan(ph1, pv.art[p.n], U.cm(p.w, st.dpi), coarseWidths(ph1), 2) });
+            results.push({ p, arr: scan(ph1, pv.art[p.n], U.cm(p.w, src.dpi), coarseWidths(ph1), 2) });
           }
           scales = pickScales(results).slice(0, 2);
         }
@@ -312,7 +364,7 @@ const Provador = (() => {
           for (const p of withArt) {
             $('#pvStatus').textContent = `Lendo o manequim (${VIEWS[v].toLowerCase()}): localizando a peça ${p.n}…`;
             await U.tick();
-            const cmW = U.cm(p.w, st.dpi), arr = scan(ph2, pv.art[p.n], cmW, range.map(f => s2 * cmW * f), 2, 3);
+            const cmW = U.cm(p.w, src.dpi), arr = scan(ph2, pv.art[p.n], cmW, range.map(f => s2 * cmW * f), 2, 3);
             arr.sort((a, b) => b.score - a.score);
             const seen = [];
             for (const e of arr) {
@@ -333,7 +385,7 @@ const Provador = (() => {
       // Peças iguais (mesmo grupo da grade, como os dois círculos) dividem os lugares encontrados entre si.
       // A lateral mostra de novo partes da frente e das costas, então ela é distribuída à parte.
       cands.sort((a, b) => b.score - a.score);
-      const groupOf = n => st.groups.find(g => g.items.some(p => p.n === n));
+      const groupOf = n => src.groups.find(g => g.items.some(p => p.n === n));
       const found = [], usedFC = new Set(), usedL = new Set();
       for (const c of cands) {
         const used = c.view === 'lado' ? usedL : usedFC;
@@ -583,8 +635,12 @@ const Provador = (() => {
     });
     window.addEventListener('resize', draw);
     window.addEventListener('pp:aba', e => { if (e.detail === 'provador') draw(); });
-    window.addEventListener('pp:lido', () => { buildArt(); pv.found = []; pv.layers = { frente: [], costas: [], lado: [] }; pv.sel = null; renderPieces(); renderSlots(); renderFound(); draw(); });
-    window.addEventListener('pp:limpo', () => { pv.art = {}; pv.base = {}; pv.only = {}; pv.found = []; pv.layers = { frente: [], costas: [], lado: [] }; pv.sel = null; renderPieces(); renderSlots(); renderFound(); draw(); });
+    // A grade não mexe no Provador: só libera ou trava o atalho "Usar o arquivo da grade".
+    window.addEventListener('pp:lido', renderSource);
+    window.addEventListener('pp:limpo', renderSource);
+    $('#pvSrcInput').addEventListener('change', e => { if (e.target.files[0]) loadSource(e.target.files[0]); });
+    $('#pvUseGrade').addEventListener('click', useGrade);
+    renderSource();
   }
 
   init();

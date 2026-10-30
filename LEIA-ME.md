@@ -19,6 +19,9 @@ Dê dois cliques em `index.html`. Abre no Edge ou no Chrome. Não precisa instal
 
 ## Provador (aba 6)
 
+O Provador é independente da grade: fica liberado sempre e trabalha com o arquivo que você escolher nele.
+
+0. **Arquivo da estampa**: escolha qualquer encaixe em TIFF ou PNG, com o contorno das peças. Se for o mesmo arquivo da grade, use "Usar o arquivo da grade". O ✕ remove o arquivo do Provador sem mexer na grade.
 1. **Modelo**: a modelo padrão já vem carregada nas três poses (frente, costas e lado). Dá para enviar outras modelos e remover as que você enviou.
 2. **Manequim**: as três fotos são obrigatórias — frente, lateral e costas —, com o manequim vestido com a roupa impressa a partir do arquivo lido na aba Arquivo. Tire as três da mesma distância. O ✕ remove a foto.
 3. **Ler manequim**: o motor procura cada peça do arquivo nas fotos. Primeiro mede a escala da foto pelas medidas reais das peças (frente e costas; a lateral usa a mesma escala), depois acha o lugar exato de cada peça e mostra a confiança. O que ele não achar, avisa para você colocar à mão.

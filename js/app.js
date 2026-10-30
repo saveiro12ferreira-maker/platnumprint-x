@@ -84,7 +84,8 @@ const App = (() => {
   }
 
   function lockTabs(lock) {
-    document.querySelectorAll('.tab').forEach(t => { if (t.dataset.tab !== 'arquivo') t.classList.toggle('locked', lock); });
+    // O Provador é independente da grade e fica sempre liberado.
+    document.querySelectorAll('.tab').forEach(t => { if (t.dataset.tab !== 'arquivo' && t.dataset.tab !== 'provador') t.classList.toggle('locked', lock); });
   }
 
   function logStep(txt) {

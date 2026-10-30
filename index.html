@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400&family=Orbitron:wght@600;700&display=swap">
-<link rel="stylesheet" href="css/app.css?v=3">
+<link rel="stylesheet" href="css/app.css?v=4">
 <script src="https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
@@ -31,7 +31,7 @@
       <button class="tab locked" data-tab="estampa" role="tab"><span class="n">3</span>Estampa</button>
       <button class="tab locked" data-tab="grade" role="tab"><span class="n">4</span>Grade</button>
       <button class="tab locked" data-tab="gerar" role="tab"><span class="n">5</span>Gerar</button>
-      <button class="tab locked" data-tab="provador" role="tab"><span class="n">6</span>Provador <span class="new">novo</span></button>
+      <button class="tab" data-tab="provador" role="tab"><span class="n">6</span>Provador <span class="new">novo</span></button>
     </nav>
   </div>
 </header>
@@ -149,6 +149,16 @@
     <div class="grid2">
       <div>
         <div class="card">
+          <h2>Arquivo da estampa</h2>
+          <p class="hint">O Provador trabalha com o arquivo que você escolher aqui, independente da grade. Pode ser qualquer encaixe em TIFF ou PNG, com o contorno das peças.</p>
+          <div class="row">
+            <label class="file" id="pvSrcFile">Escolher arquivo<input type="file" id="pvSrcInput" accept=".tif,.tiff,.png,.jpg,.jpeg"></label>
+            <button type="button" id="pvUseGrade">Usar o arquivo da grade</button>
+          </div>
+          <span id="pvSrcName" class="chip empty">Nenhum arquivo escolhido</span>
+          <p class="muted" id="pvSrcStatus"></p>
+        </div>
+        <div class="card">
           <h2>Modelo</h2>
           <p class="hint">A modelo que vai vestir a roupa. A padrão já vem carregada; você pode enviar outras.</p>
           <div class="models" id="pvModels"></div>
@@ -156,7 +166,7 @@
         </div>
         <div class="card">
           <h2>Manequim</h2>
-          <p class="hint">Fotos do manequim vestido com a roupa impressa a partir do arquivo lido na aba Arquivo. As três são obrigatórias: <b>frente, lateral e costas</b>.</p>
+          <p class="hint">Fotos do manequim vestido com a roupa impressa a partir do arquivo da estampa acima. As três são obrigatórias: <b>frente, lateral e costas</b>.</p>
           <div class="slots" id="pvSlots"></div>
           <p class="muted" id="pvNeed"></p>
           <div class="row">
@@ -212,13 +222,13 @@
   </section>
 </main>
 
-<script src="js/acesso.js?v=3"></script>
-<script src="js/util.js?v=3"></script>
-<script src="js/tiff.js?v=3"></script>
-<script src="js/analyze.js?v=3"></script>
-<script src="js/grade.js?v=3"></script>
-<script src="js/pdfgrade.js?v=3"></script>
-<script src="js/app.js?v=3"></script>
-<script src="js/provador.js?v=3"></script>
+<script src="js/acesso.js?v=4"></script>
+<script src="js/util.js?v=4"></script>
+<script src="js/tiff.js?v=4"></script>
+<script src="js/analyze.js?v=4"></script>
+<script src="js/grade.js?v=4"></script>
+<script src="js/pdfgrade.js?v=4"></script>
+<script src="js/app.js?v=4"></script>
+<script src="js/provador.js?v=4"></script>
 </body>
 </html>
