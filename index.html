@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>platnumprint-x</title>
+<link rel="stylesheet" href="css/app.css">
+<script src="https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+</head>
+<body>
+<header class="top">
+  <div class="brand">platnumprint-x <span class="muted">· motor de grade</span></div>
+  <nav class="steps" id="steps">
+    <a href="#s1">1 Arquivo</a><a href="#s2">2 Peças</a><a href="#s3">3 Estampa</a><a href="#s4">4 Grade</a><a href="#s5">5 Gerar</a>
+  </nav>
+</header>
+
+<main>
+  <section id="s1" class="card">
+    <h2>1. Arquivo base</h2>
+    <p class="hint">Envie o encaixe de um tamanho que já está pronto, exportado do Corel em TIFF (ou PNG), com o contorno das peças e o fundo do papel branco ou transparente.</p>
+    <div class="row">
+      <label class="file">Escolher arquivo<input type="file" id="fBase" accept=".tif,.tiff,.png,.jpg,.jpeg"></label>
+      <span id="fBaseName" class="muted">Nenhum arquivo escolhido</span>
+    </div>
+    <div class="row">
+      <label>Tamanhos da grade <input id="sizes" value="P, M, G, GG, XG" style="width:200px"></label>
+      <label>Este arquivo é o tamanho <select id="baseSize"></select></label>
+      <label>Resolução <input id="dpi" type="number" min="50" max="1200" step="1" value="200" style="width:80px"> dpi</label>
+    </div>
+    <div class="row">
+      <button id="btnLer" class="primary" disabled>Ler arquivo</button>
+      <span id="status1" class="muted"></span>
+    </div>
+    <ol id="log1" class="log"></ol>
+  </section>
+
+  <section id="s2" class="card locked">
+    <h2>2. Peças reconhecidas</h2>
+    <p class="hint">Confira se cada peça foi reconhecida certo. Se o tipo ou a regra estiverem errados, corrija aqui antes de gerar.</p>
+    <div id="check" class="check"></div>
+    <div id="preview" class="preview"></div>
+    <div class="scroll"><table id="tblPecas"></table></div>
+    <details class="hint"><summary>O que cada regra faz</summary>
+      <ul>
+        <li><b>Segue a barra</b>: as flores ficam presas na borda da peça (barra da saia) e acompanham a curva nova. A altura das flores não muda; a largura acompanha a peça.</li>
+        <li><b>Estampa fixa</b>: a estampa não muda de tamanho. Ela fica no mesmo lado da peça e o fundo cresce ou diminui em volta.</li>
+        <li><b>Estica com a peça</b>: a estampa aumenta ou diminui junto com a peça.</li>
+        <li><b>Só fundo</b>: a peça recebe só a cor de fundo.</li>
+      </ul>
+    </details>
+  </section>
+
+  <section id="s3" class="card locked">
+    <h2>3. Estampa</h2>
+    <div class="row">
+      <label>Cor de fundo <input type="color" id="bgColor"></label>
+      <span id="bgHex" class="mono"></span>
+      <label>Contorno de corte <input id="thick" type="number" min="0" max="10" step="0.05" placeholder="original" style="width:90px"> mm</label>
+      <span class="muted">Vazio = mantém o contorno original de cada peça.</span>
+    </div>
+    <p class="hint" id="info3"></p>
+  </section>
+
+  <section id="s4" class="card locked">
+    <h2>4. Grade</h2>
+    <div class="row seg" role="radiogroup">
+      <label><input type="radio" name="mode" value="auto" checked> Automática</label>
+      <label><input type="radio" name="mode" value="pdf"> Grade da modelista (PDF)</label>
+    </div>
+    <div id="autoBox">
+      <p class="hint">O motor parte do tamanho lido e soma um percentual a cada tamanho para cima (e tira a cada tamanho para baixo).</p>
+      <div class="scroll"><table id="tblAuto"></table></div>
+    </div>
+    <div id="pdfBox" hidden>
+      <p class="hint">Envie o PDF com a tabela de medidas da modelista. O motor lê a tabela, você confere os números e escolhe qual medida comanda cada peça.</p>
+      <div class="row">
+        <label class="file">Escolher PDF<input type="file" id="fPdf" accept=".pdf"></label>
+        <span id="pdfName" class="muted">Nenhum PDF escolhido</span>
+      </div>
+      <div id="pdfInfo"></div>
+      <div class="scroll"><table id="tblPdf"></table></div>
+      <div class="scroll"><table id="tblMap"></table></div>
+    </div>
+    <h3>Medidas de cada peça por tamanho (cm)</h3>
+    <p class="hint">Largura × altura do contorno de cada peça. Pode ajustar qualquer número na mão; o ajuste fica marcado e vale por cima da grade.</p>
+    <div class="scroll"><table id="tblGrade"></table></div>
+    <div class="row"><button id="btnLimpar">Limpar ajustes manuais</button></div>
+  </section>
+
+  <section id="s5" class="card locked">
+    <h2>5. Gerar e exportar</h2>
+    <div class="row">
+      <label>Largura do rolo <input id="roll" type="number" min="20" max="500" step="1" value="150" style="width:80px"> cm</label>
+      <label>Margem <input id="margin" type="number" min="0" max="100" step="1" value="5" style="width:70px"> mm</label>
+      <label>Espaço entre peças <input id="gap" type="number" min="0" max="100" step="1" value="5" style="width:70px"> mm</label>
+      <label>Sangria <input id="bleed" type="number" min="0" max="20" step="0.5" value="0" style="width:70px"> mm</label>
+    </div>
+    <div class="row">
+      <label><input type="checkbox" id="incBase" checked> Refazer também o tamanho base</label>
+      <label><input type="checkbox" id="allowRot" checked> Permitir girar peças 180° no encaixe</label>
+      <label><input type="checkbox" id="splitLong"> Dividir em partes as peças só de fundo (viés) mais longas que o rolo</label>
+    </div>
+    <div class="row">
+      <button id="btnGerar" class="primary">Gerar grade</button>
+      <button id="btnTodos" disabled>Baixar todos os TIFF</button>
+      <span id="status5" class="muted"></span>
+    </div>
+    <div id="results" class="results"></div>
+  </section>
+</main>
+
+<script src="js/util.js"></script>
+<script src="js/tiff.js"></script>
+<script src="js/analyze.js"></script>
+<script src="js/grade.js"></script>
+<script src="js/pdfgrade.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
