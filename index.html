@@ -11,10 +11,20 @@
 <script src="https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
-<body>
+<body class="travado">
+<div id="login" class="login">
+  <form id="lgForm" class="login-box" autocomplete="off">
+    <div class="brand"><b>PLATNUMPRINT-X</b><span>motor de grade</span></div>
+    <p class="muted">Acesso restrito à equipe Platinum Print.</p>
+    <label class="lg-field">Usuário<input id="lgUser" type="text" autocomplete="username" spellcheck="false"></label>
+    <label class="lg-field">Senha<input id="lgPass" type="password" autocomplete="current-password"></label>
+    <p id="lgErr" class="lg-err" role="alert"></p>
+    <button type="submit" class="primary">Entrar</button>
+  </form>
+</div>
 <header class="top">
   <div class="top-in">
-    <div class="brand"><b>PLATNUMPRINT-X</b><span>motor de grade</span></div>
+    <div class="brand"><b>PLATNUMPRINT-X</b><span>motor de grade</span><span class="user"><span id="quem"></span><button type="button" id="btnSair" class="ghost">Sair</button></span></div>
     <nav class="tabs" id="tabs" role="tablist">
       <button class="tab on" data-tab="arquivo" role="tab"><span class="n">1</span>Arquivo</button>
       <button class="tab locked" data-tab="pecas" role="tab"><span class="n">2</span>Peças</button>
@@ -202,6 +212,7 @@
   </section>
 </main>
 
+<script src="js/acesso.js"></script>
 <script src="js/util.js"></script>
 <script src="js/tiff.js"></script>
 <script src="js/analyze.js"></script>

@@ -42,6 +42,21 @@ body::before {
 .tab.locked:hover { background: none; color: var(--muted); }
 .tab .new { font-size: 10px; padding: 2px 6px; border-radius: 999px; background: rgba(167, 139, 250, .15); color: var(--accent-2); }
 
+/* Entrada da equipe */
+body.travado > header, body.travado > main { display: none; }
+.login { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px; }
+.login[hidden] { display: none; }
+.login-box { width: min(380px, 100%); display: grid; gap: 14px; padding: 30px 28px; border-radius: 16px; border: 1px solid var(--border-2);
+  background: linear-gradient(180deg, var(--surface-2), var(--surface)); box-shadow: 0 0 0 1px rgba(34, 211, 238, .15), 0 20px 60px rgba(0, 0, 0, .6); }
+.login-box .brand { margin: 0; flex-wrap: wrap; }
+.login-box .muted { margin: -6px 0 4px; }
+.lg-field { display: grid; gap: 6px; }
+.lg-field input { width: 100%; padding: 10px 12px; }
+.lg-err { min-height: 18px; margin: -4px 0 0; color: var(--danger); font-size: 13px; }
+.login-box button { justify-content: center; padding: 11px; }
+.brand .user { margin-left: auto; display: inline-flex; align-items: center; gap: 10px; text-transform: none; letter-spacing: 0; }
+.brand .user button { padding: 5px 12px; font-size: 13px; }
+
 /* Conteúdo */
 main { position: relative; max-width: 1240px; margin: 0 auto; padding: 22px 16px 70px; }
 .panel { display: none; animation: entra .25s ease-out; }
@@ -65,7 +80,7 @@ h3 { font-size: 14px; margin: 18px 0 6px; font-weight: 600; color: var(--text); 
 /* Controles */
 label { font-size: 13.5px; display: inline-flex; align-items: center; gap: 8px; color: var(--muted); }
 input, select, button { font: inherit; font-size: 14px; color: var(--text); }
-input[type=number], input:not([type]), input[type=text], select { background: var(--bg-2); border: 1px solid var(--border-2); border-radius: 8px; padding: 6px 10px; outline: none; }
+input[type=number], input:not([type]), input[type=text], input[type=password], select { background: var(--bg-2); border: 1px solid var(--border-2); border-radius: 8px; padding: 6px 10px; outline: none; }
 input:focus, select:focus { border-color: var(--accent); box-shadow: var(--glow); }
 input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 16px; height: 16px; }
 input[type=range] { accent-color: var(--accent); }
