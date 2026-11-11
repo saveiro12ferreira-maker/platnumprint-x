@@ -20,7 +20,7 @@ const App = (() => {
   const st = {
     file: null, sizes: [], base: 'M', dpi: 200, an: null, pieces: [], groups: [],
     bg: [255, 255, 255], thick: 4, outline: [26, 26, 26],
-    mode: 'padrao', mercado: JSON.parse(JSON.stringify(MERCADO)), marcarTamanho: true, labelMm: 4, allowRot: false, splitLong: true, autoPct: JSON.parse(JSON.stringify(PCT)), pdf: null, mapping: {}, overrides: {}, targets: {},
+    mode: 'moldes', mercado: JSON.parse(JSON.stringify(MERCADO)), marcarTamanho: true, labelMm: 4, allowRot: false, splitLong: true, autoPct: JSON.parse(JSON.stringify(PCT)), pdf: null, mapping: {}, overrides: {}, targets: {},
     rollCm: 150, marginMm: 10, gapMm: 10, bleedMm: 0, results: {},
     groupName: g => TYPES[g.type] + (g.letter ? ' ' + g.letter : ''),
   };
@@ -133,6 +133,7 @@ const App = (() => {
       lockTabs(false);
       runCheck();
       if (st.moldes) { casarMoldes(); computeTargets(); renderGrade(); renderMoldes(); }
+      if (moldesPendentes) { const f = moldesPendentes; moldesPendentes = null; await onMoldes(f); }
       sugerirSalva();
       window.dispatchEvent(new CustomEvent('pp:lido'));
       if ($('#autoGerar').checked) {
@@ -164,7 +165,7 @@ const App = (() => {
   }
   function nomesPadrao() {
     for (const p of st.pieces) {
-      if (p.nomeManual) continue;
+      if (p.nomeManual || p.nomePdf) continue;
       p.nome = p.type === 'peito' ? (cupula(p) ? 'MANGA' : decote(p) >= 0.1 ? 'FRENTE' : 'COSTAS') : NOME_TIPO[p.type] || 'PEÇA';
     }
   }
@@ -208,7 +209,7 @@ const App = (() => {
     return a;
   }
   const mmDe = (p, k) => p[k + 'Mm'] > 0 ? p[k + 'Mm'] : (st.labelMm || 4);
-  const pxDe = (p, k) => Math.max(10, Math.round(mmDe(p, k) / 25.4 * st.dpi));
+  const pxDe = (p, k) => Math.max(3, Math.round(mmDe(p, k) / 25.4 * st.dpi));
 
   function separar(p) {
     const px = pxDe(p, 'label'), pos = p.labelPos || Grade.autoPos(p, etqTexto(p), px, p.labelRot || 0);
@@ -269,10 +270,10 @@ const App = (() => {
       const mover = e2 => {
         const dd = (e2.clientX - ev.clientX) + (e2.clientY - ev.clientY);
         if (!mexeu && Math.abs(dd) < 4) return;
-        mexeu = true; p[M] = Math.round(Math.min(40, Math.max(1.5, mm0 * Math.pow(2, dd / 80))) * 10) / 10; pr();
+        mexeu = true; p[M] = Math.round(Math.min(40, Math.max(0.3, mm0 * Math.pow(2, dd / 80))) * 10) / 10; pr();
       };
       tam.addEventListener('pointermove', mover);
-      tam.addEventListener('pointerup', () => { tam.removeEventListener('pointermove', mover); if (!mexeu) p[M] = Math.min(40, mm0 + 0.5); marcou(); }, { once: true });
+      tam.addEventListener('pointerup', () => { tam.removeEventListener('pointermove', mover); if (!mexeu) p[M] = Math.round(Math.min(40, mm0 + (mm0 < 2 ? 0.1 : 0.5)) * 10) / 10; marcou(); }, { once: true });
     });
     // separar / juntar número e nome
     const sep = p.separado
@@ -284,7 +285,7 @@ const App = (() => {
     }
     d.addEventListener('wheel', ev => {
       ev.preventDefault();
-      if (ev.ctrlKey || ev.metaKey) p[M] = Math.round(Math.min(40, Math.max(1.5, mmDe(p, k) + (ev.deltaY > 0 ? -0.5 : 0.5))) * 10) / 10;
+      if (ev.ctrlKey || ev.metaKey) { const v = mmDe(p, k), pa = v <= 2 ? 0.1 : 0.5; p[M] = Math.round(Math.min(40, Math.max(0.3, v + (ev.deltaY > 0 ? -pa : pa))) * 10) / 10; }
       else p[R] = (p[R] || 0) + (ev.deltaY > 0 ? 5 : -5);
       marcou();
     }, { passive: false });
@@ -327,7 +328,7 @@ const App = (() => {
         ' ', el('button', { type: 'button', class: 'mini', title: 'Volta o nome para o lugar automático e reto', text: '↺', onclick: () => { ['labelPos', 'labelRot', 'labelMm'].forEach(c => delete p[c]); juntar(p); renderPieces(); desenharEtiquetas(); agendar(); } }),
         ' ', el('label', { title: 'Giro do nome em graus (0 = reto, 90 = em pé, 180 = de cabeça para baixo)' }, '⟳ ', el('input', { type: 'number', step: '5', value: Math.round(p.labelRot || 0), style: 'width:58px',
           onchange: e => { p.labelRot = U.num(e.target.value) || 0; desenharEtiquetas(); agendar(); } }), '°'),
-        ' ', el('label', { title: 'Tamanho da letra do nome desta peça (vazio = o padrão do Gerar)' }, 'letra ', el('input', { type: 'number', step: '0.5', min: '1.5', max: '40', value: p.labelMm || '', placeholder: String(st.labelMm || 4), style: 'width:54px',
+        ' ', el('label', { title: 'Tamanho da letra do nome desta peça (vazio = o padrão do Gerar)' }, 'letra ', el('input', { type: 'number', step: '0.1', min: '0.3', max: '40', value: p.labelMm || '', placeholder: String(st.labelMm || 4), style: 'width:54px',
           onchange: e => { const v = U.num(e.target.value); if (v > 0) p.labelMm = v; else delete p.labelMm; desenharEtiquetas(); agendar(); } }), ' mm'),
         ' ', el('label', { title: 'Número do tamanho e nome separados, cada um no seu lugar' }, el('input', { type: 'checkbox', checked: !!p.separado, onchange: e => { if (e.target.checked) separar(p); else juntar(p); renderPieces(); desenharEtiquetas(); agendar(); } }), ' separar nº e nome')),
       el('td', { text: `${U.fmt(U.cm(p.w, st.dpi))} × ${U.fmt(U.cm(p.h, st.dpi))}` }),
@@ -409,6 +410,45 @@ const App = (() => {
     const p = m.tams[size].pecas[c.j];
     return c.girada ? { w: p.h, h: p.w } : { w: p.w, h: p.h };
   }
+  // Contorno exato de cada molde da modelista (por tamanho e por peça do arquivo), no dpi do arquivo.
+  // Usado na hora de gerar: a peça sai com o formato do PDF daquele tamanho, não com a peça base esticada.
+  async function prepararFormas(sizes, msg) {
+    st.formas = st.formas || {};
+    const m = st.moldes;
+    if (st.mode !== 'moldes' || !m) return;
+    const chave = JSON.stringify([st.dpi, m.casa, Object.keys(m.tams)]);
+    if (st.formasChave !== chave) { st.formas = {}; st.formasChave = chave; }
+    for (const size of sizes) {
+      if (size === st.base || !m.tams[size] || st.formas[size]) continue;
+      const doc = m.tams[size].pecas.doc; if (!doc) continue;
+      const fs = {};
+      for (const g of st.groups) {
+        const c = m.casa[g.id] && m.casa[g.id][size]; if (!c) continue;
+        if (msg) msg(`Desenhando o molde ${size} da modelista: ${nomeGrupo(g)}…`);
+        await U.tick();
+        // peças do mesmo tamanho no PDF (ex.: frente e costas): cada peça do arquivo fica com o molde de formato mais parecido
+        const pz = m.tams[size].pecas, pc = pz[c.j];
+        const cands = pz.map((q, j) => j).filter(j => {
+          const q = pz[j], ok = (a, b) => Math.abs(a - b) / b < 0.06;
+          return j === c.j || (ok(q.w, pc.w) && ok(q.h, pc.h)) || (ok(q.w, pc.h) && ok(q.h, pc.w));
+        });
+        const raws = {};
+        for (const j of cands) raws[j] = await Moldes.forma(doc, pz[j], st.dpi);
+        const usados = new Set();
+        for (const p of g.items) {
+          let best = null;
+          for (const j of cands) {
+            const f = Moldes.orientar(raws[j], p.mask, p.w, p.h);
+            const sc = f.sc - (usados.has(j) && cands.length >= g.items.length ? 0.02 : 0);
+            if (!best || sc > best.sc) best = { f, sc, j };
+          }
+          usados.add(best.j); fs[p.n] = best.f;
+        }
+      }
+      st.formas[size] = fs;
+    }
+  }
+
   function moldeValue(g, dim, size) {
     const m = st.moldes; if (!m) return null;
     const base = dim === 'w' ? cmW(g) : cmH(g);
@@ -559,9 +599,22 @@ const App = (() => {
     for (const [k, sel] of Object.entries(MODOS)) { const b = $(sel); if (b) b.hidden = k !== modo; }
   }
 
+  const ORDEM_LETRA = ['RN', 'PP', 'P', 'M', 'G', 'GG', 'XG', 'XGG', 'EG', 'EGG', 'G1', 'G2', 'G3', 'G4', 'G5'];
+  const ordemTam = t => /^\d+$/.test(t) ? +t : 1000 + (ORDEM_LETRA.indexOf(t) + 1 || 99);
+  let moldesPendentes = null;
   async function onMoldes(files) {
     const info = $('#moldesInfo');
-    if (!st.an) { info.textContent = 'Leia primeiro o arquivo com a estampa (tamanho base) na aba Arquivo.'; return; }
+    $('#moldesNome').className = 'chip'; $('#moldesNome').textContent = `${files.length} PDF(s): ${files.map(f => Moldes.tamDoNome(f.name) || '?').join(', ')}`;
+    // os tamanhos da grade passam a ser os dos PDFs (mais o tamanho do arquivo da estampa)
+    const tams = files.map(f => Moldes.tamDoNome(f.name)).filter(Boolean);
+    if (tams.length) {
+      const base = $('#baseSize').value || st.base;
+      const todos = [...new Set([...tams, base, ...(st.moldes ? Object.keys(st.moldes.tams) : [])])].filter(Boolean).sort((a, b) => ordemTam(a) - ordemTam(b));
+      $('#sizes').value = todos.join(', '); readSizes();
+      if (todos.includes(base)) { $('#baseSize').value = base; st.base = base; }
+      if (st.an) { computeTargets(); renderGrade(); renderMercado(); renderQtd(); }
+    }
+    if (!st.an) { moldesPendentes = files; info.textContent = 'PDFs guardados: são lidos assim que você clicar em "Ler arquivo".'; $('#status1').textContent = `${files.length} PDF(s) da modelista prontos — escolha o tamanho do arquivo da estampa e clique em "Ler arquivo".`; return; }
     st.moldes = st.moldes || { tams: {}, manual: {} };
     const semTam = [];
     for (const f of files) {
@@ -589,6 +642,7 @@ const App = (() => {
     }
     conferirDpi();
     if (estranhas.length) info.textContent += ` ⚠ Confira: ${estranhas.join(', ')} ficou com tamanho fora do esperado em relação ao ${st.base}. O arquivo da estampa e os PDFs são do mesmo modelo? Se uma peça caiu no molde errado, troque na lista abaixo.`;
+    nomesDosPdfs(info);
   }
 
   // Com o PDF do tamanho base: a peça do arquivo da estampa tem que medir o mesmo que o molde dela.
@@ -618,19 +672,52 @@ const App = (() => {
     $('#moldesInfo').textContent = `dpi corrigido para ${novo}. Agora o ${st.base} do arquivo bate com o molde da modelista.`;
   }
 
+  // Lê o nome escrito em cada molde do PDF (ex.: "FRENTE 2X - 6 - 6" → FRENTE) e escreve na peça da estampa.
+  async function nomesDosPdfs(info) {
+    const m = st.moldes; if (!m || !m.ref) return;
+    const ref = m.ref, pz = m.tams[ref].pecas, doc = pz.doc; if (!doc) return;
+    const txt0 = info.textContent;
+    try {
+      for (let j = 0; j < pz.length; j++) {
+        if (pz[j].rotulo !== undefined) continue;
+        info.textContent = txt0 + ` Lendo os nomes escritos nos moldes (${j + 1} de ${pz.length})…`;
+        const f = await Moldes.forma(doc, pz[j], 150, { texto: true });
+        pz[j].rotulo = await Moldes.lerNome(f.texto);
+        pz[j].mini = f;   // forma pequena para saber qual peça do arquivo é qual
+      }
+      // cada peça do arquivo: o molde de formato mais parecido entre os do grupo (frente ≠ costas)
+      let n = 0;
+      for (const g of st.groups) {
+        const c = m.casa[g.id] && m.casa[g.id][ref]; if (!c) continue;
+        const pc = pz[c.j], ok = (a, b) => Math.abs(a - b) / b < 0.06;
+        const cands = pz.map((q, j) => j).filter(j => j === c.j || (ok(pz[j].w, pc.w) && ok(pz[j].h, pc.h)) || (ok(pz[j].w, pc.h) && ok(pz[j].h, pc.w)));
+        for (const p of g.items) {
+          let best = null;
+          for (const j of cands) { const o = Moldes.orientar(pz[j].mini, p.mask, p.w, p.h); if (!best || o.sc > best.sc) best = { j, sc: o.sc }; }
+          const r = pz[best.j].rotulo;
+          if (r && r.nome && !p.nomeManual) { p.nome = r.nome; p.nomePdf = true; n++; }
+        }
+      }
+      renderPieces(); desenharEtiquetas(); renderMoldes(); agendar();
+      info.textContent = txt0 + (n ? ` ✔ Nomes dos moldes copiados para ${n} peça(s).` : ' (Não consegui ler os nomes escritos nos moldes; escreva na peça com dois cliques.)');
+    } catch (e) { console.error(e); info.textContent = txt0 + ' (Não consegui ler os nomes dos moldes: ' + e.message + ')'; }
+  }
+
   function renderMoldes() {
     const box = $('#tblMoldes'); if (!box) return;
     const m = st.moldes;
     if (!m || !m.ref) { box.replaceChildren(); return; }
     const tams = Object.keys(m.tams).sort((a, b) => idxTam(a) - idxTam(b));
     const pr = m.tams[m.ref].pecas;
-    const head = el('tr', {}, el('th', { text: 'Peça do arquivo' }), el('th', { text: `Molde (PDF ${m.ref})` }), tams.map(t => el('th', { text: `PDF ${t}` })));
+    const head = el('tr', {}, el('th', { text: 'Peça do arquivo' }), el('th', { text: `Molde (PDF ${m.ref})` }), el('th', { text: 'Nome no molde' }), tams.map(t => el('th', { text: `PDF ${t}` })));
     const rows = st.groups.map(g => {
       const c = m.casa[g.id][m.ref];
       const sel = el('select', { onchange: e => { m.manual[g.id] = +e.target.value; casarMoldes(); computeTargets(); renderGrade(); renderMoldes(); agendar(); } },
         el('option', { value: -1, selected: !c, text: '— nenhum (segue mercado) —' }),
-        pr.map((p, j) => el('option', { value: j, selected: c && c.j === j, text: `Molde ${j + 1}: ${U.fmt(p.w)} × ${U.fmt(p.h)} cm` })));
+        pr.map((p, j) => el('option', { value: j, selected: c && c.j === j, text: `Molde ${j + 1}: ${p.rotulo ? p.rotulo.nome + ' · ' : ''}${U.fmt(p.w)} × ${U.fmt(p.h)} cm` })));
+      const rot = c && pr[c.j].rotulo;
       return el('tr', {}, el('td', { text: `${nomeGrupo(g)} ×${g.items.length} (${U.fmt(cmW(g))} × ${U.fmt(cmH(g))})` }), el('td', {}, sel),
+        el('td', { text: rot ? rot.texto : (pr[0] && pr[0].rotulo === undefined ? 'lendo…' : '—') }),
         tams.map(t => { const d = dimsMolde(g, t); return el('td', { text: d ? `${U.fmt(d.w)} × ${U.fmt(d.h)}` : '—' }); }));
     });
     box.replaceChildren(el('thead', {}, head), el('tbody', {}, rows));
@@ -832,7 +919,7 @@ const App = (() => {
   }
 
   async function exportSize(size) {
-    readOut();
+    readOut(); await prepararFormas([size]);
     $('#status5').textContent = `Montando o TIFF do ${size}…`; await U.tick();
     const r = await Grade.renderSize(st, size);
     download(Tiff.writeRGB(r.w, r.h, r.rgb, st.dpi), `${fileBase()}_${size}.tif`);
@@ -840,7 +927,7 @@ const App = (() => {
   }
 
   async function exportCorel(size) {
-    readOut();
+    readOut(); await prepararFormas([size]);
     const r = await Corel.svgSize(st, size, t => { $('#status5').textContent = t; });
     download(r, `${fileBase()}_${size}_corel.svg`);
     $('#status5').textContent = `Arquivo do Corel do tamanho ${size} pronto. No CorelDRAW: Arquivo → Importar. Cada pedaço vem separado (estampa, linha de corte e número do tamanho).`;
@@ -866,6 +953,7 @@ const App = (() => {
 
   async function gerar_() {
     readOut();
+    await prepararFormas(st.sizes, t => { $('#status5').textContent = t; });
     const bad = st.groups.flatMap(g => st.sizes.filter(s => !(st.targets[g.id][s].w > 0 && st.targets[g.id][s].h > 0)).map(s => `${st.groupName(g)} ${s}`));
     if (bad.length) { $('#status5').textContent = `Faltam medidas válidas: ${bad.join(', ')}.`; return; }
     if (st.bleedMm * 2 > st.gapMm) { $('#status5').textContent = 'O espaço entre peças precisa ser pelo menos o dobro da sangria, senão as sangrias se encostam.'; return; }
@@ -911,7 +999,7 @@ const App = (() => {
   }
   let encaixeBlob = null;
   async function montarEncaixe() {
-    readOut();
+    readOut(); await prepararFormas(st.sizes, t => { $('#statusEnc').textContent = t; });
     const q = {}; st.sizes.forEach(sz => { q[sz] = qtd[sz] != null ? qtd[sz] : 1; });
     if (!Object.values(q).some(v => v > 0)) { $('#statusEnc').textContent = 'Coloque pelo menos 1 peça em algum tamanho.'; return; }
     $('#btnEncaixe').disabled = true; $('#encRes').replaceChildren();
@@ -968,6 +1056,7 @@ const App = (() => {
     $('#fPdf').addEventListener('change', e => { if (e.target.files[0]) onPdf(e.target.files[0]); });
     $('#fCalib').addEventListener('change', e => { if (e.target.files[0]) onCalib(e.target.files[0]); });
     $('#fMoldes').addEventListener('change', e => { if (e.target.files.length) onMoldes([...e.target.files]); e.target.value = ''; });
+    $('#fMoldes2').addEventListener('change', e => { if (e.target.files.length) onMoldes([...e.target.files]); e.target.value = ''; });
     $('#btnMoldesLimpar').addEventListener('click', () => { st.moldes = null; $('#moldesInfo').textContent = 'PDFs tirados.'; renderMoldes(); computeTargets(); renderGrade(); agendar(); });
     $('#btnSalvarGrade').addEventListener('click', salvarGrade);
     $('#selSalva').addEventListener('change', e => { if (e.target.value) usarSalva(e.target.value); });

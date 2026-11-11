@@ -9,9 +9,15 @@ const Grade = (() => {
     for (let x = 0; x < Wt; x++) mapX[x] = Math.min(W - 1, Math.floor((x + 0.5) / sx));
     for (let y = 0; y < Ht; y++) mapY[y] = Math.min(H - 1, Math.floor((y + 0.5) / sy));
 
-    // Molde novo: o contorno original ampliado ou reduzido para a medida do tamanho.
+    // Molde novo: o contorno exato do PDF da modelista desse tamanho (o.forma) ou, sem PDF, o contorno original ampliado/reduzido.
     const nm = new Uint8Array(Wt * Ht);
-    for (let y = 0; y < Ht; y++) {
+    if (o.forma) {
+      const F = o.forma;
+      for (let y = 0; y < Ht; y++) {
+        const sr = Math.min(F.h - 1, Math.floor((y + 0.5) * F.h / Ht)) * F.w, r = y * Wt;
+        for (let x = 0; x < Wt; x++) nm[r + x] = F.m[sr + Math.min(F.w - 1, Math.floor((x + 0.5) * F.w / Wt))];
+      }
+    } else for (let y = 0; y < Ht; y++) {
       const sr = mapY[y] * W, r = y * Wt;
       for (let x = 0; x < Wt; x++) nm[r + x] = p.mask[sr + mapX[x]];
     }
@@ -138,10 +144,10 @@ const Grade = (() => {
   const folga = (thick, px) => (thick | 0) + Math.max(2, Math.round(px * 0.15));   // perto da borda, sem encostar no contorno
 
   function stampLabel(out, OW, OH, b, nm, Wt, Ht, label, thick) {
-    let px = Math.max(8, label.px | 0), t = null, spot = null;
+    let px = Math.max(3, label.px | 0), t = null, spot = null;
     const textos = label.curto && label.curto !== label.text ? [label.text, label.curto] : [label.text];
     for (const txt of textos) {
-      px = Math.max(8, label.px | 0);
+      px = Math.max(3, label.px | 0);
       for (let k = 0; k < 3 && !spot; k++) {
         t = textMask(txt, px, label.rot || 0);
         spot = label.pos ? spotPerto(nm, Wt, Ht, t.w, t.h, folga(thick, px), label.pos.fx, label.pos.fy) : labelSpot(nm, Wt, Ht, t.w, t.h, folga(thick, px));
@@ -309,11 +315,11 @@ const Grade = (() => {
     const dpi = st.dpi, specs = [], warns = [];
     const rollPx = U.px(st.rollCm, dpi), marginPx = Math.round(st.marginMm / 25.4 * dpi), bleedPx = Math.round(st.bleedMm / 25.4 * dpi);
     const usable = rollPx - 2 * marginPx;
-    const lpx = Math.max(10, Math.round((st.labelMm || 4) / 25.4 * dpi));
+    const lpx = Math.max(3, Math.round((st.labelMm || 4) / 25.4 * dpi));
     // Tamanho como foi digitado (número fica número, letra fica letra) + o nome do pedaço (FRENTE, COSTAS…).
     // p.semEtiqueta: essa peça sai sem nada escrito; p.labelPos: lugar escolhido à mão na aba Peças (vale para todos os tamanhos)
     // Cada peça pode ter letra própria (labelMm), giro (labelRot) e, separado, número e nome cada um com lugar/giro/letra.
-    const pxMm = mm => mm > 0 ? Math.max(10, Math.round(mm / 25.4 * dpi)) : lpx;
+    const pxMm = mm => mm > 0 ? Math.max(3, Math.round(mm / 25.4 * dpi)) : lpx;
     const labelsDe = p => {
       if (st.marcarTamanho === false || p.semEtiqueta) return [];
       const nome = st.marcarNome !== false && p.nome ? p.nome : '';
@@ -323,9 +329,17 @@ const Grade = (() => {
       return a;
     };
     for (const g of st.groups) {
-      const { W, H } = targetsPx(st, g, size);
+      const { W: W0, H: H0 } = targetsPx(st, g, size);
       for (const p of g.items) {
         const o = { bg: st.bg, thick: st.thickOverride != null ? st.thickOverride : p.thick, outline: st.outline, bleed: bleedPx, rule: p.rule, labels: labelsDe(p) }; o.label = o.labels[0] || null;
+        // molde da modelista: a peça sai com o contorno do PDF e a medida real dele (a menos que tenham digitado a medida à mão)
+        const F = st.mode === 'moldes' && st.formas && st.formas[size] && st.formas[size][p.n];
+        let W = W0, H = H0;
+        if (F) {
+          o.forma = F;
+          const t = st.targets[g.id][size];
+          if (t.src.w !== 'manual') W = F.w; if (t.src.h !== 'manual') H = F.h;
+        }
         const name = st.groupName(g);
         // Peça só de fundo mais comprida que o rolo (viés): divide em partes iguais sozinho.
         const tooLong = W + 2 * bleedPx > usable;

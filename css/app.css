@@ -209,3 +209,6 @@ label.file.mini { padding: 2px 8px; font-size: 13px; }
 
 .dpi-aviso { margin: 10px 0; padding: 12px 16px; border: 2px solid #ef4444; background: rgba(239,68,68,.12); border-radius: 10px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .dpi-aviso[hidden] { display: none; }
+
+details.outros { margin: 8px 0 4px; } details.outros summary { cursor: pointer; color: var(--muted, #94a3b8); font-size: 13px; }
+details.outros .seg { margin-top: 8px; }

@@ -76,3 +76,17 @@ A prévia coloca a estampa do arquivo na posição certa por cima da roupa da mo
 
 ## v14 (11/11) — conferência de dpi pelo molde
 - Com os PDFs da modelista incluindo o do tamanho base, o motor compara cada peça do arquivo da estampa com o molde base. Se todas estão maiores ou menores na mesma proporção, aparece o aviso vermelho com o dpi certo e o botão "Corrigir para … dpi" (causa de "a grade saiu toda pequena").
+
+## v15 (11/11) — a grade sai EM CIMA dos PDFs da modelista
+- No modo "Moldes da modelista", cada tamanho que tem PDF sai com o **contorno exato do molde daquele tamanho** (desenhado do PDF no dpi do arquivo, até o meio da linha do molde) e a **medida real** dele — não é mais a peça base esticada. A estampa é recolocada dentro do molde novo pela regra de cada peça (barra, fixa, esticar).
+- O motor acha sozinho se o molde está em pé/deitado, virado ou espelhado no PDF, e separa peças do mesmo tamanho pelo formato (ex.: frente e costas).
+- Tamanhos sem PDF continuam pela regra entre os que têm.
+- Nome e número podem ficar bem pequenos: a partir de 0,3 mm (rodinha/bolinha vão de 0,1 em 0,1 mm abaixo de 2 mm).
+
+## v16 (11/11) — o caminho é: estampa + PDFs
+- Aba Arquivo: **1️⃣ arquivo com a estampa (tamanho base)** e **2️⃣ PDFs da grade da modelista (todos de uma vez)**. Os tamanhos da grade saem dos nomes dos PDFs. Pode escolher os PDFs antes de ler; são lidos junto.
+- Aba Grade: "Moldes da modelista" é o padrão. A opção de percentual saiu da tela. Mercado / tabela / outro tamanho ficaram em "Outros jeitos (só quando não tiver os PDFs)".
+
+## v17 (11/11) — nome do molde vai para a estampa
+- Ao ler os PDFs, o motor lê o nome escrito dentro de cada molde (ex.: "FRENTE E COSTA 2X - 6 - 6", "2 MANGA 2X - 6 - 6") e escreve esse nome na peça certa da estampa (FRENTE E COSTA, 2 MANGA, 1 MANGA, COSTA, FRENTE). Vai junto com o número do tamanho em cada arquivo gerado.
+- A tabela da aba Grade mostra o "Nome no molde". Nome escrito à mão (dois cliques) não é trocado.

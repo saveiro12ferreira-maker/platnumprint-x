@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400&family=Orbitron:wght@600;700&display=swap">
-<link rel="stylesheet" href="css/app.css?v=14">
+<link rel="stylesheet" href="css/app.css?v=17">
 <script src="https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
@@ -43,9 +43,14 @@
       <h2>Arquivo base</h2>
       <p class="hint">Envie o encaixe de um tamanho que já está pronto, exportado do Corel em TIFF (ou PNG), com o contorno das peças e o fundo do papel branco ou transparente.</p>
       <div class="row">
-        <label class="file">Escolher arquivo<input type="file" id="fBase" accept=".tif,.tiff,.png,.jpg,.jpeg"></label>
+        <label class="file">1️⃣ Arquivo com a estampa (tamanho base)<input type="file" id="fBase" accept=".tif,.tiff,.png,.jpg,.jpeg"></label>
         <span id="fBaseName" class="chip empty">Nenhum arquivo escolhido</span>
       </div>
+      <div class="row">
+        <label class="file">2️⃣ PDFs da grade da modelista (todos de uma vez)<input type="file" id="fMoldes2" accept=".pdf" multiple></label>
+        <span id="moldesNome" class="chip empty">Nenhum PDF escolhido</span>
+      </div>
+      <p class="hint">O motor usa a estampa só como base e faz cada tamanho em cima do PDF daquele tamanho (formato e medida da modelista). Os tamanhos da grade saem dos nomes dos PDFs (ex.: Vestido_Antonella_6.pdf = 6).</p>
       <div class="row">
         <label>Tamanhos da grade <input id="sizes" value="P, M, G, GG, XG" style="width:200px"></label>
         <label>Este arquivo é o tamanho <select id="baseSize"></select></label>
@@ -104,19 +109,24 @@
       <h2>Grade</h2>
       <div class="row">
         <div class="seg" role="radiogroup">
-          <label><input type="radio" name="mode" value="padrao" checked> Padrão de mercado (automático)</label>
-          <label><input type="radio" name="mode" value="auto"> Percentual por tamanho</label>
-          <label><input type="radio" name="mode" value="pdf"> Grade da modelista (PDF)</label>
-          <label><input type="radio" name="mode" value="moldes"> Moldes da modelista (PDFs por tamanho)</label>
+          <label><input type="radio" name="mode" value="moldes" checked> ✅ Moldes da modelista (PDFs de cada tamanho)</label>
           <label><input type="radio" name="mode" value="salva"> Grade salva (padrão da casa)</label>
-          <label><input type="radio" name="mode" value="calib"> Pela modelista: outro tamanho pronto (arquivo)</label>
+          <label style="display:none"><input type="radio" name="mode" value="auto"> Percentual por tamanho</label>
         </div>
       </div>
-      <div id="padraoBox">
+      <details class="outros">
+        <summary>Outros jeitos (só quando não tiver os PDFs da modelista)</summary>
+        <div class="seg" role="radiogroup">
+          <label><input type="radio" name="mode" value="padrao"> Padrão de mercado (automático)</label>
+          <label><input type="radio" name="mode" value="pdf"> Tabela de medidas (PDF)</label>
+          <label><input type="radio" name="mode" value="calib"> Outro tamanho pronto (arquivo)</label>
+        </div>
+      </details>
+      <div id="padraoBox" hidden>
         <p class="hint">O motor gradua cada peça sozinho pela tabela de medidas usada no mercado (busto para a largura, estatura para o comprimento), a partir do tamanho do arquivo. Ex.: arquivo no 12 → o 10 e o 14 saem na proporção certa. Pode corrigir qualquer número.</p>
         <div class="scroll"><table id="tblMercado"></table></div>
       </div>
-      <div id="moldesBox" hidden>
+      <div id="moldesBox">
         <p class="hint">Mande os <b>PDFs da modelista</b> deste modelo, <b>um por tamanho</b>, só com o contorno das peças (sem estampa). O tamanho vem do fim do nome do arquivo (ex.: <b>Vestido_Antonella_6.pdf</b> = tamanho 6). O motor mede cada peça em cada PDF e gradua a estampa do arquivo base exatamente pelos moldes dela. Pode mandar todos de uma vez; se mandar também o PDF do tamanho base, fica ainda mais exato.</p>
         <div class="row">
           <label class="file">Escolher PDFs da modelista<input type="file" id="fMoldes" accept=".pdf" multiple></label>
@@ -194,7 +204,7 @@
         <label><input type="checkbox" id="splitLong" checked> Dividir em partes as peças só de fundo (viés) mais longas que o rolo</label>
         <label><input type="checkbox" id="marcarTam" checked> Marcar o tamanho em cada pedaço</label>
         <label><input type="checkbox" id="marcarNome" checked> Junto com o nome do pedaço (FRENTE, COSTAS…)</label>
-        <label>Altura do número <input id="labelMm" type="number" min="2" max="20" step="0.5" value="4" style="width:60px"> mm</label>
+        <label>Altura do número <input id="labelMm" type="number" min="0.3" max="20" step="0.1" value="4" style="width:60px"> mm</label>
       </div>
       <div class="row">
         <button id="btnGerar" class="primary">Gerar grade</button>
@@ -293,15 +303,15 @@
   </section>
 </main>
 
-<script src="js/acesso.js?v=14"></script>
-<script src="js/util.js?v=14"></script>
-<script src="js/tiff.js?v=14"></script>
-<script src="js/analyze.js?v=14"></script>
-<script src="js/corel.js?v=14"></script>
-<script src="js/grade.js?v=14"></script>
-<script src="js/pdfgrade.js?v=14"></script>
-<script src="js/moldes.js?v=14"></script>
-<script src="js/app.js?v=14"></script>
-<script src="js/provador.js?v=14"></script>
+<script src="js/acesso.js?v=17"></script>
+<script src="js/util.js?v=17"></script>
+<script src="js/tiff.js?v=17"></script>
+<script src="js/analyze.js?v=17"></script>
+<script src="js/corel.js?v=17"></script>
+<script src="js/grade.js?v=17"></script>
+<script src="js/pdfgrade.js?v=17"></script>
+<script src="js/moldes.js?v=17"></script>
+<script src="js/app.js?v=17"></script>
+<script src="js/provador.js?v=17"></script>
 </body>
 </html>
