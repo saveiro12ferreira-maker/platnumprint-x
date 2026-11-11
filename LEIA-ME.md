@@ -95,3 +95,8 @@ A prévia coloca a estampa do arquivo na posição certa por cima da roupa da mo
 - **Estampa acompanha a graduação** (regra nova, padrão): cada elemento da estampa (vaso, flor, faixa) muda de lugar proporcional ao molde novo e **diminui/aumenta junto com a graduação, sem deformar**. O que está perto da barra mantém a distância proporcional até ela; faixas largas (linha, barrado) seguem a curva da barra. As regras antigas continuam na aba Peças.
 - **Tabela de graduação da modelista (DX/DY)** na aba Grade: marque os pontos da peça (botão "Pontos nos cantos" ou clique no contorno) e digite DX/DY de cada tamanho, igual ao caderno dela (DX + direita, DY + para cima; cada valor = do tamanho vizinho mais perto do base até ele). O contorno entre os pontos acompanha. Linha vermelha/verde mostra o menor e o maior tamanho na hora. Peça espelhada (short esquerdo/direito) usa a mesma tabela com DX invertido. Fica salva junto com a "Grade salva".
 - **dpi**: o motor agora lê a resolução gravada no PNG/JPG; com o PDF do tamanho base, corrige o dpi sozinho quando todas as peças estão na mesma proporção errada.
+
+## v19 (11/11) — automático da casa (aprende sozinho)
+- Toda peça sem PDF e sem tabela agora gradua pelo **jeito da modelista de vocês**, não pelo mercado: corpo, short/calça, manga, saia e acabamentos (viés, gola, cós), reconhecidos pelo nome da peça.
+- Começa com a tabela do caderno dela (blusa e short) e **aprende sozinho** a cada modelo em que vocês colocam os PDFs (uma vez por modelo). A aba Grade → "🤖 Automático da casa" mostra quanto cada família cresce/diminui por tamanho e de quantos modelos aprendeu.
+- O aprendizado fica no navegador do computador onde foi feito.

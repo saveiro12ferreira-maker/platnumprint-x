@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400&family=Orbitron:wght@600;700&display=swap">
-<link rel="stylesheet" href="css/app.css?v=18">
+<link rel="stylesheet" href="css/app.css?v=19">
 <script src="https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
@@ -110,6 +110,7 @@
       <div class="row">
         <div class="seg" role="radiogroup">
           <label><input type="radio" name="mode" value="moldes" checked> ✅ Moldes da modelista (PDFs de cada tamanho)</label>
+          <label><input type="radio" name="mode" value="casa"> 🤖 Automático da casa</label>
           <label><input type="radio" name="mode" value="tabela"> 📐 Tabela de graduação da modelista (DX/DY)</label>
           <label><input type="radio" name="mode" value="salva"> Grade salva (padrão da casa)</label>
           <label style="display:none"><input type="radio" name="mode" value="auto"> Percentual por tamanho</label>
@@ -137,6 +138,10 @@
         <div id="dpiAviso" class="dpi-aviso" hidden></div>
         <p class="hint">Confira se cada peça do arquivo caiu no molde certo. Se não, escolha o molde na lista.</p>
         <div class="scroll"><table id="tblMoldes"></table></div>
+      </div>
+      <div id="casaBox" hidden>
+        <p class="hint"><b>Automático da casa:</b> gradua <b>todas as peças sozinho</b> pelo jeito da modelista de vocês — não pela tabela do mercado. Começou com a tabela do caderno dela (blusa e short) e <b>aprende sozinho</b> cada vez que vocês colocam os PDFs de um modelo: quanto o corpo, a manga, a saia, o short e os acabamentos crescem ou diminuem em cada tamanho. Cada peça é reconhecida pelo nome (FRENTE, MANGA, SAIA…). Isso também vale nas outras opções: peça sem PDF ou sem tabela usa o automático da casa.</p>
+        <div class="scroll"><table id="tblCasa" class="casa"></table></div>
       </div>
       <div id="tabelaBox" hidden>
         <p class="hint">A <b>tabela de graduação da modelista</b>, igual à do caderno dela: marque os <b>pontos</b> da peça (cantos, ombro, decote, gancho…) e digite quanto cada ponto anda a cada tamanho. <b>DX</b> + = para a direita, − = para a esquerda. <b>DY</b> + = para cima, − = para baixo. Cada coluna é o tamanho; o valor é quanto anda <b>daquele tamanho para o vizinho mais perto do tamanho base</b> (ex.: base 12 → no 10 é do 12 para o 10; no 8 é do 10 para o 8). O resto do contorno acompanha os pontos. Linha <span style="color:#ef4444">vermelha</span> = menor tamanho, <span style="color:#16a34a">verde</span> = maior.</p>
@@ -323,16 +328,16 @@
   </section>
 </main>
 
-<script src="js/acesso.js?v=18"></script>
-<script src="js/util.js?v=18"></script>
-<script src="js/tiff.js?v=18"></script>
-<script src="js/analyze.js?v=18"></script>
-<script src="js/corel.js?v=18"></script>
-<script src="js/grade.js?v=18"></script>
-<script src="js/pdfgrade.js?v=18"></script>
-<script src="js/moldes.js?v=18"></script>
-<script src="js/regras.js?v=18"></script>
-<script src="js/app.js?v=18"></script>
-<script src="js/provador.js?v=18"></script>
+<script src="js/acesso.js?v=19"></script>
+<script src="js/util.js?v=19"></script>
+<script src="js/tiff.js?v=19"></script>
+<script src="js/analyze.js?v=19"></script>
+<script src="js/corel.js?v=19"></script>
+<script src="js/grade.js?v=19"></script>
+<script src="js/pdfgrade.js?v=19"></script>
+<script src="js/moldes.js?v=19"></script>
+<script src="js/regras.js?v=19"></script>
+<script src="js/app.js?v=19"></script>
+<script src="js/provador.js?v=19"></script>
 </body>
 </html>

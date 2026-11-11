@@ -478,6 +478,76 @@ const App = (() => {
     return pts.length > 1 ? Moldes.interpolar(pts, idxTam(size)) : null;
   }
 
+  // ---------- Automático da casa: aprende a graduação da modelista ----------
+  // Fator de cada tamanho em relação ao 12 (largura w, comprimento h), por família de peça.
+  // Começa com o que saiu da tabela do caderno dela (blusa e short, 11/11) e vai aprendendo com cada PDF de modelista lido.
+  const L = (a) => Object.fromEntries(['2', '4', '6', '8', '10', '12', '14', '16'].map((s, i) => [s, a[i]]));
+  const W_CORPO = L([0.820, 0.856, 0.892, 0.928, 0.964, 1, 1.038, 1.076]), H_COMP = L([0.85, 0.875, 0.90, 0.938, 0.963, 1, 1.05, 1.075]);
+  const SEMENTE = {
+    corpo: { w: W_CORPO, h: H_COMP }, short: { w: L([0.932, 0.946, 0.959, 0.973, 0.986, 1, 1.014, 1.027]), h: H_COMP },
+    manga: { w: W_CORPO, h: H_COMP }, saia: { w: W_CORPO, h: H_COMP }, acabamento: { w: W_CORPO, h: L([1, 1, 1, 1, 1, 1, 1, 1]) },
+  };
+  const FAMILIAS = { corpo: 'Corpo (frente, costas, blusa)', short: 'Short / calça', manga: 'Manga', saia: 'Saia', acabamento: 'Viés, gola, cós, punho' };
+  function familiaDe(g) {
+    const n = (nomeGrupo(g) || '').toUpperCase();
+    if (/SHORT|BERMUDA|CAL[CÇ]A|SAIA.?SHORT/.test(n)) return 'short';
+    if (/MANGA/.test(n)) return 'manga';
+    if (/SAIA|BABADO/.test(n)) return 'saia';
+    if (/GOLA|VI[EÉ]S|PUNHO|C[OÓ]S|ALÇA|ALCA|FAIXA/.test(n)) return 'acabamento';
+    if (/FRENTE|COSTA|BLUSA|CORPO|VESTIDO|BODY|PEITO|REGATA|CROPPED/.test(n)) return 'corpo';
+    return g.type === 'saia' ? 'saia' : g.type === 'vies' ? 'acabamento' : 'corpo';
+  }
+  const CASA = 'ppx_casa_aprendida';
+  const aprendido = () => { try { return JSON.parse(localStorage.getItem(CASA) || '{}'); } catch (e) { return {}; } };
+  // F(família, medida, tamanho) em relação ao 12: média do aprendido (com a semente contando como 1 modelo)
+  function fatorCasa(fam, dim, size) {
+    const k = chaveTam(size), sem = SEMENTE[fam] && SEMENTE[fam][dim][k], ap = ((aprendido()[fam] || {})[dim] || {})[k];
+    if (sem == null && !ap) return null;
+    const soma = (sem != null ? sem : 0) + (ap ? ap[0] : 0), n = (sem != null ? 1 : 0) + (ap ? ap[1] : 0);
+    return soma / n;
+  }
+  function casaValue(g, dim, size) {
+    const fam = familiaDe(g), a = fatorCasa(fam, dim, size), b = fatorCasa(fam, dim, st.base);
+    if (a == null || b == null) return null;
+    return (dim === 'w' ? cmW(g) : cmH(g)) * a / b;
+  }
+  // Aprende com os PDFs da modelista: quanto cada peça mudou em cada tamanho (fica guardado neste computador)
+  function aprenderDosMoldes() {
+    const m = st.moldes; if (!m || !m.casa) return 0;
+    const ap = aprendido(); let n = 0;
+    const chave = (m.modelo || '') + '|' + Object.keys(m.tams).sort().join(',');
+    ap._modelos = ap._modelos || [];
+    if (ap._modelos.includes(chave)) return 0;
+    ap._modelos.push(chave);
+    for (const g of st.groups) {
+      const fam = familiaDe(g), db = dimsMolde(g, st.base);
+      const bw = db ? db.w : cmW(g), bh = db ? db.h : cmH(g);
+      for (const t of Object.keys(m.tams)) {
+        if (t === st.base) continue;
+        const d = dimsMolde(g, t); if (!d) continue;
+        for (const [dim, v, b] of [['w', d.w, bw], ['h', d.h, bh]]) {
+          const Fb = fatorCasa(fam, dim, st.base) || 1, F = v / b * Fb, k = chaveTam(t);
+          if (!(F > 0.4 && F < 2)) continue;
+          const f = ((ap[fam] = ap[fam] || {})[dim] = ap[fam][dim] || {});
+          f[k] = f[k] ? [f[k][0] + F, f[k][1] + 1] : [F, 1]; n++;
+        }
+      }
+    }
+    try { localStorage.setItem(CASA, JSON.stringify(ap)); } catch (e) { /* sem armazenamento: só não aprende */ }
+    return n;
+  }
+  function renderCasa() {
+    const box = $('#tblCasa'); if (!box) return;
+    const sz = [...new Set([...Object.keys(W_CORPO), ...st.sizes.map(chaveTam)])].sort((a, b) => ordemTam(a) - ordemTam(b));
+    const ap = aprendido();
+    const head = el('tr', {}, el('th', { text: 'Família' }), el('th', { text: '' }), sz.map(s => el('th', { text: s })), el('th', { text: 'Aprendido de' }));
+    const rows = Object.entries(FAMILIAS).flatMap(([fam, nome]) => ['w', 'h'].map(dim => el('tr', {},
+      el('td', { text: dim === 'w' ? nome : '' }), el('td', { class: 'muted', text: dim === 'w' ? 'largura' : 'comprimento' }),
+      sz.map(s => { const f = fatorCasa(fam, dim, s); return el('td', { text: f == null ? '—' : (f >= 1 ? '+' : '') + U.fmt((f - 1) * 100, 0) + '%' }); }),
+      el('td', { class: 'muted', text: dim === 'w' ? (n => n ? `caderno da modelista + ${n} modelo(s)` : 'caderno da modelista')(Math.max(0, ...Object.values((ap[fam] || {}).w || {}).map(v => v[1]))) : '' }))));
+    box.replaceChildren(el('thead', {}, head), el('tbody', {}, rows));
+  }
+
   // ---------- Tabela de graduação da modelista (pontos + DX/DY) ----------
   st.regras = {};
   const regraDoItem = (g, p) => {
@@ -551,9 +621,12 @@ const App = (() => {
             const m = mercadoValue(g, dim, size);
             if (m != null) { cell[dim] = m; cell.src[dim] = 'mercado'; continue; }
             cell.src[dim] = 'auto';
-          } else if (st.mode === 'moldes' || st.mode === 'salva' || st.mode === 'tabela') {
-            const v = st.mode === 'moldes' ? moldeValue(g, dim, size) : st.mode === 'tabela' ? tabelaValue(g, dim, size) : salvaValue(g, dim, size);
+          } else if (st.mode === 'moldes' || st.mode === 'salva' || st.mode === 'tabela' || st.mode === 'casa') {
+            const v = st.mode === 'moldes' ? moldeValue(g, dim, size) : st.mode === 'tabela' ? tabelaValue(g, dim, size) : st.mode === 'salva' ? salvaValue(g, dim, size) : null;
             if (v != null) { cell[dim] = v; cell.src[dim] = st.mode === 'moldes' ? 'modelista' : st.mode === 'tabela' ? 'tabela' : 'salva'; continue; }
+            // sem PDF / tabela dessa peça: a graduação aprendida da modelista (automático da casa)
+            const c = casaValue(g, dim, size);
+            if (c != null) { cell[dim] = c; cell.src[dim] = 'casa'; continue; }
             const m = mercadoValue(g, dim, size);
             if (m != null) { cell[dim] = m; cell.src[dim] = 'mercado'; continue; }
             cell.src[dim] = 'auto';
@@ -625,7 +698,7 @@ const App = (() => {
     } catch (e) { console.error(e); info.textContent = 'Não consegui ler esse arquivo: ' + e.message; }
   }
 
-  const MODOS = { padrao: '#padraoBox', auto: '#autoBox', pdf: '#pdfBox', calib: '#calibBox', moldes: '#moldesBox', salva: '#salvaBox', tabela: '#tabelaBox' };
+  const MODOS = { padrao: '#padraoBox', auto: '#autoBox', pdf: '#pdfBox', calib: '#calibBox', moldes: '#moldesBox', salva: '#salvaBox', tabela: '#tabelaBox', casa: '#casaBox' };
   function setModo(modo) {
     st.mode = modo;
     const r = document.querySelector(`input[name=mode][value=${modo}]`); if (r) r.checked = true;
@@ -674,6 +747,7 @@ const App = (() => {
       if (menor ? aM > aB * 1.15 : aM < aB * 0.85) estranhas.push(`${nomeGrupo(g)} no ${t}`);
     }
     conferirDpi();
+    st.aprenderPendente = !estranhas.length;
     if (estranhas.length) info.textContent += ` ⚠ Confira: ${estranhas.join(', ')} ficou com tamanho fora do esperado em relação ao ${st.base}. O arquivo da estampa e os PDFs são do mesmo modelo? Se uma peça caiu no molde errado, troque na lista abaixo.`;
     nomesDosPdfs(info);
   }
@@ -820,6 +894,11 @@ const App = (() => {
       renderPieces(); desenharEtiquetas(); renderMoldes(); agendar();
       info.textContent = txt0 + (n ? ` ✔ Nomes dos moldes copiados para ${n} peça(s).` : ' (Não consegui ler os nomes escritos nos moldes; escreva na peça com dois cliques.)');
     } catch (e) { console.error(e); info.textContent = txt0 + ' (Não consegui ler os nomes dos moldes: ' + e.message + ')'; }
+    // depois de saber o nome de cada peça: o automático da casa aprende com este modelo (uma vez por modelo)
+    if (st.aprenderPendente) {
+      st.aprenderPendente = false;
+      if (aprenderDosMoldes()) { info.textContent += ' 🧠 O automático da casa aprendeu a graduação deste modelo.'; renderCasa(); }
+    }
   }
 
   function renderMoldes() {
@@ -1001,7 +1080,7 @@ const App = (() => {
 
   function renderGrade() {
     const head = el('tr', {}, el('th', { text: 'Peça' }), st.sizes.map(s => el('th', { text: s + (s === st.base ? ' (lido)' : '') })));
-    const badge = src => src === 'modelista' ? el('span', { class: 'src manual', text: 'modelista' }) : src === 'salva' ? el('span', { class: 'src manual', text: 'salva' }) : src === 'tabela' ? el('span', { class: 'src manual', text: 'tabela' }) : src === 'mercado' ? el('span', { class: 'src pdf', text: 'mercado' }) : src === 'manual' ? el('span', { class: 'src manual', text: 'manual' }) : src === 'pdf' ? el('span', { class: 'src pdf', text: 'PDF' }) : src === 'falta' ? el('span', { class: 'src falta', text: 'falta no PDF' }) : null;
+    const badge = src => src === 'modelista' ? el('span', { class: 'src manual', text: 'modelista' }) : src === 'salva' ? el('span', { class: 'src manual', text: 'salva' }) : src === 'tabela' ? el('span', { class: 'src manual', text: 'tabela' }) : src === 'casa' ? el('span', { class: 'src pdf', text: 'automático' }) : src === 'mercado' ? el('span', { class: 'src pdf', text: 'mercado' }) : src === 'manual' ? el('span', { class: 'src manual', text: 'manual' }) : src === 'pdf' ? el('span', { class: 'src pdf', text: 'PDF' }) : src === 'falta' ? el('span', { class: 'src falta', text: 'falta no PDF' }) : null;
     const rows = st.groups.map(g => el('tr', {},
       el('td', {}, `${st.groupName(g)} `, el('span', { class: 'muted', text: `×${g.items.length} (nº ${g.items.map(p => p.n).join(', ')})` })),
       st.sizes.map(size => {
@@ -1020,7 +1099,7 @@ const App = (() => {
   }
 
   function renderAll() {
-    renderTabela();
+    renderTabela(); renderCasa();
     drawPreview(); renderPieces(); renderEstampa(); renderAuto(); renderMercado(); renderMap(); renderGrade();
   }
 
