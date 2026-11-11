@@ -61,7 +61,7 @@ const Corel = (() => {
     const { specs, rollPx, marginPx } = Grade.specsForSize(st, size);
     const parts = [];
     for (const sp of specs) {
-      parts.push(Grade.drawSpec({ ...sp, o: { ...sp.o, label: null } }));
+      parts.push(Grade.drawSpec({ ...sp, o: { ...sp.o, label: null, labels: [] } }));
       if (onProg) onProg(`Corel ${size}: pedaço ${parts.length} de ${specs.length}…`);
       await U.tick();
     }
@@ -80,9 +80,9 @@ const Corel = (() => {
       out.push(`<g id="Peca_${r.n}_${idOk(r.name)}_tam_${idOk(size)}"${tf}>`);
       out.push(`<image id="Estampa_${r.n}" x="${x}" y="${y}" width="${r.w}" height="${r.h}" xlink:href="${pngData(r)}"/>`);
       if (d) out.push(`<path id="Corte_${r.n}" d="${d}" fill="none" stroke="#000000" stroke-width="${(dpi * 0.25 / 25.4).toFixed(2)}"/>`);
-      if (specs[i].o.label) {
-        const lp = Grade.labelPos(r, specs[i].o.label, specs[i].o.thick);
-        if (lp) out.push(`<text id="Tamanho_${r.n}" x="${x + lp.x}" y="${y + lp.y}" font-family="Arial" font-weight="bold" font-size="${lp.px}" text-anchor="middle" dominant-baseline="central" fill="#000000">${esc(lp.text)}</text>`);
+      for (const L of (specs[i].o.labels || (specs[i].o.label ? [specs[i].o.label] : []))) {
+        const lp = Grade.labelPos(r, L, specs[i].o.thick);
+        if (lp) out.push(`<text id="${L.id || 'Tamanho'}_${r.n}" x="${x + lp.x}" y="${y + lp.y}" font-family="Arial" font-weight="bold" font-size="${lp.px}" text-anchor="middle" dominant-baseline="central" fill="#000000"${lp.rot ? ` transform="rotate(${lp.rot} ${x + lp.x} ${y + lp.y})"` : ''}>${esc(lp.text)}</text>`);
       }
       out.push('</g>');
       parts[i] = null;

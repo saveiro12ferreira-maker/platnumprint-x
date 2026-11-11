@@ -192,3 +192,17 @@ button.mini { padding: 2px 8px; font-size: 13px; }
 .salvar-grade { margin-top: 18px; padding: 12px 16px; border: 2px solid #3b82f6; border-radius: 10px; background: rgba(59,130,246,.10); }
 .salvar-grade h3 { margin-top: 0; }
 label.file.mini { padding: 2px 8px; font-size: 13px; }
+
+.preview .etq .giro { position: absolute; top: -13px; right: -13px; width: 20px; height: 20px; border-radius: 50%; background: #3b82f6; color: #fff; font-size: 13px; line-height: 20px; text-align: center; cursor: alias; box-shadow: 0 0 0 2px #fff; }
+.preview .etq .giro:hover { background: #2563eb; transform: scale(1.15); }
+
+.preview .etq .tam, .preview .etq .sep { position: absolute; width: 20px; height: 20px; border-radius: 50%; color: #fff; font-size: 12px; line-height: 20px; text-align: center; box-shadow: 0 0 0 2px #fff; }
+.preview .etq .tam { bottom: -13px; right: -13px; background: #a855f7; cursor: nwse-resize; }
+.preview .etq .sep { top: -13px; left: -13px; background: #f97316; cursor: pointer; }
+.preview .etq .tam:hover, .preview .etq .sep:hover { transform: scale(1.15); }
+.preview .etq.num { background: rgba(56, 189, 248, .92); color: #04263a; box-shadow: 0 0 0 1px #0369a1; }
+/* as bolinhas só aparecem com o mouse em cima do nome (não tampam o texto) */
+.preview .etq .giro, .preview .etq .tam, .preview .etq .sep { display: none; width: 17px; height: 17px; line-height: 17px; font-size: 11px; top: auto; bottom: auto; left: auto; right: auto; }
+.preview .etq .giro { top: -11px; right: -11px; } .preview .etq .tam { bottom: -11px; right: -11px; } .preview .etq .sep { top: -11px; left: -11px; }
+.preview .etq:hover, .preview .etq.arrastando { z-index: 7; }
+.preview .etq:hover .giro, .preview .etq:hover .tam, .preview .etq:hover .sep, .preview .etq.arrastando .giro { display: block; }

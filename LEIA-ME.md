@@ -61,3 +61,15 @@ A prévia coloca a estampa do arquivo na posição certa por cima da roupa da mo
 - **Salvar esta grade como padrão**: fim da aba Grade. Guarda as medidas de todas as peças em todos os tamanhos + configurações do Gerar (borda, espaço, rolo, nome na peça…).
 - **Grade salva (padrão da casa)**: escolha o modelo e o motor usa a graduação e as configurações dele. Ao abrir um arquivo parecido com um modelo salvo, aparece a faixa verde "💡 Esse arquivo parece o modelo…" com o botão Usar.
 - As grades ficam salvas no navegador do computador. "Exportar grades" / "Importar grades" leva para outro computador.
+
+## v12 (11/11) — girar o nome da peça
+- Cada nome tem uma **bolinha azul ⟳**: clique = gira 15°; segure e arraste = gira com o mouse (de 5 em 5°; com Shift, livre); dois cliques na bolinha = volta reto.
+- **Rodinha do mouse** em cima do nome também gira (5° por vez).
+- Na aba Peças, coluna "Escrever na peça": campo ⟳ em graus (0 reto, 90 em pé, 180 de cabeça para baixo). O ↺ volta lugar e giro para o automático.
+- Vale para todos os tamanhos, no TIFF, no encaixe e no Corel (texto continua editável, girado).
+
+## v13 (11/11) — letra e separar número/nome
+- Passe o mouse em cima do nome: aparecem 3 bolinhas. **⟳ azul** gira · **⤡ roxa** muda o tamanho da letra (arraste para fora = maior, para dentro = menor; clique = +0,5 mm; dois cliques = volta ao padrão) · **✂ laranja** separa número e nome (cada um com lugar, giro e letra próprios; 🔗 junta de novo).
+- **Ctrl + rodinha** em cima do nome muda a letra; rodinha sozinha gira.
+- Aba Peças: campos "letra … mm" e "separar nº e nome" em cada peça.
+- No Corel o número sai como `Tamanho_N` e o nome como `Nome_N`, os dois editáveis.

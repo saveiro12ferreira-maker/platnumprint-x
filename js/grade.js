@@ -72,7 +72,7 @@ const Grade = (() => {
       }
     }
 
-    if (o.label && o.label.text) stampLabel(out, OW, OH, b, nm, Wt, Ht, o.label, o.thick | 0);
+    for (const L of (o.labels || (o.label ? [o.label] : []))) if (L && L.text) stampLabel(out, OW, OH, b, nm, Wt, Ht, L, o.thick | 0);
 
     // Quanto da estampa coube no molde novo (1 = tudo).
     const expected = rule === 'fixa' ? p.artCount : rule === 'barra' ? p.artCount * sx : (rule === 'esticar' || rule === 'barraEsc') ? p.artCount * sx * sy : 0;
@@ -83,8 +83,9 @@ const Grade = (() => {
 
   // ---------- Número do tamanho em cada pedaço ----------
   const textCache = new Map();
-  function textMask(text, px) {
-    const key = text + '|' + px;
+  function textMask(text, px, rot = 0) {
+    rot = ((Math.round(rot) % 360) + 360) % 360;
+    const key = text + '|' + px + '|' + rot;
     if (textCache.has(key)) return textCache.get(key);
     const mk = (w, h) => (typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(w, h) : Object.assign(document.createElement('canvas'), { width: w, height: h }));
     let cv = mk(8, 8), ctx = cv.getContext('2d');
@@ -94,9 +95,18 @@ const Grade = (() => {
     cv = mk(w, h); ctx = cv.getContext('2d');
     ctx.font = font; ctx.textBaseline = 'middle'; ctx.fillStyle = '#000';
     ctx.fillText(text, 1, h / 2);
-    const d = ctx.getImageData(0, 0, w, h).data, a = new Uint8Array(w * h);
+    let fw = w, fh = h;
+    if (rot) {
+      // texto girado: desenha o texto reto dentro de uma tela do tamanho da caixa girada
+      const rad = rot * Math.PI / 180, c = Math.abs(Math.cos(rad)), s = Math.abs(Math.sin(rad));
+      fw = Math.ceil(w * c + h * s) + 2; fh = Math.ceil(w * s + h * c) + 2;
+      const cv2 = mk(fw, fh), c2 = cv2.getContext('2d');
+      c2.translate(fw / 2, fh / 2); c2.rotate(rad); c2.drawImage(cv, -w / 2, -h / 2);
+      cv = cv2; ctx = c2;
+    }
+    const d = ctx.getImageData(0, 0, fw, fh).data, a = new Uint8Array(fw * fh);
     for (let i = 0; i < a.length; i++) a[i] = d[i * 4 + 3];
-    const r = { w, h, a };
+    const r = { w: fw, h: fh, a };
     textCache.set(key, r);
     return r;
   }
@@ -133,7 +143,7 @@ const Grade = (() => {
     for (const txt of textos) {
       px = Math.max(8, label.px | 0);
       for (let k = 0; k < 3 && !spot; k++) {
-        t = textMask(txt, px);
+        t = textMask(txt, px, label.rot || 0);
         spot = label.pos ? spotPerto(nm, Wt, Ht, t.w, t.h, folga(thick, px), label.pos.fx, label.pos.fy) : labelSpot(nm, Wt, Ht, t.w, t.h, folga(thick, px));
         if (!spot) px = Math.round(px * 0.7);
       }
@@ -302,12 +312,20 @@ const Grade = (() => {
     const lpx = Math.max(10, Math.round((st.labelMm || 4) / 25.4 * dpi));
     // Tamanho como foi digitado (número fica número, letra fica letra) + o nome do pedaço (FRENTE, COSTAS…).
     // p.semEtiqueta: essa peça sai sem nada escrito; p.labelPos: lugar escolhido à mão na aba Peças (vale para todos os tamanhos)
-    const labelDe = p => st.marcarTamanho === false || p.semEtiqueta ? null
-      : { text: String(size) + (st.marcarNome !== false && p.nome ? ' ' + p.nome : ''), curto: String(size), px: lpx, pos: p.labelPos || null };
+    // Cada peça pode ter letra própria (labelMm), giro (labelRot) e, separado, número e nome cada um com lugar/giro/letra.
+    const pxMm = mm => mm > 0 ? Math.max(10, Math.round(mm / 25.4 * dpi)) : lpx;
+    const labelsDe = p => {
+      if (st.marcarTamanho === false || p.semEtiqueta) return [];
+      const nome = st.marcarNome !== false && p.nome ? p.nome : '';
+      if (!p.separado) return [{ text: String(size) + (nome ? ' ' + nome : ''), curto: String(size), px: pxMm(p.labelMm), pos: p.labelPos || null, rot: p.labelRot || 0, id: 'Tamanho' }];
+      const a = [{ text: String(size), curto: String(size), px: pxMm(p.numMm), pos: p.numPos || null, rot: p.numRot || 0, id: 'Tamanho' }];
+      if (nome) a.push({ text: nome, curto: nome, px: pxMm(p.labelMm), pos: p.labelPos || null, rot: p.labelRot || 0, id: 'Nome' });
+      return a;
+    };
     for (const g of st.groups) {
       const { W, H } = targetsPx(st, g, size);
       for (const p of g.items) {
-        const o = { bg: st.bg, thick: st.thickOverride != null ? st.thickOverride : p.thick, outline: st.outline, bleed: bleedPx, rule: p.rule, label: labelDe(p) };
+        const o = { bg: st.bg, thick: st.thickOverride != null ? st.thickOverride : p.thick, outline: st.outline, bleed: bleedPx, rule: p.rule, labels: labelsDe(p) }; o.label = o.labels[0] || null;
         const name = st.groupName(g);
         // Peça só de fundo mais comprida que o rolo (viés): divide em partes iguais sozinho.
         const tooLong = W + 2 * bleedPx > usable;
@@ -482,16 +500,16 @@ const Grade = (() => {
     for (const text of textos) {
       let px = label.px;
       for (let k = 0; k < 3; k++) {
-        const t = textMask(text, px), sp = label.pos ? spotPerto(r.nm, r.Wt, r.Ht, t.w, t.h, folga(thick, px), label.pos.fx, label.pos.fy) : labelSpot(r.nm, r.Wt, r.Ht, t.w, t.h, folga(thick, px));
-        if (sp) return { x: sp.cx + r.b, y: sp.cy + r.b, px, text };
+        const t = textMask(text, px, label.rot || 0), sp = label.pos ? spotPerto(r.nm, r.Wt, r.Ht, t.w, t.h, folga(thick, px), label.pos.fx, label.pos.fy) : labelSpot(r.nm, r.Wt, r.Ht, t.w, t.h, folga(thick, px));
+        if (sp) return { x: sp.cx + r.b, y: sp.cy + r.b, px, text, rot: label.rot || 0 };
         px = Math.round(px * 0.7);
       }
     }
     return null;
   }
 
-  function autoPos(p, text, px) {
-    const t = textMask(text, px), sp = labelSpot(p.mask, p.w, p.h, t.w, t.h, folga(p.thick, px));
+  function autoPos(p, text, px, rot = 0) {
+    const t = textMask(text, px, rot), sp = labelSpot(p.mask, p.w, p.h, t.w, t.h, folga(p.thick, px));
     return sp ? { fx: sp.cx / p.w, fy: sp.cy / p.h } : { fx: 0.5, fy: 0.85 };
   }
 

@@ -198,40 +198,121 @@ const App = (() => {
 
   // ---------- Nome e tamanho em cada peça: arrastar para onde quiser (vale para todos os tamanhos) ----------
   const etqTexto = p => `${st.base}${st.marcarNome !== false && p.nome ? ' ' + p.nome : ''}`;
+  // Textos de cada peça: juntos ("12 FRENTE") ou separados (número e nome, cada um com lugar, giro e letra próprios).
+  // Chaves na peça: label* = texto junto ou o nome; num* = o número quando separado.
+  function etiquetasDe(p) {
+    const nome = st.marcarNome !== false && p.nome ? p.nome : '';
+    if (!p.separado) return [{ k: 'label', text: etqTexto(p) }];
+    const a = [{ k: 'num', text: String(st.base) }];
+    if (nome) a.push({ k: 'label', text: nome });
+    return a;
+  }
+  const mmDe = (p, k) => p[k + 'Mm'] > 0 ? p[k + 'Mm'] : (st.labelMm || 4);
+  const pxDe = (p, k) => Math.max(10, Math.round(mmDe(p, k) / 25.4 * st.dpi));
+
+  function separar(p) {
+    const px = pxDe(p, 'label'), pos = p.labelPos || Grade.autoPos(p, etqTexto(p), px, p.labelRot || 0);
+    const numW = String(st.base).length * px * 0.6, nomeW = (p.nome || '').length * px * 0.62, gap = px * 0.5;
+    const rad = (p.labelRot || 0) * Math.PI / 180, cx = pos.fx * p.w, cy = pos.fy * p.h;
+    const desl = d => ({ fx: Math.min(1, Math.max(0, (cx + Math.cos(rad) * d) / p.w)), fy: Math.min(1, Math.max(0, (cy + Math.sin(rad) * d) / p.h)) });
+    p.numPos = desl(-(nomeW + gap) / 2); p.labelPos = desl((numW + gap) / 2);
+    p.numRot = p.labelRot || 0; if (p.labelMm) p.numMm = p.labelMm;
+    p.separado = true;
+  }
+  function juntar(p) { p.separado = false; delete p.numPos; delete p.numRot; delete p.numMm; }
+
   function desenharEtiquetas() {
     const box = $('#preview'), cv = box.querySelector('canvas'); if (!cv || !st.an) return;
     box.querySelectorAll('.etq').forEach(e => e.remove());
     if ($('#marcarTam') && !$('#marcarTam').checked) return;
-    const f = st.an.pf, px = Math.max(10, Math.round((st.labelMm || 4) / 25.4 * st.dpi));
+    const f = st.an.pf;
     for (const p of st.pieces) {
       if (p.semEtiqueta) continue;
-      const pos = p.labelPos || Grade.autoPos(p, etqTexto(p), px);
-      const d = el('div', { class: 'etq' + (p.labelPos ? ' manual' : ''), title: 'Arraste para onde quiser. Vale para todos os tamanhos.', text: etqTexto(p) });
-      const pr = () => { d.style.left = ((p.x + pos.fx * p.w) * f / cv.width * 100) + '%'; d.style.top = ((p.y + pos.fy * p.h) * f / cv.height * 100) + '%'; };
-      pr();
-      d.style.fontSize = Math.max(9, px * f * (cv.clientWidth / cv.width)) + 'px';
-      d.addEventListener('dblclick', ev => {
-        ev.preventDefault();
-        const inp = el('input', { value: p.nome || '', class: 'etq-edit', style: `left:${d.style.left};top:${d.style.top}` });
-        let feito = false;
-        const ok = () => { if (feito) return; feito = true; p.nome = inp.value.trim().toUpperCase(); p.nomeManual = true; inp.remove(); renderPieces(); desenharEtiquetas(); agendar(); };
-        inp.addEventListener('keydown', e2 => { if (e2.key === 'Enter') ok(); if (e2.key === 'Escape') { feito = true; inp.remove(); } });
-        inp.addEventListener('blur', ok, { once: true });
-        box.append(inp); inp.focus(); inp.select();
-      });
-      d.addEventListener('pointerdown', ev => {
-        if (ev.detail > 1) return;
-        ev.preventDefault(); d.setPointerCapture(ev.pointerId); d.classList.add('arrastando');
-        const r = cv.getBoundingClientRect(), k = cv.width / r.width / f;
-        const mover = e2 => {
-          const ix = (e2.clientX - r.left) * k, iy = (e2.clientY - r.top) * k;
-          pos.fx = Math.min(1, Math.max(0, (ix - p.x) / p.w)); pos.fy = Math.min(1, Math.max(0, (iy - p.y) / p.h)); pr();
-        };
-        const soltar = () => { d.removeEventListener('pointermove', mover); d.classList.remove('arrastando'); p.labelPos = { fx: pos.fx, fy: pos.fy }; d.classList.add('manual'); agendar(); };
-        d.addEventListener('pointermove', mover); d.addEventListener('pointerup', soltar, { once: true });
-      });
-      box.append(d);
+      for (const L of etiquetasDe(p)) box.append(etiquetaTela(p, L, cv, f));
     }
+  }
+
+  function etiquetaTela(p, L, cv, f) {
+    const box = $('#preview'), k = L.k, P = k + 'Pos', R = k + 'Rot', M = k + 'Mm';
+    const px = pxDe(p, k), pos = p[P] || Grade.autoPos(p, L.text, px, p[R] || 0);
+    const d = el('div', { class: 'etq' + (p[P] || p[R] || p[M] ? ' manual' : '') + (k === 'num' ? ' num' : ''),
+      title: 'Arraste para mudar de lugar · ⟳ gira (clique 15°, arraste livre, rodinha do mouse 5°) · ⤡ muda o tamanho da letra (arraste, ou Ctrl + rodinha) · ✂ separa número e nome · dois cliques escreve o nome. Vale para todos os tamanhos.', text: L.text });
+    const escala = () => cv.clientWidth / cv.width;
+    const pr = () => {
+      d.style.left = ((p.x + pos.fx * p.w) * f / cv.width * 100) + '%'; d.style.top = ((p.y + pos.fy * p.h) * f / cv.height * 100) + '%';
+      d.style.transform = `translate(-50%, -50%) rotate(${p[R] || 0}deg)`;
+      d.style.fontSize = Math.max(7, pxDe(p, k) * f * escala()) + 'px';
+    };
+    pr();
+    const marcou = () => { p[R] = ((Math.round(p[R] || 0) % 360) + 360) % 360; if (!p[P]) p[P] = { fx: pos.fx, fy: pos.fy }; d.classList.add('manual'); pr(); renderPieces(); agendar(); };
+    // girar
+    const giro = el('span', { class: 'giro', title: 'Clique: gira 15° · arraste: gira com o mouse · dois cliques: volta reto', text: '⟳' });
+    giro.addEventListener('dblclick', ev => { ev.stopPropagation(); ev.preventDefault(); p[R] = 0; marcou(); });
+    giro.addEventListener('pointerdown', ev => {
+      ev.stopPropagation(); ev.preventDefault(); giro.setPointerCapture(ev.pointerId);
+      const r = d.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+      const a0 = Math.atan2(ev.clientY - cy, ev.clientX - cx) * 180 / Math.PI, rot0 = p[R] || 0;
+      let mexeu = false;
+      const mover = e2 => {
+        if (!mexeu && Math.hypot(e2.clientX - ev.clientX, e2.clientY - ev.clientY) < 4) return;
+        mexeu = true; let v = rot0 + Math.atan2(e2.clientY - cy, e2.clientX - cx) * 180 / Math.PI - a0; if (!e2.shiftKey) v = Math.round(v / 5) * 5; p[R] = v; pr();
+      };
+      giro.addEventListener('pointermove', mover);
+      giro.addEventListener('pointerup', () => { giro.removeEventListener('pointermove', mover); if (!mexeu) p[R] = (p[R] || 0) + 15; marcou(); }, { once: true });
+    });
+    // tamanho da letra
+    const tam = el('span', { class: 'tam', title: 'Arraste para aumentar ou diminuir a letra · clique: +0,5 mm · dois cliques: volta ao tamanho padrão', text: '⤡' });
+    tam.addEventListener('dblclick', ev => { ev.stopPropagation(); ev.preventDefault(); delete p[M]; marcou(); });
+    tam.addEventListener('pointerdown', ev => {
+      ev.stopPropagation(); ev.preventDefault(); tam.setPointerCapture(ev.pointerId);
+      const mm0 = mmDe(p, k); let mexeu = false;
+      const mover = e2 => {
+        const dd = (e2.clientX - ev.clientX) + (e2.clientY - ev.clientY);
+        if (!mexeu && Math.abs(dd) < 4) return;
+        mexeu = true; p[M] = Math.round(Math.min(40, Math.max(1.5, mm0 * Math.pow(2, dd / 80))) * 10) / 10; pr();
+      };
+      tam.addEventListener('pointermove', mover);
+      tam.addEventListener('pointerup', () => { tam.removeEventListener('pointermove', mover); if (!mexeu) p[M] = Math.min(40, mm0 + 0.5); marcou(); }, { once: true });
+    });
+    // separar / juntar número e nome
+    const sep = p.separado
+      ? el('span', { class: 'sep', title: 'Juntar número e nome de novo', text: '🔗' })
+      : (st.marcarNome !== false && p.nome ? el('span', { class: 'sep', title: 'Separar: número e nome cada um no seu lugar', text: '✂' }) : null);
+    if (sep) {
+      sep.addEventListener('pointerdown', ev => { ev.stopPropagation(); ev.preventDefault(); });
+      sep.addEventListener('click', ev => { ev.stopPropagation(); if (p.separado) juntar(p); else separar(p); renderPieces(); desenharEtiquetas(); agendar(); });
+    }
+    d.addEventListener('wheel', ev => {
+      ev.preventDefault();
+      if (ev.ctrlKey || ev.metaKey) p[M] = Math.round(Math.min(40, Math.max(1.5, mmDe(p, k) + (ev.deltaY > 0 ? -0.5 : 0.5))) * 10) / 10;
+      else p[R] = (p[R] || 0) + (ev.deltaY > 0 ? 5 : -5);
+      marcou();
+    }, { passive: false });
+    d.append(giro, tam); if (sep) d.append(sep);
+    // escrever o nome
+    d.addEventListener('dblclick', ev => {
+      if (ev.target !== d) return;
+      ev.preventDefault();
+      const inp = el('input', { value: p.nome || '', class: 'etq-edit', style: `left:${d.style.left};top:${d.style.top}` });
+      let feito = false;
+      const ok = () => { if (feito) return; feito = true; p.nome = inp.value.trim().toUpperCase(); p.nomeManual = true; inp.remove(); renderPieces(); desenharEtiquetas(); agendar(); };
+      inp.addEventListener('keydown', e2 => { if (e2.key === 'Enter') ok(); if (e2.key === 'Escape') { feito = true; inp.remove(); } });
+      inp.addEventListener('blur', ok, { once: true });
+      box.append(inp); inp.focus(); inp.select();
+    });
+    // mudar de lugar
+    d.addEventListener('pointerdown', ev => {
+      if (ev.detail > 1 || ev.target !== d) return;
+      ev.preventDefault(); d.setPointerCapture(ev.pointerId); d.classList.add('arrastando');
+      const r = cv.getBoundingClientRect(), kk = cv.width / r.width / f;
+      const mover = e2 => {
+        const ix = (e2.clientX - r.left) * kk, iy = (e2.clientY - r.top) * kk;
+        pos.fx = Math.min(1, Math.max(0, (ix - p.x) / p.w)); pos.fy = Math.min(1, Math.max(0, (iy - p.y) / p.h)); pr();
+      };
+      const soltar = () => { d.removeEventListener('pointermove', mover); d.classList.remove('arrastando'); p[P] = { fx: pos.fx, fy: pos.fy }; d.classList.add('manual'); agendar(); };
+      d.addEventListener('pointermove', mover); d.addEventListener('pointerup', soltar, { once: true });
+    });
+    return d;
   }
 
   function renderPieces() {
@@ -243,7 +324,12 @@ const App = (() => {
         onchange: e => { p.nome = e.target.value.trim().toUpperCase(); p.nomeManual = true; e.target.value = p.nome; desenharEtiquetas(); agendar(); } })),
       el('td', { style: 'white-space:nowrap' },
         el('label', { title: 'Desmarque se o cliente não quer nada escrito nessa peça' }, el('input', { type: 'checkbox', checked: !p.semEtiqueta, onchange: e => { p.semEtiqueta = !e.target.checked; desenharEtiquetas(); agendar(); } }), ' sim'),
-        ' ', el('button', { type: 'button', class: 'mini', title: 'Volta o nome para o lugar automático', text: '↺', onclick: () => { delete p.labelPos; desenharEtiquetas(); agendar(); } })),
+        ' ', el('button', { type: 'button', class: 'mini', title: 'Volta o nome para o lugar automático e reto', text: '↺', onclick: () => { ['labelPos', 'labelRot', 'labelMm'].forEach(c => delete p[c]); juntar(p); renderPieces(); desenharEtiquetas(); agendar(); } }),
+        ' ', el('label', { title: 'Giro do nome em graus (0 = reto, 90 = em pé, 180 = de cabeça para baixo)' }, '⟳ ', el('input', { type: 'number', step: '5', value: Math.round(p.labelRot || 0), style: 'width:58px',
+          onchange: e => { p.labelRot = U.num(e.target.value) || 0; desenharEtiquetas(); agendar(); } }), '°'),
+        ' ', el('label', { title: 'Tamanho da letra do nome desta peça (vazio = o padrão do Gerar)' }, 'letra ', el('input', { type: 'number', step: '0.5', min: '1.5', max: '40', value: p.labelMm || '', placeholder: String(st.labelMm || 4), style: 'width:54px',
+          onchange: e => { const v = U.num(e.target.value); if (v > 0) p.labelMm = v; else delete p.labelMm; desenharEtiquetas(); agendar(); } }), ' mm'),
+        ' ', el('label', { title: 'Número do tamanho e nome separados, cada um no seu lugar' }, el('input', { type: 'checkbox', checked: !!p.separado, onchange: e => { if (e.target.checked) separar(p); else juntar(p); renderPieces(); desenharEtiquetas(); agendar(); } }), ' separar nº e nome')),
       el('td', { text: `${U.fmt(U.cm(p.w, st.dpi))} × ${U.fmt(U.cm(p.h, st.dpi))}` }),
       el('td', { text: p.artFrac > 0.005 ? `${U.fmt(p.artFrac * 100, 0)}% da peça` : 'sem estampa' }),
       el('td', {}, el('select', { onchange: e => { p.rule = e.target.value; runCheck(); agendar(); } }, opts(RULES, p.rule))),
