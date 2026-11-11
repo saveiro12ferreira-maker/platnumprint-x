@@ -45,6 +45,8 @@ const App = (() => {
     const cur = $('#baseSize').value || st.base;
     $('#baseSize').replaceChildren(...st.sizes.map(s => el('option', { value: s, selected: s === cur, text: s })));
     st.base = $('#baseSize').value;
+    const cs = $('#calibSize');
+    if (cs) { const cur2 = cs.value; cs.replaceChildren(...st.sizes.filter(x => x !== st.base).map(x => el('option', { value: x, selected: x === cur2, text: x }))); }
   }
 
   function setFile(file) {
@@ -117,6 +119,7 @@ const App = (() => {
       const img = await Tiff.readImage(st.file);
       if (img.dpi) $('#dpi').value = img.dpi;
       st.dpi = Math.round(U.num($('#dpi').value)) || 200;
+      if (st.bordaMm != null) st.thickOverride = Math.round(st.bordaMm / 25.4 * st.dpi);
       logStep(`Arquivo aberto: ${img.width} × ${img.height} px, ${st.dpi} dpi = ${U.fmt(U.cm(img.width, st.dpi))} × ${U.fmt(U.cm(img.height, st.dpi))} cm`);
       const an = await Analyze.run(img, st.dpi, logStep);
       img.data = null;
@@ -151,10 +154,16 @@ const App = (() => {
     for (let x = a; x < b; x++) { const t = p.top[x]; if (t < 0) continue; if (t < lo) lo = t; if (t > hi) hi = t; }
     return hi >= 0 ? (hi - lo) / p.h : 0;
   }
+  // Topo arredondado (o meio mais alto que os lados, como a cabeça da manga) = MANGA, não é decote.
+  function cupula(p) {
+    const t = f => { const x = Math.min(p.w - 1, Math.floor(p.w * f)); return p.top[x] < 0 ? p.h : p.top[x]; };
+    const meio = t(0.5), lados = (t(0.25) + t(0.75)) / 2;
+    return lados - meio > p.h * 0.08;
+  }
   function nomesPadrao() {
     for (const p of st.pieces) {
       if (p.nomeManual) continue;
-      p.nome = p.type === 'peito' ? (decote(p) >= 0.1 ? 'FRENTE' : 'COSTAS') : NOME_TIPO[p.type] || 'PEÇA';
+      p.nome = p.type === 'peito' ? (cupula(p) ? 'MANGA' : decote(p) >= 0.1 ? 'FRENTE' : 'COSTAS') : NOME_TIPO[p.type] || 'PEÇA';
     }
   }
 
@@ -182,15 +191,57 @@ const App = (() => {
       ctx.fillStyle = '#412402'; ctx.fillText(String(p.n), x + (p.n > 9 ? 1 : 5), y + 13); ctx.setLineDash([6, 4]);
     }
     $('#preview').replaceChildren(cv);
+    desenharEtiquetas();
+  }
+
+  // ---------- Nome e tamanho em cada peça: arrastar para onde quiser (vale para todos os tamanhos) ----------
+  const etqTexto = p => `${st.base}${st.marcarNome !== false && p.nome ? ' ' + p.nome : ''}`;
+  function desenharEtiquetas() {
+    const box = $('#preview'), cv = box.querySelector('canvas'); if (!cv || !st.an) return;
+    box.querySelectorAll('.etq').forEach(e => e.remove());
+    if ($('#marcarTam') && !$('#marcarTam').checked) return;
+    const f = st.an.pf, px = Math.max(10, Math.round((st.labelMm || 4) / 25.4 * st.dpi));
+    for (const p of st.pieces) {
+      if (p.semEtiqueta) continue;
+      const pos = p.labelPos || Grade.autoPos(p, etqTexto(p), px);
+      const d = el('div', { class: 'etq' + (p.labelPos ? ' manual' : ''), title: 'Arraste para onde quiser. Vale para todos os tamanhos.', text: etqTexto(p) });
+      const pr = () => { d.style.left = ((p.x + pos.fx * p.w) * f / cv.width * 100) + '%'; d.style.top = ((p.y + pos.fy * p.h) * f / cv.height * 100) + '%'; };
+      pr();
+      d.style.fontSize = Math.max(9, px * f * (cv.clientWidth / cv.width)) + 'px';
+      d.addEventListener('dblclick', ev => {
+        ev.preventDefault();
+        const inp = el('input', { value: p.nome || '', class: 'etq-edit', style: `left:${d.style.left};top:${d.style.top}` });
+        let feito = false;
+        const ok = () => { if (feito) return; feito = true; p.nome = inp.value.trim().toUpperCase(); p.nomeManual = true; inp.remove(); renderPieces(); desenharEtiquetas(); agendar(); };
+        inp.addEventListener('keydown', e2 => { if (e2.key === 'Enter') ok(); if (e2.key === 'Escape') { feito = true; inp.remove(); } });
+        inp.addEventListener('blur', ok, { once: true });
+        box.append(inp); inp.focus(); inp.select();
+      });
+      d.addEventListener('pointerdown', ev => {
+        if (ev.detail > 1) return;
+        ev.preventDefault(); d.setPointerCapture(ev.pointerId); d.classList.add('arrastando');
+        const r = cv.getBoundingClientRect(), k = cv.width / r.width / f;
+        const mover = e2 => {
+          const ix = (e2.clientX - r.left) * k, iy = (e2.clientY - r.top) * k;
+          pos.fx = Math.min(1, Math.max(0, (ix - p.x) / p.w)); pos.fy = Math.min(1, Math.max(0, (iy - p.y) / p.h)); pr();
+        };
+        const soltar = () => { d.removeEventListener('pointermove', mover); d.classList.remove('arrastando'); p.labelPos = { fx: pos.fx, fy: pos.fy }; d.classList.add('manual'); agendar(); };
+        d.addEventListener('pointermove', mover); d.addEventListener('pointerup', soltar, { once: true });
+      });
+      box.append(d);
+    }
   }
 
   function renderPieces() {
-    const head = el('tr', {}, ['Nº', 'Tipo', 'Nome no pedaço', 'Medida (cm)', 'Estampa', 'Regra', 'Âncora'].map(t => el('th', { text: t })));
+    const head = el('tr', {}, ['Nº', 'Tipo', 'Nome no pedaço', 'Escrever na peça', 'Medida (cm)', 'Estampa', 'Regra', 'Âncora'].map(t => el('th', { text: t })));
     const rows = st.pieces.map(p => el('tr', {},
       el('td', {}, el('span', { class: 'tag', text: p.n })),
       el('td', {}, el('select', { onchange: e => { p.type = e.target.value; regroup(); nomesPadrao(); renderPieces(); renderGrade(); renderAuto(); renderMap(); agendar(); } }, opts(TYPES, p.type))),
       el('td', {}, el('input', { value: p.nome || '', style: 'width:120px', title: 'Escrito pequeno no pedaço, junto com o tamanho (ex.: FRENTE, COSTAS, MANGA)',
-        onchange: e => { p.nome = e.target.value.trim().toUpperCase(); p.nomeManual = true; e.target.value = p.nome; agendar(); } })),
+        onchange: e => { p.nome = e.target.value.trim().toUpperCase(); p.nomeManual = true; e.target.value = p.nome; desenharEtiquetas(); agendar(); } })),
+      el('td', { style: 'white-space:nowrap' },
+        el('label', { title: 'Desmarque se o cliente não quer nada escrito nessa peça' }, el('input', { type: 'checkbox', checked: !p.semEtiqueta, onchange: e => { p.semEtiqueta = !e.target.checked; desenharEtiquetas(); agendar(); } }), ' sim'),
+        ' ', el('button', { type: 'button', class: 'mini', title: 'Volta o nome para o lugar automático', text: '↺', onclick: () => { delete p.labelPos; desenharEtiquetas(); agendar(); } })),
       el('td', { text: `${U.fmt(U.cm(p.w, st.dpi))} × ${U.fmt(U.cm(p.h, st.dpi))}` }),
       el('td', { text: p.artFrac > 0.005 ? `${U.fmt(p.artFrac * 100, 0)}% da peça` : 'sem estampa' }),
       el('td', {}, el('select', { onchange: e => { p.rule = e.target.value; runCheck(); agendar(); } }, opts(RULES, p.rule))),
@@ -203,7 +254,7 @@ const App = (() => {
   function renderEstampa() {
     $('#bgColor').value = U.hex(st.bg).toLowerCase();
     $('#bgHex').textContent = U.hex(st.bg);
-    $('#thick').value = st.thickOverride != null ? (st.thickOverride / st.dpi * 25.4).toFixed(2) : '';
+    $('#thick').value = st.bordaMm != null ? st.bordaMm : '';
     const withArt = st.pieces.filter(p => p.artFrac > 0.005).length;
     const mm = st.pieces.map(p => p.thick / st.dpi * 25.4), lo = Math.min(...mm), hi = Math.max(...mm);
     const faixa = Math.abs(hi - lo) < 0.05 ? `${U.fmt(lo, 1)} mm` : `de ${U.fmt(lo, 1)} a ${U.fmt(hi, 1)} mm, conforme a peça,`;
@@ -221,6 +272,15 @@ const App = (() => {
     const pct = (st.autoPct[g.type] || st.autoPct.outra)[dim];
     const base = dim === 'w' ? cmW(g) : cmH(g);
     return base * (1 + pct / 100 * steps);
+  }
+
+  // Graduação da modelista: com o mesmo modelo em outro tamanho já pronto, cada peça cresce/diminui o mesmo tanto a cada tamanho.
+  function calibValue(g, dim, size) {
+    const c = st.calib; if (!c || !c.dims[g.id]) return null;
+    const ib = st.sizes.indexOf(st.base), ic = st.sizes.indexOf(c.size), is = st.sizes.indexOf(size);
+    if (ib < 0 || ic < 0 || is < 0 || ib === ic) return null;
+    const base = dim === 'w' ? cmW(g) : cmH(g), alvo = c.dims[g.id][dim];
+    return base + (alvo - base) * (is - ib) / (ic - ib);
   }
 
   function mercadoValue(g, dim, size) {
@@ -258,6 +318,12 @@ const App = (() => {
             const v = pdfValue(g, dim, size);
             if (v != null) { cell[dim] = v; cell.src[dim] = 'pdf'; continue; }
             cell.src[dim] = m && m.kind !== 'auto' ? 'falta' : 'auto';
+          } else if (st.mode === 'calib') {
+            const v = calibValue(g, dim, size);
+            if (v != null) { cell[dim] = v; cell.src[dim] = 'modelista'; continue; }
+            const m = mercadoValue(g, dim, size);
+            if (m != null) { cell[dim] = m; cell.src[dim] = 'mercado'; continue; }
+            cell.src[dim] = 'auto';
           } else if (st.mode === 'padrao') {
             const v = mercadoValue(g, dim, size);
             if (v != null) { cell[dim] = v; cell.src[dim] = 'mercado'; continue; }
@@ -290,6 +356,52 @@ const App = (() => {
       const inp = j => el('input', { type: 'number', step: '0.5', value: m[j], style: 'width:80px', onchange: e => { m[j] = U.num(e.target.value) || ''; computeTargets(); renderGrade(); renderMercado(); agendar(); } });
       const f = j => b && m[j] && b[j] ? '×' + U.fmt(m[j] / b[j], 3) : '—';
       return el('tr', {}, el('td', { text: sz + (sz === st.base ? ' (base)' : '') }), el('td', {}, inp(0)), el('td', {}, inp(1)), el('td', { text: f(0) }), el('td', { text: f(1) }));
+    });
+    box.replaceChildren(el('thead', {}, head), el('tbody', {}, rows));
+  }
+
+  // Lê o encaixe da modelista em outro tamanho e casa as peças com as do arquivo base (mesmo tipo, da maior para a menor).
+  async function onCalib(file) {
+    const info = $('#calibInfo');
+    if (!st.an) { info.textContent = 'Leia primeiro o arquivo base na aba Arquivo.'; return; }
+    const size = $('#calibSize').value;
+    if (!size || size === st.base) { info.textContent = 'Escolha de que tamanho é esse arquivo (diferente do tamanho base).'; return; }
+    info.textContent = 'Lendo o arquivo da modelista…';
+    try {
+      const img = await Tiff.readImage(file);
+      const dpi = img.dpi || st.dpi;
+      const an = await Analyze.run(img, dpi, () => {});
+      img.data = null;
+      const gs = Analyze.group(an.pieces);
+      const porTipo = arr => { const m = {}; arr.forEach(g => (m[g.type] = m[g.type] || []).push(g)); Object.values(m).forEach(a => a.sort((x, y) => y.w * y.h - x.w * x.h)); return m; };
+      const A = porTipo(st.groups), B = porTipo(gs), dims = {}, falta = [];
+      // peças que o motor classificou com tipo diferente: casa pela ordem de tamanho com as que sobraram
+      const sobraA = [], sobraB = [];
+      for (const t of new Set([...Object.keys(A), ...Object.keys(B)])) {
+        const a = A[t] || [], b = B[t] || [];
+        a.forEach((g, i) => { if (b[i]) dims[g.id] = { w: U.cm(b[i].w, dpi), h: U.cm(b[i].h, dpi) }; else sobraA.push(g); });
+        b.slice(a.length).forEach(g => sobraB.push(g));
+      }
+      sobraA.sort((x, y) => y.w * y.h - x.w * x.h); sobraB.sort((x, y) => y.w * y.h - x.w * x.h);
+      sobraA.forEach((g, i) => { if (sobraB[i]) dims[g.id] = { w: U.cm(sobraB[i].w, dpi), h: U.cm(sobraB[i].h, dpi) }; else falta.push(st.groupName(g)); });
+      st.calib = { size, dims, nome: file.name };
+      st.mode = 'calib'; document.querySelector('input[name=mode][value=calib]').checked = true;
+      ['#autoBox', '#pdfBox', '#padraoBox'].forEach(s2 => { $(s2).hidden = true; }); $('#calibBox').hidden = false;
+      computeTargets(); renderGrade(); renderCalib(); agendar();
+      info.textContent = `Arquivo da modelista no ${size}: ${an.pieces.length} peças lidas. A grade agora segue a diferença real entre o ${st.base} e o ${size} de cada peça.` + (falta.length ? ` Sem par no arquivo: ${falta.join(', ')} (seguem o padrão de mercado).` : '');
+    } catch (e) { console.error(e); info.textContent = 'Não consegui ler esse arquivo: ' + e.message; }
+  }
+
+  function renderCalib() {
+    const box = $('#tblCalib'); if (!box) return;
+    if (!st.calib) { box.replaceChildren(); return; }
+    const c = st.calib, steps = st.sizes.indexOf(c.size) - st.sizes.indexOf(st.base);
+    const head = el('tr', {}, ['Peça', `${st.base} (arquivo base)`, `${c.size} (modelista)`, 'Muda a cada tamanho'].map(t => el('th', { text: t })));
+    const rows = st.groups.map(g => {
+      const d = c.dims[g.id];
+      const passo = d && steps ? `${U.fmt((d.w - cmW(g)) / steps)} × ${U.fmt((d.h - cmH(g)) / steps)} cm` : '—';
+      return el('tr', {}, el('td', { text: `${st.groupName(g)} ×${g.items.length}` }), el('td', { text: `${U.fmt(cmW(g))} × ${U.fmt(cmH(g))}` }),
+        el('td', { text: d ? `${U.fmt(d.w)} × ${U.fmt(d.h)}` : 'sem par' }), el('td', { text: passo }));
     });
     box.replaceChildren(el('thead', {}, head), el('tbody', {}, rows));
   }
@@ -366,7 +478,7 @@ const App = (() => {
 
   function renderGrade() {
     const head = el('tr', {}, el('th', { text: 'Peça' }), st.sizes.map(s => el('th', { text: s + (s === st.base ? ' (lido)' : '') })));
-    const badge = src => src === 'mercado' ? el('span', { class: 'src pdf', text: 'mercado' }) : src === 'manual' ? el('span', { class: 'src manual', text: 'manual' }) : src === 'pdf' ? el('span', { class: 'src pdf', text: 'PDF' }) : src === 'falta' ? el('span', { class: 'src falta', text: 'falta no PDF' }) : null;
+    const badge = src => src === 'modelista' ? el('span', { class: 'src manual', text: 'modelista' }) : src === 'mercado' ? el('span', { class: 'src pdf', text: 'mercado' }) : src === 'manual' ? el('span', { class: 'src manual', text: 'manual' }) : src === 'pdf' ? el('span', { class: 'src pdf', text: 'PDF' }) : src === 'falta' ? el('span', { class: 'src falta', text: 'falta no PDF' }) : null;
     const rows = st.groups.map(g => el('tr', {},
       el('td', {}, `${st.groupName(g)} `, el('span', { class: 'muted', text: `×${g.items.length} (nº ${g.items.map(p => p.n).join(', ')})` })),
       st.sizes.map(size => {
@@ -430,12 +542,14 @@ const App = (() => {
   function agendar() {
     if (!Object.keys(st.results).length) return;
     clearTimeout(tAgenda);
+    if (!$('#autoRefazer').checked) { $('#status5').textContent = '⚠ Você mudou alguma coisa: clique em "Gerar grade" para refazer com o que está marcado.'; $('#status5').classList.add('pendente'); return; }
     $('#status5').textContent = 'Opção mudou: refazendo a grade com o que está marcado…';
     tAgenda = setTimeout(() => { if (gerando) deNovo = true; else gerar(); }, 700);
   }
 
   async function gerar() {
     if (gerando) { deNovo = true; return; }
+    $('#status5').classList.remove('pendente');
     gerando = true;
     try { await gerar_(); } finally { gerando = false; if (deNovo) { deNovo = false; gerar(); } }
   }
@@ -524,16 +638,24 @@ const App = (() => {
     $('#baseSize').addEventListener('change', () => { st.base = $('#baseSize').value; if (st.an) { computeTargets(); renderGrade(); renderMercado(); runCheck(); } });
     $('#btnLer').addEventListener('click', ler);
     $('#bgColor').addEventListener('input', e => { st.bg = U.rgb(e.target.value); $('#bgHex').textContent = U.hex(st.bg); agendar(); });
+    const setBorda = txt => {
+      const v = U.num(txt);
+      st.bordaMm = String(txt).trim() === '' || !(v >= 0) ? null : v;
+      st.thickOverride = st.bordaMm == null ? null : Math.round(st.bordaMm / 25.4 * st.dpi);
+      $('#thick').value = st.bordaMm == null ? '' : st.bordaMm; $('#bordaMm').value = st.bordaMm == null ? '' : st.bordaMm;
+    };
+    setBorda($('#bordaMm').value);
+    $('#bordaMm').addEventListener('change', e => { setBorda(e.target.value); agendar(); });
     $('#thick').addEventListener('change', e => {
-      const v = U.num(e.target.value);
-      st.thickOverride = e.target.value.trim() === '' || !(v >= 0) ? null : Math.round(v / 25.4 * st.dpi);
+      setBorda(e.target.value);
       agendar();
     });
     document.querySelectorAll('input[name=mode]').forEach(r => r.addEventListener('change', e => {
-      st.mode = e.target.value; $('#autoBox').hidden = st.mode !== 'auto'; $('#pdfBox').hidden = st.mode !== 'pdf'; $('#padraoBox').hidden = st.mode !== 'padrao';
+      st.mode = e.target.value; $('#autoBox').hidden = st.mode !== 'auto'; $('#pdfBox').hidden = st.mode !== 'pdf'; $('#padraoBox').hidden = st.mode !== 'padrao'; $('#calibBox').hidden = st.mode !== 'calib';
       computeTargets(); renderGrade(); agendar();
     }));
     $('#fPdf').addEventListener('change', e => { if (e.target.files[0]) onPdf(e.target.files[0]); });
+    $('#fCalib').addEventListener('change', e => { if (e.target.files[0]) onCalib(e.target.files[0]); });
     $('#btnLimpar').addEventListener('click', () => { st.overrides = {}; computeTargets(); renderGrade(); });
     $('#btnGerar').addEventListener('click', gerar);
     $('#btnTodos').addEventListener('click', baixarTodos);
@@ -541,6 +663,11 @@ const App = (() => {
     $('#btnEncaixe').addEventListener('click', montarEncaixe);
     // Qualquer opção do Gerar mudou: refaz sozinho (obedece o que está marcado).
     ['#roll', '#margin', '#gap', '#bleed', '#allowRot', '#splitLong', '#incBase', '#marcarTam', '#marcarNome', '#labelMm'].forEach(id => $(id).addEventListener('change', agendar));
+    ['#marcarTam', '#marcarNome', '#labelMm'].forEach(id => $(id).addEventListener('change', () => { readOut(); desenharEtiquetas(); }));
+    $('#semNomeTodas').addEventListener('click', () => { st.pieces.forEach(p => { p.semEtiqueta = true; }); renderPieces(); desenharEtiquetas(); agendar(); });
+    $('#comNomeTodas').addEventListener('click', () => { st.pieces.forEach(p => { p.semEtiqueta = false; }); renderPieces(); desenharEtiquetas(); agendar(); });
+    $('#nomeAutoTodas').addEventListener('click', () => { st.pieces.forEach(p => { delete p.labelPos; }); desenharEtiquetas(); agendar(); });
+    window.addEventListener('resize', () => desenharEtiquetas());
 
     // Abrir um arquivo por endereço (?src=...), útil para testes no computador.
     const src = new URLSearchParams(location.search).get('src');

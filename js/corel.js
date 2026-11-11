@@ -65,7 +65,7 @@ const Corel = (() => {
       if (onProg) onProg(`Corel ${size}: pedaço ${parts.length} de ${specs.length}…`);
       await U.tick();
     }
-    const cell = Math.max(4, Math.round(5 / 25.4 * dpi));
+    const cell = Grade.celula(st);
     const lay = Grade.layout(parts, rollPx, marginPx, Math.round(st.gapMm / 25.4 * dpi), cell, st.allowRot);
     const W = lay.width, H = lay.height;
     const out = [`<?xml version="1.0" encoding="UTF-8"?>`,

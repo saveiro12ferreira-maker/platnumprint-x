@@ -115,12 +115,28 @@ const Grade = (() => {
     return null;
   }
 
+  // Ponto escolhido à mão (fx, fy de 0 a 1 na peça): acha o lugar válido mais perto, sem o texto sair da peça.
+  function spotPerto(nm, Wt, Ht, tw, th, keep, fx, fy) {
+    const R = Math.ceil(Math.max(tw, th) / 2) + keep;
+    if (2 * R + 1 > Wt || 2 * R + 1 > Ht) return null;
+    const er = U.box(nm, Wt, Ht, R, 'min'), tx = fx * Wt, ty = fy * Ht;
+    let best = null, bd = Infinity;
+    const st = Math.max(1, Math.floor(Math.min(Wt, Ht) / 400));
+    for (let y = R; y < Ht - R; y += st) { const o = y * Wt; for (let x = R; x < Wt - R; x += st) if (er[o + x]) { const d = (x - tx) ** 2 + (y - ty) ** 2; if (d < bd) { bd = d; best = { cx: x, cy: y }; } } }
+    return best;
+  }
+  const folga = (thick, px) => (thick | 0) + Math.max(2, Math.round(px * 0.15));   // perto da borda, sem encostar no contorno
+
   function stampLabel(out, OW, OH, b, nm, Wt, Ht, label, thick) {
     let px = Math.max(8, label.px | 0), t = null, spot = null;
     const textos = label.curto && label.curto !== label.text ? [label.text, label.curto] : [label.text];
     for (const txt of textos) {
       px = Math.max(8, label.px | 0);
-      for (let k = 0; k < 3 && !spot; k++) { t = textMask(txt, px); spot = labelSpot(nm, Wt, Ht, t.w, t.h, thick + Math.ceil(px * 0.4)); if (!spot) px = Math.round(px * 0.7); }
+      for (let k = 0; k < 3 && !spot; k++) {
+        t = textMask(txt, px);
+        spot = label.pos ? spotPerto(nm, Wt, Ht, t.w, t.h, folga(thick, px), label.pos.fx, label.pos.fy) : labelSpot(nm, Wt, Ht, t.w, t.h, folga(thick, px));
+        if (!spot) px = Math.round(px * 0.7);
+      }
       if (spot) break;
     }
     if (!spot) return;
@@ -137,6 +153,12 @@ const Grade = (() => {
       const q = ((yy + b) * OW + xx + b) * 4, f = al / 255;
       out[q] = Math.round(out[q] * (1 - f) + ink * f); out[q + 1] = Math.round(out[q + 1] * (1 - f) + ink * f); out[q + 2] = Math.round(out[q + 2] * (1 - f) + ink * f);
     }
+  }
+
+  // Tamanho da célula do encaixe: fina para as peças encostarem no espaço certo (5 mm entre peças) e o rolo gastar menos.
+  function celula(st) {
+    const mm = Math.min(2.5, Math.max(1, (st.gapMm > 0 ? st.gapMm : 5) / 4));
+    return Math.max(3, Math.round(mm / 25.4 * st.dpi));
   }
 
   // Formato da peça numa grade de células (c px). 'mark' é a peça; 'test' é a peça com o espaço de folga em volta.
@@ -173,7 +195,7 @@ const Grade = (() => {
 
   // Encaixe pelo formato real das peças: cada peça vai para a posição mais alta e mais à esquerda
   // onde cabe sem encostar nas outras, testando também girada 180°.
-  function layout(items, rollPx, marginPx, gapPx, c, allowRot) {
+  function layout(items, rollPx, marginPx, gapPx, c, allowRot, tempoMs = 2500) {
     const warn = [];
     const g = Math.ceil(gapPx / c);
     const shapes = items.map(it => {
@@ -191,11 +213,27 @@ const Grade = (() => {
       idx.slice().sort((a, b) => area(b) - area(a)),
       idx.slice().sort((a, b) => items[b].h - items[a].h),
       idx.slice().sort((a, b) => items[b].w - items[a].w),
+      idx.slice().sort((a, b) => items[b].w * items[b].h - items[a].w * items[a].h),
+      idx.slice().sort((a, b) => Math.max(items[b].w, items[b].h) - Math.max(items[a].w, items[a].h)),
     ];
-    let bestRun = null;
+    // mais algumas tentativas misturando a ordem (sempre as mesmas, para o resultado não mudar de uma vez para outra)
+    let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    for (let t = 0; t < (items.length > 60 ? 3 : 8); t++) orders.push(idx.slice().sort((a, b) => area(b) * (0.75 + rnd() * 0.5) - area(a) * (0.75 + rnd() * 0.5)));
+    let bestRun = null, bestOrder = null;
     for (const order of orders) {
       const run = place(order, shapes, items, cols, marginPx, c);
-      if (!bestRun || run.bottomPx < bestRun.bottomPx) bestRun = run;
+      if (!bestRun || run.bottomPx < bestRun.bottomPx) { bestRun = run; bestOrder = order; }
+    }
+    // Aperta mais: troca duas peças de lugar na ordem de entrada e fica com a troca se gastar menos rolo (até ~2,5 s).
+    const t0 = performance.now(), limite = items.length > 1 ? tempoMs : 0;
+    let tent = 0;
+    while (performance.now() - t0 < limite && tent < (tempoMs > 2500 ? 3000 : 400)) {
+      tent++;
+      const ord = bestOrder.slice(), i = Math.floor(rnd() * ord.length), j = Math.floor(rnd() * ord.length);
+      if (i === j) continue;
+      if (rnd() < 0.5) { [ord[i], ord[j]] = [ord[j], ord[i]]; } else { const [x] = ord.splice(i, 1); ord.splice(j, 0, x); }
+      const run = place(ord, shapes, items, cols, marginPx, c);
+      if (run.bottomPx < bestRun.bottomPx) { bestRun = run; bestOrder = ord; }
     }
     return { pos: bestRun.pos, width: Math.max(rollPx, cols * c + 2 * marginPx), height: bestRun.bottomPx + marginPx, warn: [...new Set(warn)] };
   }
@@ -203,18 +241,22 @@ const Grade = (() => {
   function place(order, shapes, items, cols, marginPx, c) {
     const occ = [], pre = [];
     const ensure = n => { while (occ.length < n) { occ.push(new Uint8Array(cols)); pre.push(new Int32Array(cols + 1)); } };
+    // -1 = cabe; senão devolve o próximo X que vale testar (pula a peça que está no caminho)
     const fits = (s, X, Y) => {
-      if (X < 0 || X + s.cw > cols) return false;
+      if (X < 0 || X + s.cw > cols) return cols;
       for (let r = 0; r < s.test.length; r++) {
         const yy = Y + r - s.g;
         if (yy < 0 || yy >= occ.length) continue;
-        const p = pre[yy];
+        const p = pre[yy], row = occ[yy];
         for (const [l, rr] of s.test[r]) {
           const a = Math.max(0, X + l), b = Math.min(cols - 1, X + rr);
-          if (a <= b && p[b + 1] - p[a] > 0) return false;
+          if (a <= b && p[b + 1] - p[a] > 0) {
+            let k = b; while (k > a && !row[k]) k--;
+            return Math.max(X + 1, k - l + 1);
+          }
         }
       }
-      return true;
+      return -1;
     };
     const pos = [];
     let bottomPx = 0;
@@ -225,7 +267,7 @@ const Grade = (() => {
         for (let Y = 0; Y <= occ.length + s.g; Y++) {
           if (best && Y + s.ch > best.bottom) break;
           let X = 0;
-          for (; X + s.cw <= cols; X++) if (fits(s, X, Y)) break;
+          while (X + s.cw <= cols) { const nx = fits(s, X, Y); if (nx < 0) break; X = nx; }
           if (X + s.cw <= cols) {
             const bottom = Y + s.ch;
             if (!best || bottom < best.bottom || (bottom === best.bottom && X < best.X)) best = { X, Y, rot, bottom, s };
@@ -259,7 +301,9 @@ const Grade = (() => {
     const usable = rollPx - 2 * marginPx;
     const lpx = Math.max(10, Math.round((st.labelMm || 4) / 25.4 * dpi));
     // Tamanho como foi digitado (número fica número, letra fica letra) + o nome do pedaço (FRENTE, COSTAS…).
-    const labelDe = p => st.marcarTamanho === false ? null : { text: String(size) + (st.marcarNome !== false && p.nome ? ' ' + p.nome : ''), curto: String(size), px: lpx };
+    // p.semEtiqueta: essa peça sai sem nada escrito; p.labelPos: lugar escolhido à mão na aba Peças (vale para todos os tamanhos)
+    const labelDe = p => st.marcarTamanho === false || p.semEtiqueta ? null
+      : { text: String(size) + (st.marcarNome !== false && p.nome ? ' ' + p.nome : ''), curto: String(size), px: lpx, pos: p.labelPos || null };
     for (const g of st.groups) {
       const { W, H } = targetsPx(st, g, size);
       for (const p of g.items) {
@@ -317,7 +361,7 @@ const Grade = (() => {
       if (onPiece) onPiece(res.length);
       await U.tick();
     }
-    const cell = Math.max(4, Math.round(5 / 25.4 * dpi));
+    const cell = celula(st);
     let out = null;
     const compor = lay => {
       const W = lay.width, H = lay.height;
@@ -369,7 +413,7 @@ const Grade = (() => {
       }
     }
     if (onProg) onProg('Encaixando todos os pedaços no rolo…'); await U.tick();
-    const lay = layout(items, rollPx, marginPx, gap, cell, st.allowRot);
+    const lay = layout(items, rollPx, marginPx, gap, cell, st.allowRot, 12000);   // grade completa: procura por mais tempo
     lay_warn(lay, warns);
     const W = lay.width, H = lay.height;
     // Faixas de 256 linhas, comprimidas em LZW (o Corel, o Photoshop e o RIP abrem).
@@ -438,7 +482,7 @@ const Grade = (() => {
     for (const text of textos) {
       let px = label.px;
       for (let k = 0; k < 3; k++) {
-        const t = textMask(text, px), sp = labelSpot(r.nm, r.Wt, r.Ht, t.w, t.h, (thick | 0) + Math.ceil(px * 0.4));
+        const t = textMask(text, px), sp = label.pos ? spotPerto(r.nm, r.Wt, r.Ht, t.w, t.h, folga(thick, px), label.pos.fx, label.pos.fy) : labelSpot(r.nm, r.Wt, r.Ht, t.w, t.h, folga(thick, px));
         if (sp) return { x: sp.cx + r.b, y: sp.cy + r.b, px, text };
         px = Math.round(px * 0.7);
       }
@@ -446,5 +490,10 @@ const Grade = (() => {
     return null;
   }
 
-  return { renderPiece, renderSize, encaixeGrade, labelPos, specsForSize, drawSpec, layout, selfCheck, RULE_NAMES };
+  function autoPos(p, text, px) {
+    const t = textMask(text, px), sp = labelSpot(p.mask, p.w, p.h, t.w, t.h, folga(p.thick, px));
+    return sp ? { fx: sp.cx / p.w, fy: sp.cy / p.h } : { fx: 0.5, fy: 0.85 };
+  }
+
+  return { renderPiece, renderSize, autoPos, encaixeGrade, labelPos, celula, specsForSize, drawSpec, layout, selfCheck, RULE_NAMES };
 })();

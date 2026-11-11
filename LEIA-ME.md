@@ -9,7 +9,8 @@ Dê dois cliques em `index.html`. Abre no Edge ou no Chrome. Não precisa instal
 ## Passo a passo
 
 1. **Arquivo**: com "Gerar a grade completa logo depois de ler" marcado, um clique em Ler já entrega todos os tamanhos prontos na aba Gerar. Exporte o encaixe do Corel em TIFF (como o `Azul Petróleo Ryan.tif`), com o contorno das peças e o fundo do papel branco ou transparente. Informe de que tamanho ele é e quais tamanhos fazem parte da grade.
-2. **Peças**: o motor numera cada peça e diz o tipo e a regra da estampa. A conferência no topo refaz o tamanho base e compara com o original: precisa dar perto de 100%. Se alguma peça estiver errada, corrija o tipo ou a regra ali mesmo.
+2. **Peças**: na prévia aparece o nome e o tamanho de cada peça (amarelo). **Arraste** para onde quiser (ex.: no finalzinho do vestido): fica verde e vale para todos os tamanhos. "Escrever na peça" (na tabela) desmarcado = a peça sai sem nada escrito; os botões em cima tiram ou põem em todas, e ↺ volta para o lugar automático.
+   O motor numera cada peça e diz o tipo e a regra da estampa. A conferência no topo refaz o tamanho base e compara com o original: precisa dar perto de 100%. Se alguma peça estiver errada, corrija o tipo ou a regra ali mesmo.
 3. **Estampa**: mostra a cor de fundo e o contorno de corte que o motor leu.
 4. **Grade**:
    - *Padrão de mercado (automático, já vem marcado)*: o motor gradua sozinho pela tabela de medidas usada no mercado (busto para a largura, estatura para o comprimento), a partir do tamanho do arquivo. Ex.: arquivo no 12 → todos os outros tamanhos saem na proporção certa. Os números da tabela podem ser corrigidos.
@@ -18,7 +19,8 @@ Dê dois cliques em `index.html`. Abre no Edge ou no Chrome. Não precisa instal
    - Qualquer medida pode ser corrigida na mão na tabela final.
 5. **Gerar**: monta todos os tamanhos e baixa um TIFF por tamanho, em 200 dpi, pronto para o RIP.
    - **Sem avisos de grade**: quando parte da estampa ficaria fora do molde novo, o motor resolve sozinho (a estampa acompanha a graduação da peça).
-   - **Obedece o que está marcado**: mudou qualquer opção (girar, margem, espaço, rolo, medidas), ele refaz a grade sozinho. "Permitir girar peças 180°" vem desmarcado: desmarcado, nenhuma peça gira.
+   - **A grade só é gerada quando você clicar em "Gerar grade"**. Mudou alguma opção, aparece o aviso para gerar de novo. Se quiser que refaça sozinho, marque "Refazer a grade sozinho quando eu mudar algo". "Permitir girar peças 180°" vem desmarcado: desmarcado, nenhuma peça gira.
+   - **Encaixe apertado**: as peças ficam a 5 mm uma da outra (o "Espaço entre peças") e o motor testa várias ordens de encaixe para gastar a menor altura de rolo. Com "Permitir girar 180°" marcado ele aperta ainda mais.
    - **Tamanho e nome em cada pedaço**: bem pequeno (4 mm, dá para mudar), dentro da peça, perto da barra, ex.: "12 FRENTE", "G COSTAS". O tamanho sai como foi digitado (número fica número, letra fica letra). O nome vem sozinho (peito com decote fundo = FRENTE, decote raso = COSTAS; SAIA, VIÉS…) e pode ser trocado na aba Peças, coluna "Nome no pedaço". Se o nome não couber no pedaço, sai só o tamanho.
    - **✏️ Corel editável**: um SVG por tamanho. No CorelDRAW use Arquivo → Importar: cada pedaço vem num grupo separado, com a estampa, a linha de corte em vetor e o número do tamanho como texto.
    - **Encaixe automático da grade completa**: junta todos os tamanhos (com a quantidade de cada um) num rolo só, na largura do tecido, diz quantos metros vai dar e baixa o TIFF do encaixe (LZW, abre no Corel, Photoshop e RIP).
@@ -48,3 +50,8 @@ A prévia coloca a estampa do arquivo na posição certa por cima da roupa da mo
 - O PDF precisa ter texto (uma tabela de medidas). PDF que é só desenho do molde ou imagem escaneada não é lido: nesse caso, digite as medidas na tabela.
 - Tamanhos com número (36, 38…) não são reconhecidos sozinhos no PDF. Digite-os no campo de tamanhos e preencha as medidas.
 - A grade automática aumenta a peça por proporção. Ela não substitui a graduação da modelista em peças que mudam de formato entre os tamanhos.
+
+## v10 (11/11)
+- **Borda de corte ajustável**: aba Gerar → "Borda de corte" (padrão 3 mm). Vale para TIFF, Corel e encaixe.
+- **Nome de cada pedaço**: dois cliques no texto amarelo da peça (ou na coluna Nome da tabela) e escreva (ex.: MANGA ESQ). Arraste o texto para onde ele deve ficar. "Escrever na peça" desmarcado = peça sem nome.
+- **Tamanhos iguais aos da modelista**: aba Grade → "Pela modelista: outro tamanho pronto (arquivo)". Escolha o tamanho (ex.: 6) e abra o arquivo que a modelista já fez nesse tamanho. O motor mede cada peça e passa a graduar pela diferença real entre o tamanho base e esse arquivo (os outros tamanhos seguem a mesma proporção). Sem esse arquivo, o motor usa a tabela de mercado — por isso o 6 do motor saía diferente do 6 da modelista.

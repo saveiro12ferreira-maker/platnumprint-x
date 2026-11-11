@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400&family=Orbitron:wght@600;700&display=swap">
-<link rel="stylesheet" href="css/app.css?v=8">
+<link rel="stylesheet" href="css/app.css?v=10">
 <script src="https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
@@ -51,7 +51,7 @@
         <label>Resolução <input id="dpi" type="number" min="50" max="1200" step="1" value="200" style="width:80px"> dpi</label>
       </div>
       <div class="row">
-        <label><input type="checkbox" id="autoGerar" checked> Gerar a grade completa logo depois de ler</label>
+        <label><input type="checkbox" id="autoGerar"> Gerar a grade completa logo depois de ler</label>
       </div>
       <div class="row">
         <button id="btnLer" class="primary" disabled>Ler arquivo</button>
@@ -66,6 +66,12 @@
       <h2>Peças reconhecidas</h2>
       <p class="hint">Confira se cada peça foi reconhecida certo. Se o tipo ou a regra estiverem errados, corrija aqui antes de gerar.</p>
       <div id="check" class="check"></div>
+      <p class="hint"><b>Nome e tamanho em cada peça:</b> arraste o texto amarelo para onde quiser (ex.: no finalzinho do vestido). <b>Dois cliques no texto</b> para escrever o nome do pedaço (ex.: MANGA). O lugar vale para todos os tamanhos. Para não escrever nada numa peça, desmarque "Escrever na peça" na tabela abaixo.</p>
+      <div class="row" style="margin-top:0">
+        <button type="button" id="nomeAutoTodas">↺ Todos no lugar automático</button>
+        <button type="button" id="semNomeTodas">🚫 Não escrever em nenhuma peça</button>
+        <button type="button" id="comNomeTodas">✍️ Escrever em todas</button>
+      </div>
       <div id="preview" class="preview"></div>
       <div class="scroll"><table id="tblPecas"></table></div>
       <details class="hint"><summary>O que cada regra faz</summary>
@@ -100,11 +106,21 @@
           <label><input type="radio" name="mode" value="padrao" checked> Padrão de mercado (automático)</label>
           <label><input type="radio" name="mode" value="auto"> Percentual por tamanho</label>
           <label><input type="radio" name="mode" value="pdf"> Grade da modelista (PDF)</label>
+          <label><input type="radio" name="mode" value="calib"> Pela modelista: outro tamanho pronto (arquivo)</label>
         </div>
       </div>
       <div id="padraoBox">
         <p class="hint">O motor gradua cada peça sozinho pela tabela de medidas usada no mercado (busto para a largura, estatura para o comprimento), a partir do tamanho do arquivo. Ex.: arquivo no 12 → o 10 e o 14 saem na proporção certa. Pode corrigir qualquer número.</p>
         <div class="scroll"><table id="tblMercado"></table></div>
+      </div>
+      <div id="calibBox" hidden>
+        <p class="hint">Mande o encaixe da <b>modelista</b> do mesmo modelo em <b>outro tamanho</b> (ex.: o 6, se o arquivo base é o 12). O motor mede cada peça nos dois tamanhos e gradua os outros tamanhos com a diferença real de vocês (não a tabela do mercado). Quanto mais longe do base, melhor (ex.: base 12 e modelista no 2).</p>
+        <div class="row">
+          <label>Esse arquivo é o tamanho <select id="calibSize"></select></label>
+          <label class="file">Escolher arquivo da modelista<input type="file" id="fCalib" accept=".tif,.tiff,.png,.jpg,.jpeg"></label>
+        </div>
+        <p class="muted" id="calibInfo"></p>
+        <div class="scroll"><table id="tblCalib"></table></div>
       </div>
       <div id="autoBox" hidden>
         <p class="hint">O motor parte do tamanho lido e soma um percentual a cada tamanho para cima (e tira a cada tamanho para baixo).</p>
@@ -134,10 +150,12 @@
         <label>Largura do rolo <input id="roll" type="number" min="20" max="500" step="1" value="150" style="width:80px"> cm</label>
         <label>Margem <input id="margin" type="number" min="0" max="100" step="1" value="5" style="width:70px"> mm</label>
         <label>Espaço entre peças <input id="gap" type="number" min="0" max="100" step="1" value="5" style="width:70px"> mm</label>
+        <label>Borda de corte <input id="bordaMm" type="number" min="0" max="10" step="0.1" value="3" style="width:70px" title="Espessura do contorno preto de cada peça. Vazio = a mesma do arquivo"> mm</label>
         <label>Sangria <input id="bleed" type="number" min="0" max="20" step="0.5" value="0" style="width:70px"> mm</label>
       </div>
       <div class="row">
         <label><input type="checkbox" id="incBase" checked> Refazer também o tamanho base</label>
+        <label><input type="checkbox" id="autoRefazer"> Refazer a grade sozinho quando eu mudar algo</label>
         <label><input type="checkbox" id="allowRot"> Permitir girar peças 180° no encaixe</label>
         <label><input type="checkbox" id="splitLong" checked> Dividir em partes as peças só de fundo (viés) mais longas que o rolo</label>
         <label><input type="checkbox" id="marcarTam" checked> Marcar o tamanho em cada pedaço</label>
@@ -241,14 +259,14 @@
   </section>
 </main>
 
-<script src="js/acesso.js?v=8"></script>
-<script src="js/util.js?v=8"></script>
-<script src="js/tiff.js?v=8"></script>
-<script src="js/analyze.js?v=8"></script>
-<script src="js/corel.js?v=8"></script>
-<script src="js/grade.js?v=8"></script>
-<script src="js/pdfgrade.js?v=8"></script>
-<script src="js/app.js?v=8"></script>
-<script src="js/provador.js?v=8"></script>
+<script src="js/acesso.js?v=10"></script>
+<script src="js/util.js?v=10"></script>
+<script src="js/tiff.js?v=10"></script>
+<script src="js/analyze.js?v=10"></script>
+<script src="js/corel.js?v=10"></script>
+<script src="js/grade.js?v=10"></script>
+<script src="js/pdfgrade.js?v=10"></script>
+<script src="js/app.js?v=10"></script>
+<script src="js/provador.js?v=10"></script>
 </body>
 </html>
