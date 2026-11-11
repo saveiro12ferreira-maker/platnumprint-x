@@ -718,7 +718,10 @@ const App = (() => {
     const tams = files.map(f => Moldes.tamDoNome(f.name)).filter(Boolean);
     if (tams.length) {
       const base = $('#baseSize').value || st.base;
-      const todos = [...new Set([...tams, base, ...(st.moldes ? Object.keys(st.moldes.tams) : [])])].filter(Boolean).sort((a, b) => ordemTam(a) - ordemTam(b));
+      // junta com os tamanhos que já estavam na grade (do mesmo tipo: número com número, letra com letra)
+      const num = t => /^\d+$/.test(t), tipoPdf = num(tams[0]);
+      const ja = st.sizes.filter(t => num(t) === tipoPdf);
+      const todos = [...new Set([...ja, ...tams, base, ...(st.moldes ? Object.keys(st.moldes.tams) : [])])].filter(Boolean).sort((a, b) => ordemTam(a) - ordemTam(b));
       $('#sizes').value = todos.join(', '); readSizes();
       if (todos.includes(base)) { $('#baseSize').value = base; st.base = base; }
       if (st.an) { computeTargets(); renderGrade(); renderMercado(); renderQtd(); }
