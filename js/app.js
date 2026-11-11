@@ -132,6 +132,8 @@ const App = (() => {
       renderAll();
       lockTabs(false);
       runCheck();
+      if (st.moldes) { casarMoldes(); computeTargets(); renderGrade(); renderMoldes(); }
+      sugerirSalva();
       window.dispatchEvent(new CustomEvent('pp:lido'));
       if ($('#autoGerar').checked) {
         // Um clique só: lê e já monta todos os tamanhos da grade.
@@ -283,6 +285,72 @@ const App = (() => {
     return base + (alvo - base) * (is - ib) / (ic - ib);
   }
 
+  // ---------- Moldes da modelista (PDFs, um por tamanho) ----------
+  const idxTam = size => st.sizes.indexOf(size);
+  const dimsGrupo = () => st.groups.map(g => ({ w: cmW(g), h: cmH(g) }));
+  function refMolde() {
+    const m = st.moldes; if (!m) return null;
+    const tams = Object.keys(m.tams).filter(t => idxTam(t) >= 0);
+    if (!tams.length) return null;
+    const ib = idxTam(st.base);
+    return tams.sort((a, b) => Math.abs(idxTam(a) - ib) - Math.abs(idxTam(b) - ib))[0];
+  }
+  // Casa as peças do arquivo base com as do PDF mais perto do base; os outros PDFs casam com esse.
+  function casarMoldes() {
+    const m = st.moldes; if (!m) return;
+    const ref = refMolde(); m.ref = ref; m.casa = {};
+    if (!ref) return;
+    const pr = m.tams[ref].pecas, auto = Moldes.casar(dimsGrupo(), pr);
+    st.groups.forEach((g, i) => {
+      const man = (m.manual || {})[g.id];
+      let c = auto[i];
+      if (man === -1) c = null;
+      else if (man != null && pr[man]) { const p = pr[man], d = dimsGrupo()[i]; c = { j: man, girada: Math.abs(Math.log(p.h / p.w) + Math.log(d.w / d.h)) < Math.abs(Math.log(p.w / p.h) + Math.log(d.w / d.h)) }; }
+      m.casa[g.id] = {}; if (c) m.casa[g.id][ref] = { j: c.j, girada: c.girada };
+    });
+    for (const t of Object.keys(m.tams)) {
+      if (t === ref) continue;
+      const link = Moldes.casar(pr, m.tams[t].pecas);
+      for (const g of st.groups) {
+        const r = m.casa[g.id][ref]; if (!r || !link[r.j]) continue;
+        m.casa[g.id][t] = { j: link[r.j].j, girada: r.girada !== link[r.j].girada };
+      }
+    }
+  }
+  function dimsMolde(g, size) {
+    const m = st.moldes; if (!m || !m.tams[size] || !m.casa || !m.casa[g.id]) return null;
+    const c = m.casa[g.id][size]; if (!c) return null;
+    const p = m.tams[size].pecas[c.j];
+    return c.girada ? { w: p.h, h: p.w } : { w: p.w, h: p.h };
+  }
+  function moldeValue(g, dim, size) {
+    const m = st.moldes; if (!m) return null;
+    const base = dim === 'w' ? cmW(g) : cmH(g);
+    if (dim === 'h' && g.type === 'vies') return base;
+    const db = dimsMolde(g, st.base), pts = [{ i: idxTam(st.base), v: base }];
+    for (const t of Object.keys(m.tams)) {
+      if (t === st.base || idxTam(t) < 0) continue;
+      const d = dimsMolde(g, t); if (!d) continue;
+      pts.push({ i: idxTam(t), v: db ? base + d[dim] - db[dim] : d[dim] });
+    }
+    return pts.length > 1 ? Moldes.interpolar(pts, idxTam(size)) : null;
+  }
+
+  // ---------- Grade salva (padrão da casa) ----------
+  function casarSalva(g0) {
+    const sv = g0 || st.salva; if (!sv) return null;
+    const ref = sv.pecas.map(p => ({ w: p.w[sv.base], h: p.h[sv.base] }));
+    return Moldes.casar(dimsGrupo(), ref);
+  }
+  function salvaValue(g, dim, size) {
+    const sv = st.salva; if (!sv || !st.salvaCasa) return null;
+    const c = st.salvaCasa[st.groups.indexOf(g)]; if (!c) return null;
+    const pc = sv.pecas[c.j], dd = c.girada ? (dim === 'w' ? 'h' : 'w') : dim;
+    const a = pc[dd][size], b = pc[dd][st.base];
+    if (!(a > 0) || !(b > 0)) return null;
+    return (dim === 'w' ? cmW(g) : cmH(g)) + a - b;
+  }
+
   function mercadoValue(g, dim, size) {
     const a = st.mercado[chaveTam(size)], b = st.mercado[chaveTam(st.base)];
     if (!a || !b) return null;
@@ -321,6 +389,12 @@ const App = (() => {
           } else if (st.mode === 'calib') {
             const v = calibValue(g, dim, size);
             if (v != null) { cell[dim] = v; cell.src[dim] = 'modelista'; continue; }
+            const m = mercadoValue(g, dim, size);
+            if (m != null) { cell[dim] = m; cell.src[dim] = 'mercado'; continue; }
+            cell.src[dim] = 'auto';
+          } else if (st.mode === 'moldes' || st.mode === 'salva') {
+            const v = st.mode === 'moldes' ? moldeValue(g, dim, size) : salvaValue(g, dim, size);
+            if (v != null) { cell[dim] = v; cell.src[dim] = st.mode === 'moldes' ? 'modelista' : 'salva'; continue; }
             const m = mercadoValue(g, dim, size);
             if (m != null) { cell[dim] = m; cell.src[dim] = 'mercado'; continue; }
             cell.src[dim] = 'auto';
@@ -390,6 +464,128 @@ const App = (() => {
       computeTargets(); renderGrade(); renderCalib(); agendar();
       info.textContent = `Arquivo da modelista no ${size}: ${an.pieces.length} peças lidas. A grade agora segue a diferença real entre o ${st.base} e o ${size} de cada peça.` + (falta.length ? ` Sem par no arquivo: ${falta.join(', ')} (seguem o padrão de mercado).` : '');
     } catch (e) { console.error(e); info.textContent = 'Não consegui ler esse arquivo: ' + e.message; }
+  }
+
+  const MODOS = { padrao: '#padraoBox', auto: '#autoBox', pdf: '#pdfBox', calib: '#calibBox', moldes: '#moldesBox', salva: '#salvaBox' };
+  function setModo(modo) {
+    st.mode = modo;
+    const r = document.querySelector(`input[name=mode][value=${modo}]`); if (r) r.checked = true;
+    for (const [k, sel] of Object.entries(MODOS)) { const b = $(sel); if (b) b.hidden = k !== modo; }
+  }
+
+  async function onMoldes(files) {
+    const info = $('#moldesInfo');
+    if (!st.an) { info.textContent = 'Leia primeiro o arquivo com a estampa (tamanho base) na aba Arquivo.'; return; }
+    st.moldes = st.moldes || { tams: {}, manual: {} };
+    const semTam = [];
+    for (const f of files) {
+      info.textContent = `Lendo ${f.name}…`; await U.tick();
+      try {
+        const pecas = await Moldes.ler(f);
+        let t = Moldes.tamDoNome(f.name);
+        if (!t || !st.sizes.includes(t)) { semTam.push(f.name + (t ? ` (tamanho ${t} não está na grade)` : '')); if (!t) continue; }
+        st.moldes.tams[t] = { arquivo: f.name, pecas };
+        if (!st.moldes.modelo) st.moldes.modelo = Moldes.modeloDoNome(f.name);
+      } catch (e) { console.error(e); semTam.push(`${f.name}: ${e.message}`); }
+    }
+    casarMoldes(); setModo('moldes');
+    computeTargets(); renderGrade(); renderMoldes(); agendar();
+    if ($('#nomeGrade') && !$('#nomeGrade').value && st.moldes.modelo) $('#nomeGrade').value = st.moldes.modelo;
+    const n = Object.keys(st.moldes.tams).length;
+    info.textContent = n ? `${n} PDF(s) da modelista lidos (${Object.keys(st.moldes.tams).join(', ')}). A grade agora segue os moldes dela; tamanhos sem PDF seguem a mesma regra entre os que têm.` : 'Nenhum PDF lido.';
+    if (semTam.length) info.textContent += ' Atenção: ' + semTam.join('; ') + ' — coloque o tamanho no fim do nome do arquivo (ex.: Vestido_6.pdf).';
+    // conferência: tamanho menor que o base tem que ter peça menor (e maior, maior)
+    const estranhas = [];
+    for (const g of st.groups) for (const t of Object.keys(st.moldes.tams)) {
+      const d = dimsMolde(g, t); if (!d || t === st.base) continue;
+      const menor = idxTam(t) < idxTam(st.base), aB = cmW(g) * cmH(g), aM = d.w * d.h;
+      if (menor ? aM > aB * 1.15 : aM < aB * 0.85) estranhas.push(`${nomeGrupo(g)} no ${t}`);
+    }
+    if (estranhas.length) info.textContent += ` ⚠ Confira: ${estranhas.join(', ')} ficou com tamanho fora do esperado em relação ao ${st.base}. O arquivo da estampa e os PDFs são do mesmo modelo? Se uma peça caiu no molde errado, troque na lista abaixo.`;
+  }
+
+  function renderMoldes() {
+    const box = $('#tblMoldes'); if (!box) return;
+    const m = st.moldes;
+    if (!m || !m.ref) { box.replaceChildren(); return; }
+    const tams = Object.keys(m.tams).sort((a, b) => idxTam(a) - idxTam(b));
+    const pr = m.tams[m.ref].pecas;
+    const head = el('tr', {}, el('th', { text: 'Peça do arquivo' }), el('th', { text: `Molde (PDF ${m.ref})` }), tams.map(t => el('th', { text: `PDF ${t}` })));
+    const rows = st.groups.map(g => {
+      const c = m.casa[g.id][m.ref];
+      const sel = el('select', { onchange: e => { m.manual[g.id] = +e.target.value; casarMoldes(); computeTargets(); renderGrade(); renderMoldes(); agendar(); } },
+        el('option', { value: -1, selected: !c, text: '— nenhum (segue mercado) —' }),
+        pr.map((p, j) => el('option', { value: j, selected: c && c.j === j, text: `Molde ${j + 1}: ${U.fmt(p.w)} × ${U.fmt(p.h)} cm` })));
+      return el('tr', {}, el('td', { text: `${nomeGrupo(g)} ×${g.items.length} (${U.fmt(cmW(g))} × ${U.fmt(cmH(g))})` }), el('td', {}, sel),
+        tams.map(t => { const d = dimsMolde(g, t); return el('td', { text: d ? `${U.fmt(d.w)} × ${U.fmt(d.h)}` : '—' }); }));
+    });
+    box.replaceChildren(el('thead', {}, head), el('tbody', {}, rows));
+  }
+
+  const nomeGrupo = g => (g.items[0] && g.items[0].nome) || st.groupName(g);
+  const CONF = ['roll', 'margin', 'gap', 'bordaMm', 'bleed', 'labelMm'], CONFCHK = ['marcarTam', 'marcarNome', 'allowRot', 'splitLong'];
+
+  function salvarGrade() {
+    const nome = ($('#nomeGrade').value || '').trim();
+    if (!nome) { $('#salvarInfo').textContent = 'Escreva o nome do modelo (ex.: Vestido Antonella).'; return; }
+    const ant = Moldes.lista()[nome];
+    const g = {
+      nome, base: st.base, sizes: [...st.sizes], salvo: new Date().toISOString(), usos: ant ? (ant.usos || 0) : 0,
+      origem: st.mode === 'moldes' && st.moldes ? 'moldes da modelista: ' + Object.values(st.moldes.tams).map(t => t.arquivo).join(', ') : st.mode,
+      pecas: st.groups.map(gr => ({ nome: nomeGrupo(gr), tipo: gr.type, qtd: gr.items.length,
+        w: Object.fromEntries(st.sizes.map(sz => [sz, +st.targets[gr.id][sz].w.toFixed(2)])),
+        h: Object.fromEntries(st.sizes.map(sz => [sz, +st.targets[gr.id][sz].h.toFixed(2)])) })),
+      config: Object.assign(Object.fromEntries(CONF.map(id => [id, $('#' + id).value])), Object.fromEntries(CONFCHK.map(id => [id, $('#' + id).checked]))),
+    };
+    if (!Moldes.salvar(g)) { $('#salvarInfo').textContent = 'Não consegui salvar neste navegador (armazenamento cheio ou bloqueado). Use "Exportar grades".'; return; }
+    $('#salvarInfo').textContent = `✔ Grade "${nome}" salva${ant ? ' (atualizada)' : ''}. Da próxima vez que abrir um arquivo parecido, o motor oferece essa grade sozinho.`;
+    renderSalvas();
+  }
+
+  function usarSalva(nome, comConfig = true) {
+    const sv = Moldes.lista()[nome]; if (!sv) return;
+    st.salva = sv; st.salvaCasa = casarSalva(sv);
+    if (comConfig && sv.config) {
+      for (const id of CONF) if (sv.config[id] != null && $('#' + id)) $('#' + id).value = sv.config[id];
+      for (const id of CONFCHK) if (sv.config[id] != null && $('#' + id)) $('#' + id).checked = sv.config[id];
+      $('#bordaMm').dispatchEvent(new Event('change'));
+      readOut(); desenharEtiquetas();
+    }
+    sv.usos = (sv.usos || 0) + 1; Moldes.salvar(sv);
+    setModo('salva'); renderSalvas();
+    if ($('#nomeGrade')) $('#nomeGrade').value = nome;
+    computeTargets(); renderGrade(); agendar();
+    const sem = st.groups.filter((g, i) => !st.salvaCasa[i]).map(nomeGrupo);
+    $('#salvaInfo').textContent = `Usando a grade salva "${nome}" (base ${sv.base}, tamanhos ${sv.sizes.join(', ')}) e as configurações dela.` + (sem.length ? ` Sem par na grade salva: ${sem.join(', ')} (seguem o mercado).` : '');
+  }
+
+  function renderSalvas() {
+    const sel = $('#selSalva'); if (!sel) return;
+    const l = Object.values(Moldes.lista()).sort((a, b) => (b.salvo || '').localeCompare(a.salvo || ''));
+    const cur = st.salva && st.salva.nome;
+    sel.replaceChildren(el('option', { value: '', text: l.length ? '— escolha um modelo —' : '— nenhuma grade salva ainda —' }),
+      l.map(g => el('option', { value: g.nome, selected: g.nome === cur, text: `${g.nome} · base ${g.base} · ${g.pecas.length} peças · ${(g.salvo || '').slice(0, 10).split('-').reverse().join('/')}` })));
+    sel.value = cur && l.some(g => g.nome === cur) ? cur : '';
+    $('#qtdSalvas').textContent = l.length ? `${l.length} modelo(s) salvo(s) neste computador` : '';
+  }
+
+  // Depois de ler o arquivo: se parece com um modelo já salvo, oferece a grade dele.
+  function sugerirSalva() {
+    const box = $('#sugestao'); if (!box) return;
+    box.replaceChildren(); box.hidden = true;
+    let melhor = null;
+    for (const sv of Object.values(Moldes.lista())) {
+      if (!sv.pecas || !sv.pecas[0] || !sv.pecas[0].w[sv.base]) continue;
+      const res = casarSalva(sv), ok = res.filter(Boolean);
+      if (ok.length < Math.max(1, Math.ceil(st.groups.length * 0.7)) || Math.abs(sv.pecas.length - st.groups.length) > 1) continue;
+      const custo = ok.reduce((a, c) => a + c.custo, 0) / ok.length;
+      if (custo < 0.15 && (!melhor || custo < melhor.custo)) melhor = { sv, custo };
+    }
+    if (!melhor) return;
+    box.hidden = false;
+    box.append(el('span', { text: `💡 Esse arquivo parece o modelo "${melhor.sv.nome}" (grade salva, base ${melhor.sv.base}). ` }),
+      el('button', { class: 'primary mini', type: 'button', text: 'Usar essa grade', onclick: () => { usarSalva(melhor.sv.nome); box.hidden = true; showTab('grade'); } }),
+      el('button', { class: 'mini', type: 'button', text: 'Não', onclick: () => { box.hidden = true; } }));
   }
 
   function renderCalib() {
@@ -478,7 +674,7 @@ const App = (() => {
 
   function renderGrade() {
     const head = el('tr', {}, el('th', { text: 'Peça' }), st.sizes.map(s => el('th', { text: s + (s === st.base ? ' (lido)' : '') })));
-    const badge = src => src === 'modelista' ? el('span', { class: 'src manual', text: 'modelista' }) : src === 'mercado' ? el('span', { class: 'src pdf', text: 'mercado' }) : src === 'manual' ? el('span', { class: 'src manual', text: 'manual' }) : src === 'pdf' ? el('span', { class: 'src pdf', text: 'PDF' }) : src === 'falta' ? el('span', { class: 'src falta', text: 'falta no PDF' }) : null;
+    const badge = src => src === 'modelista' ? el('span', { class: 'src manual', text: 'modelista' }) : src === 'salva' ? el('span', { class: 'src manual', text: 'salva' }) : src === 'mercado' ? el('span', { class: 'src pdf', text: 'mercado' }) : src === 'manual' ? el('span', { class: 'src manual', text: 'manual' }) : src === 'pdf' ? el('span', { class: 'src pdf', text: 'PDF' }) : src === 'falta' ? el('span', { class: 'src falta', text: 'falta no PDF' }) : null;
     const rows = st.groups.map(g => el('tr', {},
       el('td', {}, `${st.groupName(g)} `, el('span', { class: 'muted', text: `×${g.items.length} (nº ${g.items.map(p => p.n).join(', ')})` })),
       st.sizes.map(size => {
@@ -651,11 +847,30 @@ const App = (() => {
       agendar();
     });
     document.querySelectorAll('input[name=mode]').forEach(r => r.addEventListener('change', e => {
-      st.mode = e.target.value; $('#autoBox').hidden = st.mode !== 'auto'; $('#pdfBox').hidden = st.mode !== 'pdf'; $('#padraoBox').hidden = st.mode !== 'padrao'; $('#calibBox').hidden = st.mode !== 'calib';
+      setModo(e.target.value);
+      if (st.mode === 'salva' && !st.salva && $('#selSalva').value) usarSalva($('#selSalva').value);
       computeTargets(); renderGrade(); agendar();
     }));
     $('#fPdf').addEventListener('change', e => { if (e.target.files[0]) onPdf(e.target.files[0]); });
     $('#fCalib').addEventListener('change', e => { if (e.target.files[0]) onCalib(e.target.files[0]); });
+    $('#fMoldes').addEventListener('change', e => { if (e.target.files.length) onMoldes([...e.target.files]); e.target.value = ''; });
+    $('#btnMoldesLimpar').addEventListener('click', () => { st.moldes = null; $('#moldesInfo').textContent = 'PDFs tirados.'; renderMoldes(); computeTargets(); renderGrade(); agendar(); });
+    $('#btnSalvarGrade').addEventListener('click', salvarGrade);
+    $('#selSalva').addEventListener('change', e => { if (e.target.value) usarSalva(e.target.value); });
+    $('#btnExcluirSalva').addEventListener('click', () => {
+      const n = $('#selSalva').value; if (!n) return;
+      if (!confirm(`Apagar a grade salva "${n}" deste computador?`)) return;
+      Moldes.excluir(n); if (st.salva && st.salva.nome === n) { st.salva = null; st.salvaCasa = null; computeTargets(); renderGrade(); }
+      renderSalvas(); $('#salvaInfo').textContent = `Grade "${n}" apagada.`;
+    });
+    $('#btnExportarSalvas').addEventListener('click', () => download(new Blob([JSON.stringify(Moldes.lista(), null, 1)], { type: 'application/json' }), 'grades-salvas-platnumprint-x.json'));
+    $('#fImportarSalvas').addEventListener('change', async e => {
+      const f = e.target.files[0]; if (!f) return;
+      try { const n = Moldes.importar(await f.text()); renderSalvas(); $('#salvaInfo').textContent = `${n} grade(s) importada(s).`; }
+      catch (er) { $('#salvaInfo').textContent = 'Arquivo inválido: ' + er.message; }
+      e.target.value = '';
+    });
+    renderSalvas();
     $('#btnLimpar').addEventListener('click', () => { st.overrides = {}; computeTargets(); renderGrade(); });
     $('#btnGerar').addEventListener('click', gerar);
     $('#btnTodos').addEventListener('click', baixarTodos);

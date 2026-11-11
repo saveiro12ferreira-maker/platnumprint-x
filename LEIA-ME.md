@@ -55,3 +55,9 @@ A prévia coloca a estampa do arquivo na posição certa por cima da roupa da mo
 - **Borda de corte ajustável**: aba Gerar → "Borda de corte" (padrão 3 mm). Vale para TIFF, Corel e encaixe.
 - **Nome de cada pedaço**: dois cliques no texto amarelo da peça (ou na coluna Nome da tabela) e escreva (ex.: MANGA ESQ). Arraste o texto para onde ele deve ficar. "Escrever na peça" desmarcado = peça sem nome.
 - **Tamanhos iguais aos da modelista**: aba Grade → "Pela modelista: outro tamanho pronto (arquivo)". Escolha o tamanho (ex.: 6) e abra o arquivo que a modelista já fez nesse tamanho. O motor mede cada peça e passa a graduar pela diferença real entre o tamanho base e esse arquivo (os outros tamanhos seguem a mesma proporção). Sem esse arquivo, o motor usa a tabela de mercado — por isso o 6 do motor saía diferente do 6 da modelista.
+
+## v11 (11/11) — o motor aprende com cada trabalho
+- **Moldes da modelista (PDFs por tamanho)**: aba Grade. Mande os PDFs só com o contorno (um por tamanho, tamanho no fim do nome: `Vestido_Antonella_6.pdf`). O motor mede cada peça em cada PDF (medida real do PDF, sem erro de escala), casa com as peças do arquivo da estampa e gradua por eles. Tamanho sem PDF segue a mesma regra entre os que têm. Dá para trocar o molde de cada peça na lista. Avisa se algum tamanho ficar fora do esperado.
+- **Salvar esta grade como padrão**: fim da aba Grade. Guarda as medidas de todas as peças em todos os tamanhos + configurações do Gerar (borda, espaço, rolo, nome na peça…).
+- **Grade salva (padrão da casa)**: escolha o modelo e o motor usa a graduação e as configurações dele. Ao abrir um arquivo parecido com um modelo salvo, aparece a faixa verde "💡 Esse arquivo parece o modelo…" com o botão Usar.
+- As grades ficam salvas no navegador do computador. "Exportar grades" / "Importar grades" leva para outro computador.
