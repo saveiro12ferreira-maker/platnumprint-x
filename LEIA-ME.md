@@ -12,10 +12,16 @@ Dê dois cliques em `index.html`. Abre no Edge ou no Chrome. Não precisa instal
 2. **Peças**: o motor numera cada peça e diz o tipo e a regra da estampa. A conferência no topo refaz o tamanho base e compara com o original: precisa dar perto de 100%. Se alguma peça estiver errada, corrija o tipo ou a regra ali mesmo.
 3. **Estampa**: mostra a cor de fundo e o contorno de corte que o motor leu.
 4. **Grade**:
-   - *Automática*: um percentual por tamanho para cada tipo de peça.
+   - *Padrão de mercado (automático, já vem marcado)*: o motor gradua sozinho pela tabela de medidas usada no mercado (busto para a largura, estatura para o comprimento), a partir do tamanho do arquivo. Ex.: arquivo no 12 → todos os outros tamanhos saem na proporção certa. Os números da tabela podem ser corrigidos.
+   - *Percentual por tamanho*: um percentual por tamanho para cada tipo de peça.
    - *Grade da modelista (PDF)*: envie o PDF com a tabela de medidas. O motor lê a tabela, você confere os números e escolhe qual medida comanda cada peça.
    - Qualquer medida pode ser corrigida na mão na tabela final.
-5. **Gerar**: monta todos os tamanhos, mostra uma prévia com avisos e baixa um TIFF por tamanho, em 200 dpi, pronto para o RIP.
+5. **Gerar**: monta todos os tamanhos e baixa um TIFF por tamanho, em 200 dpi, pronto para o RIP.
+   - **Sem avisos de grade**: quando parte da estampa ficaria fora do molde novo, o motor resolve sozinho (a estampa acompanha a graduação da peça).
+   - **Obedece o que está marcado**: mudou qualquer opção (girar, margem, espaço, rolo, medidas), ele refaz a grade sozinho. "Permitir girar peças 180°" vem desmarcado: desmarcado, nenhuma peça gira.
+   - **Tamanho e nome em cada pedaço**: bem pequeno (4 mm, dá para mudar), dentro da peça, perto da barra, ex.: "12 FRENTE", "G COSTAS". O tamanho sai como foi digitado (número fica número, letra fica letra). O nome vem sozinho (peito com decote fundo = FRENTE, decote raso = COSTAS; SAIA, VIÉS…) e pode ser trocado na aba Peças, coluna "Nome no pedaço". Se o nome não couber no pedaço, sai só o tamanho.
+   - **✏️ Corel editável**: um SVG por tamanho. No CorelDRAW use Arquivo → Importar: cada pedaço vem num grupo separado, com a estampa, a linha de corte em vetor e o número do tamanho como texto.
+   - **Encaixe automático da grade completa**: junta todos os tamanhos (com a quantidade de cada um) num rolo só, na largura do tecido, diz quantos metros vai dar e baixa o TIFF do encaixe (LZW, abre no Corel, Photoshop e RIP).
 
 ## Provador (aba 6)
 

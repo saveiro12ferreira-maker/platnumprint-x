@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400&family=Orbitron:wght@600;700&display=swap">
-<link rel="stylesheet" href="css/app.css?v=6">
+<link rel="stylesheet" href="css/app.css?v=8">
 <script src="https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
@@ -97,11 +97,16 @@
       <h2>Grade</h2>
       <div class="row">
         <div class="seg" role="radiogroup">
-          <label><input type="radio" name="mode" value="auto" checked> Automática</label>
+          <label><input type="radio" name="mode" value="padrao" checked> Padrão de mercado (automático)</label>
+          <label><input type="radio" name="mode" value="auto"> Percentual por tamanho</label>
           <label><input type="radio" name="mode" value="pdf"> Grade da modelista (PDF)</label>
         </div>
       </div>
-      <div id="autoBox">
+      <div id="padraoBox">
+        <p class="hint">O motor gradua cada peça sozinho pela tabela de medidas usada no mercado (busto para a largura, estatura para o comprimento), a partir do tamanho do arquivo. Ex.: arquivo no 12 → o 10 e o 14 saem na proporção certa. Pode corrigir qualquer número.</p>
+        <div class="scroll"><table id="tblMercado"></table></div>
+      </div>
+      <div id="autoBox" hidden>
         <p class="hint">O motor parte do tamanho lido e soma um percentual a cada tamanho para cima (e tira a cada tamanho para baixo).</p>
         <div class="scroll"><table id="tblAuto"></table></div>
       </div>
@@ -133,15 +138,29 @@
       </div>
       <div class="row">
         <label><input type="checkbox" id="incBase" checked> Refazer também o tamanho base</label>
-        <label><input type="checkbox" id="allowRot" checked> Permitir girar peças 180° no encaixe</label>
-        <label><input type="checkbox" id="splitLong"> Dividir em partes as peças só de fundo (viés) mais longas que o rolo</label>
+        <label><input type="checkbox" id="allowRot"> Permitir girar peças 180° no encaixe</label>
+        <label><input type="checkbox" id="splitLong" checked> Dividir em partes as peças só de fundo (viés) mais longas que o rolo</label>
+        <label><input type="checkbox" id="marcarTam" checked> Marcar o tamanho em cada pedaço</label>
+        <label><input type="checkbox" id="marcarNome" checked> Junto com o nome do pedaço (FRENTE, COSTAS…)</label>
+        <label>Altura do número <input id="labelMm" type="number" min="2" max="20" step="0.5" value="4" style="width:60px"> mm</label>
       </div>
       <div class="row">
         <button id="btnGerar" class="primary">Gerar grade</button>
         <button id="btnTodos" disabled>Baixar todos os TIFF</button>
+        <button id="btnCorelTodos" disabled title="Um SVG por tamanho: abre no CorelDRAW (Arquivo → Importar) com cada pedaço separado e editável">✏️ Baixar todos para o Corel (editável)</button>
         <span id="status5" class="muted"></span>
       </div>
       <div id="results" class="results"></div>
+    </div>
+    <div class="card">
+      <h2>Encaixe automático da grade completa</h2>
+      <p class="hint">Junta todos os tamanhos num rolo só, na largura do tecido acima (ex.: 150 cm), e encaixa os pedaços sozinho. Mostra quantos metros vai dar e gera o TIFF do encaixe pronto para imprimir. Escolha quantas peças de cada tamanho.</p>
+      <div class="row" id="qtdTam"></div>
+      <div class="row">
+        <button id="btnEncaixe" class="primary" disabled>Montar encaixe automático</button>
+        <span id="statusEnc" class="muted">Gere a grade primeiro.</span>
+      </div>
+      <div id="encRes" class="enc-res"></div>
     </div>
   </section>
 
@@ -222,13 +241,14 @@
   </section>
 </main>
 
-<script src="js/acesso.js?v=6"></script>
-<script src="js/util.js?v=6"></script>
-<script src="js/tiff.js?v=6"></script>
-<script src="js/analyze.js?v=6"></script>
-<script src="js/grade.js?v=6"></script>
-<script src="js/pdfgrade.js?v=6"></script>
-<script src="js/app.js?v=6"></script>
-<script src="js/provador.js?v=6"></script>
+<script src="js/acesso.js?v=8"></script>
+<script src="js/util.js?v=8"></script>
+<script src="js/tiff.js?v=8"></script>
+<script src="js/analyze.js?v=8"></script>
+<script src="js/corel.js?v=8"></script>
+<script src="js/grade.js?v=8"></script>
+<script src="js/pdfgrade.js?v=8"></script>
+<script src="js/app.js?v=8"></script>
+<script src="js/provador.js?v=8"></script>
 </body>
 </html>

@@ -169,3 +169,11 @@ caption { caption-side: top; padding-bottom: 6px; }
 .views { display: inline-flex; gap: 4px; }
 .views button.on { border-color: var(--accent); box-shadow: var(--glow); color: var(--accent); }
 .ai { margin-top: 14px; }
+
+/* v7: encaixe automático e linha de pronto */
+.ok-line { color: #22c55e; font-weight: 600; font-size: 13px; margin: 6px 0 4px; }
+.qtd { display: inline-flex; align-items: center; gap: 4px; margin-right: 12px; }
+.enc-res canvas { width: 100%; height: auto; border-radius: 8px; background: #fff; margin: 10px 0; }
+.enc-num { display: inline-flex; flex-direction: column; border: 2px solid #22c55e; border-radius: 14px; padding: 10px 18px; margin: 10px 0; }
+.enc-num b { font-size: 40px; line-height: 1; color: #22c55e; font-family: "Orbitron", "Segoe UI", sans-serif; }
+.enc-num span { font-size: 13px; color: var(--muted); margin-top: 4px; }

@@ -25,6 +25,85 @@ const Tiff = {
     return { width: bmp.width, height: bmp.height, data: ctx.getImageData(0, 0, bmp.width, bmp.height).data, dpi: null };
   },
 
+  // PackBits linha por linha (o padrão TIFF não deixa uma sequência passar de uma linha para a outra).
+  packBits(buf, rowBytes, rows) {
+    const out = new Uint8Array(rows * (rowBytes + Math.ceil(rowBytes / 128) + 2));
+    let o = 0;
+    for (let r = 0; r < rows; r++) {
+      const a = r * rowBytes, e = a + rowBytes;
+      let i = a;
+      while (i < e) {
+        let run = 1;
+        while (i + run < e && run < 128 && buf[i + run] === buf[i]) run++;
+        if (run >= 3) { out[o++] = 257 - run; out[o++] = buf[i]; i += run; continue; }
+        let lit = 1;
+        while (i + lit < e && lit < 128) {
+          if (i + lit + 2 < e && buf[i + lit] === buf[i + lit + 1] && buf[i + lit] === buf[i + lit + 2]) break;
+          lit++;
+        }
+        out[o++] = lit - 1; out.set(buf.subarray(i, i + lit), o); o += lit; i += lit;
+      }
+    }
+    return out.slice(0, o);
+  },
+
+  // LZW do padrão TIFF (o mesmo do Photoshop/Corel): começa com 9 bits, troca de tamanho um código antes ("early change").
+  lzw(buf) {
+    const out = new Uint8Array(Math.max(1024, Math.ceil(buf.length * 1.4) + 16));
+    let o = 0, acc = 0, nb = 0, width = 9, next = 258;
+    const put = c => { acc = (acc << width) | c; nb += width; while (nb >= 8) { nb -= 8; out[o++] = (acc >>> nb) & 255; } acc &= (1 << nb) - 1; };
+    let dict = new Map();
+    put(256);
+    if (!buf.length) { put(257); if (nb) out[o++] = (acc << (8 - nb)) & 255; return out.slice(0, o); }
+    let w = buf[0];
+    for (let i = 1; i < buf.length; i++) {
+      const c = buf[i], key = w * 256 + c, hit = dict.get(key);
+      if (hit !== undefined) { w = hit; continue; }
+      put(w);
+      dict.set(key, next++);
+      if (next === 4094) { put(256); dict = new Map(); next = 258; width = 9; }
+      else if (next === 512) width = 10; else if (next === 1024) width = 11; else if (next === 2048) width = 12;
+      w = c;
+    }
+    put(w); next++;
+    if (next === 4094) { put(256); width = 9; }
+    else if (next === 512) width = 10; else if (next === 1024) width = 11; else if (next === 2048) width = 12;
+    put(257);
+    if (nb) out[o++] = (acc << (8 - nb)) & 255;
+    return out.slice(0, o);
+  },
+
+  // TIFF RGB em faixas comprimidas (PackBits), com a resolução gravada. As faixas vêm prontas.
+  writeStrips(w, h, rowsPerStrip, strips, counts, dpi, comp = 32773) {
+    const ns = strips.length, n = 13, ifdSize = 2 + n * 12 + 4;
+    let off = 8;
+    const offsets = [];
+    for (const c of counts) { offsets.push(off); off += c; }
+    if (off % 2) off++;
+    const ifdOff = off, bpsOff = ifdOff + ifdSize, xresOff = bpsOff + 6, yresOff = xresOff + 8, soOff = yresOff + 8, sbOff = soOff + ns * 4, end = sbOff + ns * 4;
+    const head = new ArrayBuffer(8), hv = new DataView(head);
+    hv.setUint16(0, 0x4949, true); hv.setUint16(2, 42, true); hv.setUint32(4, ifdOff, true);
+    const tail = new ArrayBuffer(end - ifdOff), dv = new DataView(tail);
+    let p = 0; dv.setUint16(p, n, true); p += 2;
+    const tag = (id, type, count, val) => {
+      dv.setUint16(p, id, true); dv.setUint16(p + 2, type, true); dv.setUint32(p + 4, count, true);
+      if (type === 3 && count === 1) dv.setUint16(p + 8, val, true); else dv.setUint32(p + 8, val, true);
+      p += 12;
+    };
+    tag(256, 4, 1, w); tag(257, 4, 1, h); tag(258, 3, 3, bpsOff); tag(259, 3, 1, comp);
+    tag(262, 3, 1, 2); tag(273, 4, ns, ns === 1 ? offsets[0] : soOff); tag(277, 3, 1, 3); tag(278, 4, 1, rowsPerStrip);
+    tag(279, 4, ns, ns === 1 ? counts[0] : sbOff); tag(282, 5, 1, xresOff); tag(283, 5, 1, yresOff);
+    tag(284, 3, 1, 1); tag(296, 3, 1, 2);
+    dv.setUint32(p, 0, true);
+    const L = x => x - ifdOff;
+    for (let i = 0; i < 3; i++) dv.setUint16(L(bpsOff) + i * 2, 8, true);
+    dv.setUint32(L(xresOff), dpi, true); dv.setUint32(L(xresOff) + 4, 1, true);
+    dv.setUint32(L(yresOff), dpi, true); dv.setUint32(L(yresOff) + 4, 1, true);
+    for (let i = 0; i < ns; i++) { dv.setUint32(L(soOff) + i * 4, offsets[i], true); dv.setUint32(L(sbOff) + i * 4, counts[i], true); }
+    const pad = (8 + counts.reduce((a, b) => a + b, 0)) % 2 ? [new Uint8Array(1)] : [];
+    return new Blob([head, ...strips, ...pad, tail], { type: 'image/tiff' });
+  },
+
   // TIFF RGB sem compressão, com a resolução gravada (abre no Corel, Photoshop e RIP).
   writeRGB(w, h, rgb, dpi) {
     const n = 13, ifdSize = 2 + n * 12 + 4;

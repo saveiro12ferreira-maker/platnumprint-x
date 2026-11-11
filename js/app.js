@@ -6,10 +6,21 @@ const App = (() => {
   const ANCH = { left: 'esquerda', right: 'direita', center: 'centro', top: 'em cima', bottom: 'embaixo' };
   const PCT = { saia: { w: 4, h: 2 }, peito: { w: 4, h: 3 }, circ: { w: 2, h: 2 }, vies: { w: 4, h: 0 }, ret: { w: 4, h: 2 }, outra: { w: 4, h: 2 } };
 
+  // Padrão de mercado (referência das tabelas de medidas usadas no Brasil, ABNT NBR 15800 para infantil):
+  // busto e estatura de cada tamanho. A graduação de cada peça segue a proporção entre o tamanho e o tamanho base.
+  // Pode corrigir qualquer número na aba Grade.
+  const MERCADO = {
+    '1': [52, 80], '2': [54, 92], '3': [56, 98], '4': [58, 104], '5': [60, 110], '6': [62, 116], '7': [64, 122], '8': [66, 128],
+    '9': [68, 134], '10': [70, 140], '11': [73, 146], '12': [76, 152], '13': [78, 155], '14': [80, 158], '16': [84, 164],
+    PP: [80, 97], P: [84, 98.5], M: [88, 100], G: [94, 101.5], GG: [100, 103], XG: [106, 104.5], XGG: [112, 106], EG: [106, 104.5], EGG: [112, 106],
+    '34': [76, 97], '36': [80, 98.5], '38': [84, 99.2], '40': [88, 100], '42': [92, 100.8], '44': [96, 101.5], '46': [100, 102.3], '48': [104, 103], '50': [110, 103.8], '52': [116, 104.5], '54': [122, 105.3], '56': [128, 106],
+  };
+  const chaveTam = s => { const t = String(s).toUpperCase().replace(/\s+/g, ''); const m = t.match(/^(\d+)(A|ANO|ANOS)?$/); return m ? m[1] : t; };
+
   const st = {
     file: null, sizes: [], base: 'M', dpi: 200, an: null, pieces: [], groups: [],
     bg: [255, 255, 255], thick: 4, outline: [26, 26, 26],
-    mode: 'auto', autoPct: JSON.parse(JSON.stringify(PCT)), pdf: null, mapping: {}, overrides: {}, targets: {},
+    mode: 'padrao', mercado: JSON.parse(JSON.stringify(MERCADO)), marcarTamanho: true, labelMm: 4, allowRot: false, splitLong: true, autoPct: JSON.parse(JSON.stringify(PCT)), pdf: null, mapping: {}, overrides: {}, targets: {},
     rollCm: 150, marginMm: 10, gapMm: 10, bleedMm: 0, results: {},
     groupName: g => TYPES[g.type] + (g.letter ? ' ' + g.letter : ''),
   };
@@ -114,6 +125,7 @@ const App = (() => {
       $('#log1').lastElementChild.classList.add('done');
       $('#status1').textContent = `Leitura completa em ${U.secs(U.now() - t0)}`;
       regroup();
+      nomesPadrao();
       renderAll();
       lockTabs(false);
       runCheck();
@@ -129,6 +141,21 @@ const App = (() => {
       console.error(e);
       $('#log1').append(el('li', { class: 'err', text: 'Não consegui ler o arquivo: ' + e.message }));
     } finally { busy = false; $('#btnLer').disabled = !st.file; }
+  }
+
+  // Nome de cada pedaço (vai escrito pequeno junto com o tamanho). Peito: decote fundo = FRENTE, decote raso = COSTAS.
+  const NOME_TIPO = { saia: 'SAIA', peito: 'FRENTE', circ: 'CÍRCULO', vies: 'VIÉS', ret: 'RETÂNGULO', outra: 'PEÇA' };
+  function decote(p) {
+    const a = Math.floor(p.w * 0.3), b = Math.ceil(p.w * 0.7);
+    let lo = Infinity, hi = -1;
+    for (let x = a; x < b; x++) { const t = p.top[x]; if (t < 0) continue; if (t < lo) lo = t; if (t > hi) hi = t; }
+    return hi >= 0 ? (hi - lo) / p.h : 0;
+  }
+  function nomesPadrao() {
+    for (const p of st.pieces) {
+      if (p.nomeManual) continue;
+      p.nome = p.type === 'peito' ? (decote(p) >= 0.1 ? 'FRENTE' : 'COSTAS') : NOME_TIPO[p.type] || 'PEÇA';
+    }
   }
 
   function runCheck() {
@@ -158,13 +185,15 @@ const App = (() => {
   }
 
   function renderPieces() {
-    const head = el('tr', {}, ['Nº', 'Tipo', 'Medida (cm)', 'Estampa', 'Regra', 'Âncora'].map(t => el('th', { text: t })));
+    const head = el('tr', {}, ['Nº', 'Tipo', 'Nome no pedaço', 'Medida (cm)', 'Estampa', 'Regra', 'Âncora'].map(t => el('th', { text: t })));
     const rows = st.pieces.map(p => el('tr', {},
       el('td', {}, el('span', { class: 'tag', text: p.n })),
-      el('td', {}, el('select', { onchange: e => { p.type = e.target.value; regroup(); renderGrade(); renderAuto(); renderMap(); } }, opts(TYPES, p.type))),
+      el('td', {}, el('select', { onchange: e => { p.type = e.target.value; regroup(); nomesPadrao(); renderPieces(); renderGrade(); renderAuto(); renderMap(); agendar(); } }, opts(TYPES, p.type))),
+      el('td', {}, el('input', { value: p.nome || '', style: 'width:120px', title: 'Escrito pequeno no pedaço, junto com o tamanho (ex.: FRENTE, COSTAS, MANGA)',
+        onchange: e => { p.nome = e.target.value.trim().toUpperCase(); p.nomeManual = true; e.target.value = p.nome; agendar(); } })),
       el('td', { text: `${U.fmt(U.cm(p.w, st.dpi))} × ${U.fmt(U.cm(p.h, st.dpi))}` }),
       el('td', { text: p.artFrac > 0.005 ? `${U.fmt(p.artFrac * 100, 0)}% da peça` : 'sem estampa' }),
-      el('td', {}, el('select', { onchange: e => { p.rule = e.target.value; runCheck(); } }, opts(RULES, p.rule))),
+      el('td', {}, el('select', { onchange: e => { p.rule = e.target.value; runCheck(); agendar(); } }, opts(RULES, p.rule))),
       el('td', { text: p.rule === 'barra' || p.type === 'saia' ? `barra ${ANCH[p.edge]}` : (p.artFrac > 0.005 ? `${ANCH[p.anchorX]}, ${ANCH[p.anchorY]}` : '—') }),
     ));
     $('#tblPecas').replaceChildren(el('thead', {}, head), el('tbody', {}, rows));
@@ -194,6 +223,15 @@ const App = (() => {
     return base * (1 + pct / 100 * steps);
   }
 
+  function mercadoValue(g, dim, size) {
+    const a = st.mercado[chaveTam(size)], b = st.mercado[chaveTam(st.base)];
+    if (!a || !b) return null;
+    const base = dim === 'w' ? cmW(g) : cmH(g);
+    if (dim === 'h' && g.type === 'vies') return base;               // viés: só o comprimento acompanha
+    const k = dim === 'w' || g.type === 'circ' ? 0 : 1;               // largura pelo busto, altura pela estatura (círculo cresce por igual)
+    return base * a[k] / b[k];
+  }
+
   function pdfValue(g, dim, size) {
     const m = (st.mapping[g.id] || {})[dim];
     if (!st.pdf || !m || m.kind === 'auto') return null;
@@ -220,6 +258,10 @@ const App = (() => {
             const v = pdfValue(g, dim, size);
             if (v != null) { cell[dim] = v; cell.src[dim] = 'pdf'; continue; }
             cell.src[dim] = m && m.kind !== 'auto' ? 'falta' : 'auto';
+          } else if (st.mode === 'padrao') {
+            const v = mercadoValue(g, dim, size);
+            if (v != null) { cell[dim] = v; cell.src[dim] = 'mercado'; continue; }
+            cell.src[dim] = 'auto';
           } else cell.src[dim] = 'auto';
           cell[dim] = autoValue(g, dim, size);
         }
@@ -233,10 +275,23 @@ const App = (() => {
     const head = el('tr', {}, el('th', { text: 'Tipo de peça' }), el('th', { text: 'Largura por tamanho' }), el('th', { text: 'Altura por tamanho' }));
     const rows = types.map(t => {
       const pc = st.autoPct[t] || (st.autoPct[t] = { ...PCT.outra });
-      const inp = dim => el('input', { type: 'number', step: '0.5', value: pc[dim], oninput: e => { pc[dim] = U.num(e.target.value) || 0; computeTargets(); renderGrade(); } });
+      const inp = dim => el('input', { type: 'number', step: '0.5', value: pc[dim], oninput: e => { pc[dim] = U.num(e.target.value) || 0; computeTargets(); renderGrade(); agendar(); } });
       return el('tr', {}, el('td', { text: TYPES[t] }), el('td', {}, inp('w'), ' %'), el('td', {}, inp('h'), ' %'));
     });
     $('#tblAuto').replaceChildren(el('thead', {}, head), el('tbody', {}, rows));
+  }
+
+  function renderMercado() {
+    const box = $('#tblMercado'); if (!box) return;
+    const head = el('tr', {}, el('th', { text: 'Tamanho' }), el('th', { text: 'Busto (cm)' }), el('th', { text: 'Estatura / comprimento' }), el('th', { text: 'Largura ×' }), el('th', { text: 'Altura ×' }));
+    const b = st.mercado[chaveTam(st.base)];
+    const rows = st.sizes.map(sz => {
+      const k = chaveTam(sz), m = st.mercado[k] || (st.mercado[k] = ['', '']);
+      const inp = j => el('input', { type: 'number', step: '0.5', value: m[j], style: 'width:80px', onchange: e => { m[j] = U.num(e.target.value) || ''; computeTargets(); renderGrade(); renderMercado(); agendar(); } });
+      const f = j => b && m[j] && b[j] ? '×' + U.fmt(m[j] / b[j], 3) : '—';
+      return el('tr', {}, el('td', { text: sz + (sz === st.base ? ' (base)' : '') }), el('td', {}, inp(0)), el('td', {}, inp(1)), el('td', { text: f(0) }), el('td', { text: f(1) }));
+    });
+    box.replaceChildren(el('thead', {}, head), el('tbody', {}, rows));
   }
 
   async function onPdf(file) {
@@ -311,7 +366,7 @@ const App = (() => {
 
   function renderGrade() {
     const head = el('tr', {}, el('th', { text: 'Peça' }), st.sizes.map(s => el('th', { text: s + (s === st.base ? ' (lido)' : '') })));
-    const badge = src => src === 'manual' ? el('span', { class: 'src manual', text: 'manual' }) : src === 'pdf' ? el('span', { class: 'src pdf', text: 'PDF' }) : src === 'falta' ? el('span', { class: 'src falta', text: 'falta no PDF' }) : null;
+    const badge = src => src === 'mercado' ? el('span', { class: 'src pdf', text: 'mercado' }) : src === 'manual' ? el('span', { class: 'src manual', text: 'manual' }) : src === 'pdf' ? el('span', { class: 'src pdf', text: 'PDF' }) : src === 'falta' ? el('span', { class: 'src falta', text: 'falta no PDF' }) : null;
     const rows = st.groups.map(g => el('tr', {},
       el('td', {}, `${st.groupName(g)} `, el('span', { class: 'muted', text: `×${g.items.length} (nº ${g.items.map(p => p.n).join(', ')})` })),
       st.sizes.map(size => {
@@ -321,7 +376,7 @@ const App = (() => {
           const v = U.num(e.target.value);
           const o = (st.overrides[g.id] = st.overrides[g.id] || {})[size] = (st.overrides[g.id][size] || {});
           if (v > 0) o[dim] = v; else delete o[dim];
-          computeTargets(); renderGrade();
+          computeTargets(); renderGrade(); agendar();
         } });
         const srcs = [...new Set([t.src.w, t.src.h])].map(badge);
         return el('td', { class: 'cell' }, inp('w'), el('span', { class: 'x', text: '×' }), inp('h'), srcs);
@@ -330,7 +385,7 @@ const App = (() => {
   }
 
   function renderAll() {
-    drawPreview(); renderPieces(); renderEstampa(); renderAuto(); renderMap(); renderGrade();
+    drawPreview(); renderPieces(); renderEstampa(); renderAuto(); renderMercado(); renderMap(); renderGrade();
   }
 
   // ---------- Etapa 5 ----------
@@ -341,6 +396,9 @@ const App = (() => {
     st.bleedMm = U.num($('#bleed').value) || 0;
     st.allowRot = $('#allowRot').checked;
     st.splitLong = $('#splitLong').checked;
+    st.marcarTamanho = $('#marcarTam').checked;
+    st.marcarNome = $('#marcarNome').checked;
+    st.labelMm = U.num($('#labelMm').value) || 4;
   }
 
   function fileBase() { return (st.file ? st.file.name.replace(/\.[^.]+$/, '') : 'grade').replace(/[\\/:*?"<>|]/g, '_'); }
@@ -359,7 +417,30 @@ const App = (() => {
     $('#status5').textContent = `TIFF do ${size} pronto (${U.fmt(U.cm(r.w, st.dpi))} × ${U.fmt(U.cm(r.h, st.dpi))} cm).`;
   }
 
+  async function exportCorel(size) {
+    readOut();
+    const r = await Corel.svgSize(st, size, t => { $('#status5').textContent = t; });
+    download(r, `${fileBase()}_${size}_corel.svg`);
+    $('#status5').textContent = `Arquivo do Corel do tamanho ${size} pronto. No CorelDRAW: Arquivo → Importar. Cada pedaço vem separado (estampa, linha de corte e número do tamanho).`;
+  }
+  async function corelTodos() { for (const size of Object.keys(st.results)) await exportCorel(size); }
+
+  // Opção mudou depois de gerar: refaz sozinho para valer exatamente o que está marcado.
+  let tAgenda = null, gerando = false, deNovo = false;
+  function agendar() {
+    if (!Object.keys(st.results).length) return;
+    clearTimeout(tAgenda);
+    $('#status5').textContent = 'Opção mudou: refazendo a grade com o que está marcado…';
+    tAgenda = setTimeout(() => { if (gerando) deNovo = true; else gerar(); }, 700);
+  }
+
   async function gerar() {
+    if (gerando) { deNovo = true; return; }
+    gerando = true;
+    try { await gerar_(); } finally { gerando = false; if (deNovo) { deNovo = false; gerar(); } }
+  }
+
+  async function gerar_() {
     readOut();
     const bad = st.groups.flatMap(g => st.sizes.filter(s => !(st.targets[g.id][s].w > 0 && st.targets[g.id][s].h > 0)).map(s => `${st.groupName(g)} ${s}`));
     if (bad.length) { $('#status5').textContent = `Faltam medidas válidas: ${bad.join(', ')}.`; return; }
@@ -375,20 +456,56 @@ const App = (() => {
         const pv = U.preview(r.rgb, r.w, r.h, 3, 700);
         r.rgb = null;
         st.results[size] = { w: r.w, h: r.h, ms: r.ms };
-        const warns = r.warns.length ? el('ul', {}, r.warns.map(w => el('li', { class: w.lvl, text: w.txt }))) : el('p', { class: 'muted', text: 'Sem avisos.' });
+        // Sem avisos de grade: o motor já resolve sozinho. Só aparece o que precisa de outra largura de rolo.
+        const fisicos = r.warns.filter(w => w.lvl === 'alerta');
+        const warns = fisicos.length ? el('ul', {}, fisicos.map(w => el('li', { class: w.lvl, text: w.txt })))
+          : el('p', { class: 'ok-line', text: `✔ Pronto${r.rotated ? ` · ${r.rotated} pedaço(s) girado(s) 180°` : ' · nenhum pedaço girado'}${st.marcarTamanho ? ` · tamanho ${size}${st.marcarNome ? ' e nome' : ''} marcado em cada pedaço` : ''}` });
         $('#results').append(el('div', { class: 'res' },
           el('h4', { text: `Tamanho ${size}${size === st.base ? ' (base)' : ''}` }),
           el('div', { class: 'muted', text: `${r.pieces} peças · encaixe ${U.fmt(U.cm(r.w, st.dpi))} × ${U.fmt(U.cm(r.h, st.dpi))} cm · montado em ${U.secs(r.ms)}` }),
           pv.canvas, warns,
-          el('button', { text: `Baixar TIFF ${size}`, onclick: () => exportSize(size) })));
+          el('div', { class: 'row', style: 'margin:6px 0 0' },
+            el('button', { text: `Baixar TIFF ${size}`, onclick: () => exportSize(size) }),
+            el('button', { text: `✏️ Corel editável ${size}`, title: 'Cada pedaço separado: estampa, linha de corte e número do tamanho', onclick: () => exportCorel(size) }))));
         await U.tick();
       }
       $('#status5').textContent = `Grade completa: ${sizes.length} tamanhos em ${U.secs(U.now() - t0)}.`;
-      $('#btnTodos').disabled = false;
+      $('#btnTodos').disabled = false; $('#btnCorelTodos').disabled = false; $('#btnEncaixe').disabled = false;
+      renderQtd();
     } catch (e) {
       console.error(e);
       $('#status5').textContent = 'Erro ao gerar: ' + e.message;
     } finally { $('#btnGerar').disabled = false; }
+  }
+
+  const qtd = {};
+  function renderQtd() {
+    const box = $('#qtdTam'); if (!box) return;
+    box.replaceChildren(...st.sizes.map(sz => el('label', { class: 'qtd' }, `${sz} `, el('input', { type: 'number', min: '0', step: '1', value: qtd[sz] != null ? qtd[sz] : 1, style: 'width:56px',
+      onchange: e => { qtd[sz] = Math.max(0, Math.round(U.num(e.target.value) || 0)); } }))));
+    st.sizes.forEach(sz => { if (qtd[sz] == null) qtd[sz] = 1; });
+  }
+  let encaixeBlob = null;
+  async function montarEncaixe() {
+    readOut();
+    const q = {}; st.sizes.forEach(sz => { q[sz] = qtd[sz] != null ? qtd[sz] : 1; });
+    if (!Object.values(q).some(v => v > 0)) { $('#statusEnc').textContent = 'Coloque pelo menos 1 peça em algum tamanho.'; return; }
+    $('#btnEncaixe').disabled = true; $('#encRes').replaceChildren();
+    try {
+      const r = await Grade.encaixeGrade(st, q, t => { $('#statusEnc').textContent = t; });
+      encaixeBlob = r.blob;
+      const m = U.cm(r.h, st.dpi) / 100;
+      const porTam = Object.entries(q).filter(([, v]) => v > 0).map(([k, v]) => `${k}${v > 1 ? ' ×' + v : ''}`).join(', ');
+      const fis = r.warns.filter(w => w.lvl === 'alerta');
+      $('#encRes').replaceChildren(
+        el('div', { class: 'enc-num' }, el('b', { text: U.fmt(m, 2) + ' m' }), el('span', { text: `de tecido com ${U.fmt(st.rollCm / 100, 2)} m de largura` })),
+        el('p', { class: 'muted', text: `${r.pieces} pedaços (${porTam}) · encaixe ${U.fmt(U.cm(r.w, st.dpi))} × ${U.fmt(U.cm(r.h, st.dpi))} cm · ${r.rotated ? r.rotated + ' girado(s) 180°' : 'nenhum girado'} · montado em ${U.secs(r.ms)}` }),
+        r.preview,
+        fis.length ? el('ul', {}, fis.map(w => el('li', { class: 'alerta', text: w.txt }))) : null,
+        el('button', { class: 'primary', text: '⬇ Baixar TIFF do encaixe', onclick: () => download(encaixeBlob, `${fileBase()}_encaixe_grade_${U.fmt(m, 2).replace(',', '-')}m.tif`) }));
+      $('#statusEnc').textContent = `Encaixe pronto: ${U.fmt(m, 2)} m.`;
+    } catch (e) { console.error(e); $('#statusEnc').textContent = 'Erro no encaixe: ' + e.message; }
+    finally { $('#btnEncaixe').disabled = false; }
   }
 
   async function baixarTodos() {
@@ -397,28 +514,33 @@ const App = (() => {
 
   // ---------- Início ----------
   function init() {
-    readSizes();
+    readSizes(); renderQtd();
     document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
       if (t.classList.contains('locked')) { $('#status1').textContent = 'Leia um arquivo primeiro para liberar as outras abas.'; showTab('arquivo'); return; }
       showTab(t.dataset.tab);
     }));
     $('#fBase').addEventListener('change', e => setFile(e.target.files[0] || null));
-    $('#sizes').addEventListener('change', () => { readSizes(); if (st.an) { computeTargets(); renderGrade(); } });
-    $('#baseSize').addEventListener('change', () => { st.base = $('#baseSize').value; if (st.an) { computeTargets(); renderGrade(); runCheck(); } });
+    $('#sizes').addEventListener('change', () => { readSizes(); if (st.an) { computeTargets(); renderGrade(); renderMercado(); } renderQtd(); });
+    $('#baseSize').addEventListener('change', () => { st.base = $('#baseSize').value; if (st.an) { computeTargets(); renderGrade(); renderMercado(); runCheck(); } });
     $('#btnLer').addEventListener('click', ler);
-    $('#bgColor').addEventListener('input', e => { st.bg = U.rgb(e.target.value); $('#bgHex').textContent = U.hex(st.bg); });
+    $('#bgColor').addEventListener('input', e => { st.bg = U.rgb(e.target.value); $('#bgHex').textContent = U.hex(st.bg); agendar(); });
     $('#thick').addEventListener('change', e => {
       const v = U.num(e.target.value);
       st.thickOverride = e.target.value.trim() === '' || !(v >= 0) ? null : Math.round(v / 25.4 * st.dpi);
+      agendar();
     });
     document.querySelectorAll('input[name=mode]').forEach(r => r.addEventListener('change', e => {
-      st.mode = e.target.value; $('#autoBox').hidden = st.mode !== 'auto'; $('#pdfBox').hidden = st.mode !== 'pdf';
-      computeTargets(); renderGrade();
+      st.mode = e.target.value; $('#autoBox').hidden = st.mode !== 'auto'; $('#pdfBox').hidden = st.mode !== 'pdf'; $('#padraoBox').hidden = st.mode !== 'padrao';
+      computeTargets(); renderGrade(); agendar();
     }));
     $('#fPdf').addEventListener('change', e => { if (e.target.files[0]) onPdf(e.target.files[0]); });
     $('#btnLimpar').addEventListener('click', () => { st.overrides = {}; computeTargets(); renderGrade(); });
     $('#btnGerar').addEventListener('click', gerar);
     $('#btnTodos').addEventListener('click', baixarTodos);
+    $('#btnCorelTodos').addEventListener('click', corelTodos);
+    $('#btnEncaixe').addEventListener('click', montarEncaixe);
+    // Qualquer opção do Gerar mudou: refaz sozinho (obedece o que está marcado).
+    ['#roll', '#margin', '#gap', '#bleed', '#allowRot', '#splitLong', '#incBase', '#marcarTam', '#marcarNome', '#labelMm'].forEach(id => $(id).addEventListener('change', agendar));
 
     // Abrir um arquivo por endereço (?src=...), útil para testes no computador.
     const src = new URLSearchParams(location.search).get('src');
