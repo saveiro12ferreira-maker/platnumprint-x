@@ -46,7 +46,7 @@ const Acesso = (() => {
 
   function entrar(e) {
     e.preventDefault();
-    const u = $('#lgUser').value.trim().toLowerCase(), p = $('#lgPass').value;
+    const u = $('#lgUser').value.trim().toLowerCase(), p = $('#lgPass').value.trim();   // espaço sobrando ao colar não atrapalha
     if (!u || !p) { $('#lgErr').textContent = 'Preencha usuário e senha.'; return; }
     if (USERS[u] && USERS[u] === sha256(`${SALT}|${u}|${p}`)) {
       try { sessionStorage.setItem(KEY, u); } catch (err) { /* sem armazenamento: vale só até recarregar */ }

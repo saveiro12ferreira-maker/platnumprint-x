@@ -334,7 +334,7 @@ const App = (() => {
         ' ', el('label', { title: 'Número do tamanho e nome separados, cada um no seu lugar' }, el('input', { type: 'checkbox', checked: !!p.separado, onchange: e => { if (e.target.checked) separar(p); else juntar(p); renderPieces(); desenharEtiquetas(); agendar(); } }), ' separar nº e nome')),
       el('td', { text: `${U.fmt(U.cm(p.w, st.dpi))} × ${U.fmt(U.cm(p.h, st.dpi))}` }),
       el('td', { text: p.artFrac > 0.005 ? `${U.fmt(p.artFrac * 100, 0)}% da peça` : 'sem estampa' }),
-      el('td', {}, el('select', { onchange: e => { p.rule = e.target.value; runCheck(); agendar(); } }, opts(RULES, p.rule))),
+      el('td', {}, el('select', { onchange: e => { p.rule = e.target.value; p.regraManual = true; runCheck(); agendar(); } }, opts(RULES, p.rule))),
       el('td', { text: p.rule === 'barra' || p.type === 'saia' ? `barra ${ANCH[p.edge]}` : (p.artFrac > 0.005 ? `${ANCH[p.anchorX]}, ${ANCH[p.anchorY]}` : '—') }),
     ));
     $('#tblPecas').replaceChildren(el('thead', {}, head), el('tbody', {}, rows));
