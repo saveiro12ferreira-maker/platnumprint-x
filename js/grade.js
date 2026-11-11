@@ -221,7 +221,57 @@ const Grade = (() => {
     for (let y = R; y < Ht - R; y += st) { const o = y * Wt; for (let x = R; x < Wt - R; x += st) if (er[o + x]) { const d = (x - tx) ** 2 + (y - ty) ** 2; if (d < bd) { bd = d; best = { cx: x, cy: y }; } } }
     return best;
   }
-  const folga = (thick, px) => (thick | 0) + Math.max(2, Math.round(px * 0.15));   // perto da borda, sem encostar no contorno
+  const folga = (thick, px) => (thick | 0) + Math.max(1, Math.round(px * 0.06));   // quase colado na borda preta, sem encostar nela
+
+  // Lugar do texto pelo FORMATO real das letras (não por um círculo em volta): o nome pode ficar rente à borda,
+  // no pezinho da peça, que o laser corta e a bainha/overlock cobre.
+  const erCache = new WeakMap();
+  function erodida(nm, Wt, Ht, keep) {
+    let c = erCache.get(nm); if (!c) erCache.set(nm, c = {});
+    return c[keep] || (c[keep] = U.box(nm, Wt, Ht, keep, 'min'));
+  }
+  function pontosTexto(t) {
+    if (t._pts) return t._pts;
+    let pts = [];
+    for (let y = 0; y < t.h; y++) for (let x = 0; x < t.w; x++) if (t.a[y * t.w + x] > 60) pts.push([x - (t.w >> 1), y - (t.h >> 1)]);
+    if (pts.length > 600) {   // amostra, mas guarda as pontas (onde o texto encosta primeiro)
+      const k = Math.ceil(pts.length / 500), ext = [];
+      let a = pts[0], b = pts[0], c = pts[0], d = pts[0];
+      for (const q of pts) { if (q[0] < a[0]) a = q; if (q[0] > b[0]) b = q; if (q[1] < c[1]) c = q; if (q[1] > d[1]) d = q; }
+      pts = pts.filter((_, i) => i % k === 0).concat([a, b, c, d]);
+    }
+    return (t._pts = pts);
+  }
+  function cabe(er, Wt, Ht, pts, cx, cy) {
+    for (const [dx, dy] of pts) { const x = cx + dx, y = cy + dy; if (x < 0 || y < 0 || x >= Wt || y >= Ht || !er[y * Wt + x]) return false; }
+    return true;
+  }
+  // pos = {fx, fy} escolhido à mão: o lugar válido mais perto dele. Sem pos: embaixo, perto do meio (na barra).
+  function spotTexto(nm, Wt, Ht, t, keep, pos) {
+    if (t.w > Wt || t.h > Ht) return null;
+    const er = erodida(nm, Wt, Ht, keep), pts = pontosTexto(t);
+    if (pos) {
+      const tx = Math.round(pos.fx * Wt), ty = Math.round(pos.fy * Ht), maxR = Math.max(Wt, Ht);
+      if (cabe(er, Wt, Ht, pts, tx, ty)) return { cx: tx, cy: ty };
+      for (let r = 1; r < maxR; r += r < 30 ? 1 : Math.max(2, r >> 5)) {
+        let best = null, bd = Infinity;
+        const passo = Math.max(1, r >> 4);
+        for (let k = -r; k <= r; k += passo) for (const [x, y] of [[tx + k, ty - r], [tx + k, ty + r], [tx - r, ty + k], [tx + r, ty + k]]) {
+          const d = (x - tx) ** 2 + (y - ty) ** 2;
+          if (d < bd && cabe(er, Wt, Ht, pts, x, y)) { bd = d; best = { cx: x, cy: y }; }
+        }
+        if (best) return best;
+      }
+      return null;
+    }
+    const sy = Math.max(1, Math.floor(Ht / 500)), sx = Math.max(1, Math.floor(Wt / 300));
+    for (let y = Ht - 1 - (t.h >> 1); y >= (t.h >> 1); y -= sy) {
+      for (let d = 0; d < Wt / 2; d += sx) for (const x of d ? [Math.round(Wt / 2 - d), Math.round(Wt / 2 + d)] : [Math.round(Wt / 2)]) {
+        if (cabe(er, Wt, Ht, pts, x, y)) return { cx: x, cy: y };
+      }
+    }
+    return null;
+  }
 
   function stampLabel(out, OW, OH, b, nm, Wt, Ht, label, thick) {
     let px = Math.max(3, label.px | 0), t = null, spot = null;
@@ -230,7 +280,7 @@ const Grade = (() => {
       px = Math.max(3, label.px | 0);
       for (let k = 0; k < 3 && !spot; k++) {
         t = textMask(txt, px, label.rot || 0);
-        spot = label.pos ? spotPerto(nm, Wt, Ht, t.w, t.h, folga(thick, px), label.pos.fx, label.pos.fy) : labelSpot(nm, Wt, Ht, t.w, t.h, folga(thick, px));
+        spot = spotTexto(nm, Wt, Ht, t, folga(thick, px), label.pos);
         if (!spot) px = Math.round(px * 0.7);
       }
       if (spot) break;
@@ -598,7 +648,7 @@ const Grade = (() => {
     for (const text of textos) {
       let px = label.px;
       for (let k = 0; k < 3; k++) {
-        const t = textMask(text, px, label.rot || 0), sp = label.pos ? spotPerto(r.nm, r.Wt, r.Ht, t.w, t.h, folga(thick, px), label.pos.fx, label.pos.fy) : labelSpot(r.nm, r.Wt, r.Ht, t.w, t.h, folga(thick, px));
+        const t = textMask(text, px, label.rot || 0), sp = spotTexto(r.nm, r.Wt, r.Ht, t, folga(thick, px), label.pos);
         if (sp) return { x: sp.cx + r.b, y: sp.cy + r.b, px, text, rot: label.rot || 0 };
         px = Math.round(px * 0.7);
       }
@@ -607,7 +657,7 @@ const Grade = (() => {
   }
 
   function autoPos(p, text, px, rot = 0) {
-    const t = textMask(text, px, rot), sp = labelSpot(p.mask, p.w, p.h, t.w, t.h, folga(p.thick, px));
+    const t = textMask(text, px, rot), sp = spotTexto(p.mask, p.w, p.h, t, folga(p.thick, px), null);
     return sp ? { fx: sp.cx / p.w, fy: sp.cy / p.h } : { fx: 0.5, fy: 0.85 };
   }
 

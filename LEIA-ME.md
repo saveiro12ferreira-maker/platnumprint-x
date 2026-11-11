@@ -101,3 +101,7 @@ A prévia coloca a estampa do arquivo na posição certa por cima da roupa da mo
 - Começa com a tabela do caderno dela (blusa e short) e **aprende sozinho** a cada modelo em que vocês colocam os PDFs (uma vez por modelo). A aba Grade → "🤖 Automático da casa" mostra quanto cada família cresce/diminui por tamanho e de quantos modelos aprendeu.
 - O aprendizado fica no navegador do computador onde foi feito.
 - **Peças iguais em posições diferentes** (ex.: duas costas, uma de cabeça para baixo ou deitada): o motor reconhece pelo contorno que é a mesma peça, gradua as duas igual e o molde de cada uma acompanha a posição dela — o desenho segue a modelagem de cada peça.
+
+## v23 (11/11) — nome rente à borda
+- O lugar do nome/número agora é calculado pelo formato real das letras (antes era um círculo em volta do texto, que empurrava nomes compridos para o meio da estampa). Dá para deixar o nome no pezinho da peça, quase colado na borda preta (o laser corta e a bainha/overlock cobre), em qualquer giro.
+- Na tela, o nome não tem mais a barra grossa de cor: só um contorno fino, para ver exatamente onde ele fica.
