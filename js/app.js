@@ -526,7 +526,10 @@ const App = (() => {
         if (t === st.base) continue;
         const d = dimsMolde(g, t); if (!d) continue;
         for (const [dim, v, b] of [['w', d.w, bw], ['h', d.h, bh]]) {
-          const Fb = fatorCasa(fam, dim, st.base) || 1, F = v / b * Fb, k = chaveTam(t);
+          // grade nova (ex.: adulto P, M, G ou 36 a 46): o tamanho base vira a referência dessa família
+          if (fatorCasa(fam, dim, st.base) == null) { const f0 = ((ap[fam] = ap[fam] || {})[dim] = ap[fam][dim] || {}); if (!f0[chaveTam(st.base)]) f0[chaveTam(st.base)] = [1, 1]; }
+          const Fb = (() => { const sem = SEMENTE[fam] && SEMENTE[fam][dim][chaveTam(st.base)], a0 = ((ap[fam] || {})[dim] || {})[chaveTam(st.base)]; const so = (sem != null ? sem : 0) + (a0 ? a0[0] : 0), n0 = (sem != null ? 1 : 0) + (a0 ? a0[1] : 0); return n0 ? so / n0 : 1; })();
+          const F = v / b * Fb, k = chaveTam(t);
           if (!(F > 0.4 && F < 2)) continue;
           const f = ((ap[fam] = ap[fam] || {})[dim] = ap[fam][dim] || {});
           f[k] = f[k] ? [f[k][0] + F, f[k][1] + 1] : [F, 1]; n++;
