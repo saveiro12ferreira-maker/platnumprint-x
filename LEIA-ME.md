@@ -100,3 +100,4 @@ A prévia coloca a estampa do arquivo na posição certa por cima da roupa da mo
 - Toda peça sem PDF e sem tabela agora gradua pelo **jeito da modelista de vocês**, não pelo mercado: corpo, short/calça, manga, saia e acabamentos (viés, gola, cós), reconhecidos pelo nome da peça.
 - Começa com a tabela do caderno dela (blusa e short) e **aprende sozinho** a cada modelo em que vocês colocam os PDFs (uma vez por modelo). A aba Grade → "🤖 Automático da casa" mostra quanto cada família cresce/diminui por tamanho e de quantos modelos aprendeu.
 - O aprendizado fica no navegador do computador onde foi feito.
+- **Peças iguais em posições diferentes** (ex.: duas costas, uma de cabeça para baixo ou deitada): o motor reconhece pelo contorno que é a mesma peça, gradua as duas igual e o molde de cada uma acompanha a posição dela — o desenho segue a modelagem de cada peça.

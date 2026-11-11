@@ -164,12 +164,49 @@ const Analyze = (() => {
     return { w, h, dpi, pieces, bg, outline, thick, ignored, times, preview: pv.canvas, pf: pv.f };
   }
 
-  // Junta peças iguais (mesmo tipo e mesma medida) para a grade.
+  // Miniatura da peça (G×G, esticada na caixa) e giro/espelho dela: t = quartos de volta no sentido horário (bits 1-2) + espelho (bit 3).
+  const G = 32;
+  function mini(p) {
+    if (p._mini) return p._mini;
+    const g = new Uint8Array(G * G);
+    for (let y = 0; y < G; y++) for (let x = 0; x < G; x++) g[y * G + x] = p.mask[Math.min(p.h - 1, Math.floor((y + 0.5) * p.h / G)) * p.w + Math.min(p.w - 1, Math.floor((x + 0.5) * p.w / G))];
+    return (p._mini = g);
+  }
+  function girarMini(m, t) {
+    const rot = t & 3, esp = t >> 2, o = new Uint8Array(G * G);
+    for (let y = 0; y < G; y++) for (let x0 = 0; x0 < G; x0++) {
+      if (!m[y * G + x0]) continue;
+      const x = esp ? G - 1 - x0 : x0;
+      const [X, Y] = rot === 0 ? [x, y] : rot === 1 ? [G - 1 - y, x] : rot === 2 ? [G - 1 - x, G - 1 - y] : [y, G - 1 - x];
+      o[Y * G + X] = 1;
+    }
+    return o;
+  }
+  // A peça p é a mesma peça g (mesmo contorno), só que virada/girada/espelhada no arquivo? Devolve o t ou -1.
+  function mesmaPeca(g, p) {
+    const a = g.items[0], ok = (u, v) => Math.abs(u - v) / v < 0.03;
+    let best = -1, bs = 0.9;
+    for (let t = 0; t < 8; t++) {
+      const odd = (t & 3) % 2 === 1;
+      if (odd ? !(ok(p.w, a.h) && ok(p.h, a.w)) : !(ok(p.w, a.w) && ok(p.h, a.h))) continue;
+      const m = girarMini(mini(a), t), q = mini(p);
+      let i2 = 0, u = 0; for (let i = 0; i < m.length; i++) { if (m[i] && q[i]) i2++; if (m[i] || q[i]) u++; }
+      const s = u ? i2 / u : 0;
+      if (s > bs) { bs = s; best = t; }
+    }
+    return best;
+  }
+
+  // Junta peças iguais para a grade — também quando a mesma peça está girada, de cabeça para baixo ou espelhada no arquivo
+  // (ex.: as duas costas em posições diferentes). Cada peça guarda como está em relação à primeira (p.t): a graduação
+  // e o molde acompanham a posição de cada uma, e o desenho dela continua do jeito que está nela.
   function group(pieces) {
     const gs = [];
     for (const p of pieces) {
-      let g = gs.find(g => g.type === p.type && Math.abs(g.w - p.w) / g.w < 0.03 && Math.abs(g.h - p.h) / g.h < 0.03);
-      if (!g) { g = { type: p.type, w: p.w, h: p.h, items: [] }; gs.push(g); }
+      let g = null, t = 0;
+      for (const c of gs) { if (c.type !== p.type && !(Math.abs(c.w - p.h) / c.w < 0.03 && Math.abs(c.h - p.w) / c.h < 0.03)) continue; const tt = mesmaPeca(c, p); if (tt >= 0) { g = c; t = tt; break; } }
+      if (!g) { g = { type: p.type, w: p.w, h: p.h, items: [] }; gs.push(g); t = 0; }
+      p.t = t;
       g.items.push(p);
     }
     const byType = {};

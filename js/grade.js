@@ -409,12 +409,14 @@ const Grade = (() => {
       return a;
     };
     for (const g of st.groups) {
-      const { W: W0, H: H0 } = targetsPx(st, g, size);
+      const alvo = targetsPx(st, g, size);
       for (const p of g.items) {
         const o = { bg: st.bg, thick: st.thickOverride != null ? st.thickOverride : p.thick, outline: st.outline, bleed: bleedPx, rule: p.rule, labels: labelsDe(p) }; o.label = o.labels[0] || null;
         // molde da modelista: a peça sai com o contorno do PDF e a medida real dele (a menos que tenham digitado a medida à mão)
         const F = (st.mode === 'moldes' || st.mode === 'tabela') && st.formas && st.formas[size] && st.formas[size][p.n];
-        let W = W0, H = H0;
+        // peça girada de lado em relação à primeira do grupo: largura e altura trocam
+        const deLado = ((p.t || 0) & 3) % 2 === 1;
+        let W = deLado ? alvo.H : alvo.W, H = deLado ? alvo.W : alvo.H;
         if (F) {
           o.forma = F;
           const t = st.targets[g.id][size];

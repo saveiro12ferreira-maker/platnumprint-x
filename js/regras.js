@@ -98,7 +98,25 @@ const Regras = (() => {
   }
 
   // Leva as regras de uma peça para outra do mesmo grupo (igual ou espelhada): ponto pelo lugar na caixa, DX trocado se espelhada.
+  // Leva um ponto e um deslocamento da peça de referência para a mesma peça girada/espelhada (t como em Analyze.group).
+  function moverT(x, y, w, h, t) {
+    const rot = t & 3, esp = t >> 2; if (esp) x = w - 1 - x;
+    return rot === 0 ? [x, y] : rot === 1 ? [h - 1 - y, x] : rot === 2 ? [w - 1 - x, h - 1 - y] : [y, w - 1 - x];
+  }
+  function vetorT(dx, dy, t) {   // dy da tabela é para CIMA; na imagem y é para baixo
+    let vx = dx, vy = -dy; const rot = t & 3; if (t >> 2) vx = -vx;
+    for (let k = 0; k < rot; k++) [vx, vy] = [-vy, vx];
+    return [vx, -vy];
+  }
   function espelhar(regra, pDe, pPara) {
+    if (pPara.t != null && (pDe.t || 0) === 0) {
+      const t = pPara.t, c = contorno(pDe);
+      return { pontos: regra.pontos.map(q => {
+        const [x, y] = moverT(c[q.i][0], c[q.i][1], pDe.w, pDe.h, t);
+        const tab = {}; for (const [s, v] of Object.entries(q.tab || {})) { const d = vetorT(+v[0] || 0, +v[1] || 0, t); tab[s] = [v[0] === '' && v[1] === '' ? '' : d[0], v[0] === '' && v[1] === '' ? '' : d[1]]; }
+        return { i: pontoPerto(pPara, x / pPara.w, y / pPara.h), nome: q.nome, tab };
+      }) };
+    }
     const mi = (m, w, h, G = 32) => { const g = new Uint8Array(G * G); for (let y = 0; y < G; y++) for (let x = 0; x < G; x++) g[y * G + x] = m[Math.min(h - 1, Math.floor((y + 0.5) * h / G)) * w + Math.min(w - 1, Math.floor((x + 0.5) * w / G))]; return g; };
     const A = mi(pDe.mask, pDe.w, pDe.h), B = mi(pPara.mask, pPara.w, pPara.h), G = 32;
     let igual = 0, esp = 0;
