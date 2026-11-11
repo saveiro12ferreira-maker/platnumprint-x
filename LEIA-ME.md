@@ -73,3 +73,6 @@ A prévia coloca a estampa do arquivo na posição certa por cima da roupa da mo
 - **Ctrl + rodinha** em cima do nome muda a letra; rodinha sozinha gira.
 - Aba Peças: campos "letra … mm" e "separar nº e nome" em cada peça.
 - No Corel o número sai como `Tamanho_N` e o nome como `Nome_N`, os dois editáveis.
+
+## v14 (11/11) — conferência de dpi pelo molde
+- Com os PDFs da modelista incluindo o do tamanho base, o motor compara cada peça do arquivo da estampa com o molde base. Se todas estão maiores ou menores na mesma proporção, aparece o aviso vermelho com o dpi certo e o botão "Corrigir para … dpi" (causa de "a grade saiu toda pequena").

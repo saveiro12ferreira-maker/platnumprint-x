@@ -587,7 +587,35 @@ const App = (() => {
       const menor = idxTam(t) < idxTam(st.base), aB = cmW(g) * cmH(g), aM = d.w * d.h;
       if (menor ? aM > aB * 1.15 : aM < aB * 0.85) estranhas.push(`${nomeGrupo(g)} no ${t}`);
     }
+    conferirDpi();
     if (estranhas.length) info.textContent += ` ⚠ Confira: ${estranhas.join(', ')} ficou com tamanho fora do esperado em relação ao ${st.base}. O arquivo da estampa e os PDFs são do mesmo modelo? Se uma peça caiu no molde errado, troque na lista abaixo.`;
+  }
+
+  // Com o PDF do tamanho base: a peça do arquivo da estampa tem que medir o mesmo que o molde dela.
+  // Se todas estão maiores ou menores na mesma proporção, o dpi do arquivo está errado (é a causa de "saiu tudo pequeno").
+  function conferirDpi() {
+    const box = $('#dpiAviso'); if (!box) return; box.hidden = true; box.replaceChildren();
+    if (!st.moldes || !st.moldes.tams[st.base]) return;
+    const r = [];
+    for (const g of st.groups) {
+      const d = dimsMolde(g, st.base); if (!d || g.type === 'vies') continue;
+      r.push(d.w / cmW(g), d.h / cmH(g));
+    }
+    if (r.length < 2) return;
+    r.sort((a, b) => a - b);
+    const k = r[r.length >> 1];
+    if (Math.abs(k - 1) < 0.04) return;
+    const novo = Math.round(st.dpi / k);
+    box.hidden = false;
+    box.append(el('b', { text: `⚠ As peças do arquivo da estampa estão ${U.fmt((k > 1 ? 1 - 1 / k : 1 / k - 1) * 100, 0)}% ${k > 1 ? 'MENORES' : 'MAIORES'} que o molde ${st.base} da modelista. ` }),
+      el('span', { text: `O arquivo parece estar em ${novo} dpi, e o motor está lendo como ${st.dpi} dpi — por isso a grade sai ${k > 1 ? 'pequena' : 'grande'}. ` }),
+      el('button', { class: 'primary mini', type: 'button', text: `Corrigir para ${novo} dpi`, onclick: () => corrigirDpi(novo) }));
+  }
+  function corrigirDpi(novo) {
+    st.dpi = novo; $('#dpi').value = novo;
+    if (st.bordaMm != null) st.thickOverride = Math.round(st.bordaMm / 25.4 * st.dpi);
+    casarMoldes(); computeTargets(); renderAll(); renderMoldes(); conferirDpi(); agendar();
+    $('#moldesInfo').textContent = `dpi corrigido para ${novo}. Agora o ${st.base} do arquivo bate com o molde da modelista.`;
   }
 
   function renderMoldes() {
