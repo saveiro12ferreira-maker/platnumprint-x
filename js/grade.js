@@ -1,6 +1,33 @@
 // Motor de grade: refaz cada peça na medida nova, recoloca a estampa pela regra e encaixa no rolo.
 const Grade = (() => {
-  const RULE_NAMES = { barra: 'segue a barra', fixa: 'estampa fixa', esticar: 'estica com a peça', fundo: 'só fundo' };
+  const RULE_NAMES = { acompanha: 'acompanha a graduação', barra: 'segue a barra', fixa: 'estampa fixa', esticar: 'estica com a peça', fundo: 'só fundo' };
+
+  // Elementos da estampa de uma peça: cada bloco de desenho (flor, vaso, faixa) separado, com centro e caixa.
+  // Partes que quase se tocam (até ~1,5 mm) contam como o mesmo elemento.
+  function elementos(p) {
+    if (p._elem) return p._elem;
+    const W = p.w, H = p.h, r = Math.max(2, Math.round(Math.min(W, H) * 0.004));
+    const dil = U.box(p.art, W, H, r, 'max');
+    for (let i = 0; i < dil.length; i++) if (!p.mask[i] || p.band[i]) dil[i] = 0;
+    const lab = new Int32Array(W * H), fila = new Int32Array(W * H), lista = [];
+    let id = 0;
+    for (let s0 = 0; s0 < W * H; s0++) {
+      if (!dil[s0] || lab[s0]) continue;
+      id++; let a = 0, bq = 0, n = 0, sx = 0, sy = 0, x0 = W, y0 = H, x1 = 0, y1 = 0; fila[bq++] = s0; lab[s0] = id;
+      while (a < bq) {
+        const i = fila[a++], x = i % W, y = (i / W) | 0;
+        if (p.art[i]) { n++; sx += x; sy += y; }
+        if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+        if (x > 0 && dil[i - 1] && !lab[i - 1]) { lab[i - 1] = id; fila[bq++] = i - 1; }
+        if (x < W - 1 && dil[i + 1] && !lab[i + 1]) { lab[i + 1] = id; fila[bq++] = i + 1; }
+        if (y > 0 && dil[i - W] && !lab[i - W]) { lab[i - W] = id; fila[bq++] = i - W; }
+        if (y < H - 1 && dil[i + W] && !lab[i + W]) { lab[i + W] = id; fila[bq++] = i + W; }
+      }
+      if (!n) continue;
+      lista.push({ id, n, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, x0, y0, x1, y1, largo: (x1 - x0) > W * 0.5 });
+    }
+    return (p._elem = { lab, lista });
+  }
 
   // Refaz uma peça com largura Wt e altura Ht (pixels, sem sangria).
   function renderPiece(p, Wt, Ht, o) {
@@ -41,7 +68,60 @@ const Grade = (() => {
     if (rule === 'barra' || rule === 'barraEsc') { const pr = U.profiles(nm, Wt, Ht); nt = pr.top; nb = pr.bot; }
     const bottom = p.edge === 'bottom';
 
-    let copied = 0;
+    let copied = 0, esperado = 0;
+    if (rule === 'acompanha') {
+      // ACOMPANHA A GRADUAÇÃO: cada elemento da estampa (vaso, flor, faixa) vai para o lugar proporcional no molde novo
+      // e muda de tamanho junto com a graduação (12 → 2 diminui um pouco; 12 → 16 aumenta), sem deformar.
+      // O que está perto da barra (ou do ombro) mantém a distância até ela proporcional, seguindo a curva nova.
+      const E = elementos(p), s = Math.sqrt(sx * sy);
+      if (!nb) { const pr = U.profiles(nm, Wt, Ht); nt = pr.top; nb = pr.bot; }
+      for (let y = 0; y < Ht; y++) for (let x = 0; x < Wt; x++) {
+        if (!nm[y * Wt + x]) continue;
+        const q = ((y + b) * OW + x + b) * 4; out[q] = br; out[q + 1] = bgG; out[q + 2] = bb; out[q + 3] = 255;
+      }
+      const pint = new Uint8Array(Wt * Ht);
+      const coluna = (prof, x) => { x = Math.max(0, Math.min(prof.length - 1, x)); if (prof[x] >= 0) return prof[x]; for (let d = 1; d < prof.length; d++) { if (x - d >= 0 && prof[x - d] >= 0) return prof[x - d]; if (x + d < prof.length && prof[x + d] >= 0) return prof[x + d]; } return -1; };
+      for (const e of E.lista) {
+        const ex = e.largo ? sx : s, ey = s;
+        const Xn = e.cx * sx;
+        let Yn;
+        if (e.cy > H * 0.5) { const sb = coluna(p.bot, Math.round(e.cx)), nbb = coluna(nb, Math.round(Xn)); Yn = sb >= 0 && nbb >= 0 ? nbb - (sb - e.cy) * s : e.cy * sy; }
+        else { const st0 = coluna(p.top, Math.round(e.cx)), ntt = coluna(nt, Math.round(Xn)); Yn = st0 >= 0 && ntt >= 0 ? ntt + (e.cy - st0) * s : e.cy * sy; }
+        // caixa nova do elemento, sem sair da peça
+        let bx0 = Xn + (e.x0 - e.cx) * ex, bx1 = Xn + (e.x1 - e.cx) * ex, by0 = Yn + (e.y0 - e.cy) * ey, by1 = Yn + (e.y1 - e.cy) * ey;
+        let dxs = 0, dys = 0;
+        if (bx0 < 0) dxs = -bx0; else if (bx1 > Wt - 1) dxs = Wt - 1 - bx1;
+        if (by0 < 0) dys = -by0; else if (by1 > Ht - 1) dys = Ht - 1 - by1;
+        const X0n = Xn + dxs, Y0n = Yn + dys;
+        esperado += e.n * ex * ey;
+        const ya = Math.max(0, Math.floor(by0 + dys)), yb = Math.min(Ht - 1, Math.ceil(by1 + dys));
+        const xa = Math.max(0, Math.floor(bx0 + dxs)), xb = Math.min(Wt - 1, Math.ceil(bx1 + dxs));
+        // faixa larga (linha, renda, barrado corrido): segue a curva da barra coluna por coluna
+        const embaixo = e.cy > H * 0.5, curva = e.largo;
+        const y0c = curva ? 0 : ya, y1c = curva ? Ht - 1 : yb;
+        for (let y = y0c; y <= y1c; y++) {
+          const Yr = Math.round(e.cy + (y - Y0n) / ey);
+          if (!curva && (Yr < 0 || Yr >= H)) continue;
+          for (let x = xa; x <= xb; x++) {
+            const i = y * Wt + x; if (!nm[i]) continue;
+            const X = Math.round(e.cx + (x - X0n) / ex); if (X < 0 || X >= W) continue;
+            let Y = Yr;
+            if (curva) {
+              if (embaixo) { const sb = p.bot[X], nbb = nb[x]; if (sb < 0 || nbb < 0) continue; Y = Math.round(sb - (nbb - y) / ey); }
+              else { const st0 = p.top[X], ntt = nt[x]; if (st0 < 0 || ntt < 0) continue; Y = Math.round(st0 + (y - ntt) / ey); }
+              if (Y < e.y0 || Y > e.y1) continue;
+            }
+            const k = Y * W + X;
+            if (E.lab[k] !== e.id || p.band[k]) continue;
+            const art = A[k];
+            if (!art && pint[i]) continue;
+            const q = ((y + b) * OW + x + b) * 4, s4 = k * 4;
+            out[q] = S[s4]; out[q + 1] = S[s4 + 1]; out[q + 2] = S[s4 + 2];
+            if (art) { pint[i] = 1; copied++; }
+          }
+        }
+      }
+    } else
     for (let y = 0; y < Ht; y++) {
       for (let x = 0; x < Wt; x++) {
         const i = y * Wt + x;
@@ -81,7 +161,7 @@ const Grade = (() => {
     for (const L of (o.labels || (o.label ? [o.label] : []))) if (L && L.text) stampLabel(out, OW, OH, b, nm, Wt, Ht, L, o.thick | 0);
 
     // Quanto da estampa coube no molde novo (1 = tudo).
-    const expected = rule === 'fixa' ? p.artCount : rule === 'barra' ? p.artCount * sx : (rule === 'esticar' || rule === 'barraEsc') ? p.artCount * sx * sy : 0;
+    const expected = rule === 'acompanha' ? esperado : rule === 'fixa' ? p.artCount : rule === 'barra' ? p.artCount * sx : (rule === 'esticar' || rule === 'barraEsc') ? p.artCount * sx * sy : 0;
     const kept = expected > 0 ? Math.min(1, copied / expected) : 1;
     return { w: OW, h: OH, rgba: out, sx, sy, kept, nm, Wt, Ht, b };
   }
@@ -333,7 +413,7 @@ const Grade = (() => {
       for (const p of g.items) {
         const o = { bg: st.bg, thick: st.thickOverride != null ? st.thickOverride : p.thick, outline: st.outline, bleed: bleedPx, rule: p.rule, labels: labelsDe(p) }; o.label = o.labels[0] || null;
         // molde da modelista: a peça sai com o contorno do PDF e a medida real dele (a menos que tenham digitado a medida à mão)
-        const F = st.mode === 'moldes' && st.formas && st.formas[size] && st.formas[size][p.n];
+        const F = (st.mode === 'moldes' || st.mode === 'tabela') && st.formas && st.formas[size] && st.formas[size][p.n];
         let W = W0, H = H0;
         if (F) {
           o.forma = F;

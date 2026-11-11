@@ -212,3 +212,8 @@ label.file.mini { padding: 2px 8px; font-size: 13px; }
 
 details.outros { margin: 8px 0 4px; } details.outros summary { cursor: pointer; color: var(--muted, #94a3b8); font-size: 13px; }
 details.outros .seg { margin-top: 8px; }
+
+.tab-canvas { display: block; max-width: 100%; margin: 10px 0; border: 2px solid #3b82f6; border-radius: 10px; cursor: crosshair; background: #fff; }
+table.regras input.dxy { width: 62px; }
+table.regras tr.sel td { background: rgba(245, 158, 11, .18); }
+.tab-rapido { font-size: 13px; }

@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400&family=Orbitron:wght@600;700&display=swap">
-<link rel="stylesheet" href="css/app.css?v=17">
+<link rel="stylesheet" href="css/app.css?v=18">
 <script src="https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
@@ -110,6 +110,7 @@
       <div class="row">
         <div class="seg" role="radiogroup">
           <label><input type="radio" name="mode" value="moldes" checked> ✅ Moldes da modelista (PDFs de cada tamanho)</label>
+          <label><input type="radio" name="mode" value="tabela"> 📐 Tabela de graduação da modelista (DX/DY)</label>
           <label><input type="radio" name="mode" value="salva"> Grade salva (padrão da casa)</label>
           <label style="display:none"><input type="radio" name="mode" value="auto"> Percentual por tamanho</label>
         </div>
@@ -136,6 +137,25 @@
         <div id="dpiAviso" class="dpi-aviso" hidden></div>
         <p class="hint">Confira se cada peça do arquivo caiu no molde certo. Se não, escolha o molde na lista.</p>
         <div class="scroll"><table id="tblMoldes"></table></div>
+      </div>
+      <div id="tabelaBox" hidden>
+        <p class="hint">A <b>tabela de graduação da modelista</b>, igual à do caderno dela: marque os <b>pontos</b> da peça (cantos, ombro, decote, gancho…) e digite quanto cada ponto anda a cada tamanho. <b>DX</b> + = para a direita, − = para a esquerda. <b>DY</b> + = para cima, − = para baixo. Cada coluna é o tamanho; o valor é quanto anda <b>daquele tamanho para o vizinho mais perto do tamanho base</b> (ex.: base 12 → no 10 é do 12 para o 10; no 8 é do 10 para o 8). O resto do contorno acompanha os pontos. Linha <span style="color:#ef4444">vermelha</span> = menor tamanho, <span style="color:#16a34a">verde</span> = maior.</p>
+        <div class="row">
+          <label>Peça <select id="tabPeca"></select></label>
+          <button type="button" id="btnTabCantos" class="mini">📍 Pontos nos cantos</button>
+          <button type="button" id="btnTabLimpar" class="mini">Limpar pontos</button>
+        </div>
+        <canvas id="tabCanvas" class="tab-canvas"></canvas>
+        <div class="row tab-rapido">
+          <span>Ponto escolhido, todos os tamanhos de uma vez:</span>
+          <label>menores DX <input id="tabMenDx" type="number" step="0.05" style="width:64px"></label>
+          <label>DY <input id="tabMenDy" type="number" step="0.05" style="width:64px"></label>
+          <label>maiores DX <input id="tabMaiDx" type="number" step="0.05" style="width:64px"></label>
+          <label>DY <input id="tabMaiDy" type="number" step="0.05" style="width:64px"></label>
+          <button type="button" id="btnTabPreencher" class="mini">Preencher</button>
+        </div>
+        <p class="muted" id="tabInfo"></p>
+        <div class="scroll"><table id="tblRegras" class="regras"></table></div>
       </div>
       <div id="salvaBox" hidden>
         <p class="hint">Grades que vocês já salvaram. Escolha o modelo e o motor usa a graduação e as configurações (borda, espaço, nome na peça…) dele.</p>
@@ -303,15 +323,16 @@
   </section>
 </main>
 
-<script src="js/acesso.js?v=17"></script>
-<script src="js/util.js?v=17"></script>
-<script src="js/tiff.js?v=17"></script>
-<script src="js/analyze.js?v=17"></script>
-<script src="js/corel.js?v=17"></script>
-<script src="js/grade.js?v=17"></script>
-<script src="js/pdfgrade.js?v=17"></script>
-<script src="js/moldes.js?v=17"></script>
-<script src="js/app.js?v=17"></script>
-<script src="js/provador.js?v=17"></script>
+<script src="js/acesso.js?v=18"></script>
+<script src="js/util.js?v=18"></script>
+<script src="js/tiff.js?v=18"></script>
+<script src="js/analyze.js?v=18"></script>
+<script src="js/corel.js?v=18"></script>
+<script src="js/grade.js?v=18"></script>
+<script src="js/pdfgrade.js?v=18"></script>
+<script src="js/moldes.js?v=18"></script>
+<script src="js/regras.js?v=18"></script>
+<script src="js/app.js?v=18"></script>
+<script src="js/provador.js?v=18"></script>
 </body>
 </html>

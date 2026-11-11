@@ -90,3 +90,8 @@ A prévia coloca a estampa do arquivo na posição certa por cima da roupa da mo
 ## v17 (11/11) — nome do molde vai para a estampa
 - Ao ler os PDFs, o motor lê o nome escrito dentro de cada molde (ex.: "FRENTE E COSTA 2X - 6 - 6", "2 MANGA 2X - 6 - 6") e escreve esse nome na peça certa da estampa (FRENTE E COSTA, 2 MANGA, 1 MANGA, COSTA, FRENTE). Vai junto com o número do tamanho em cada arquivo gerado.
 - A tabela da aba Grade mostra o "Nome no molde". Nome escrito à mão (dois cliques) não é trocado.
+
+## v18 (11/11) — a matemática da modelista
+- **Estampa acompanha a graduação** (regra nova, padrão): cada elemento da estampa (vaso, flor, faixa) muda de lugar proporcional ao molde novo e **diminui/aumenta junto com a graduação, sem deformar**. O que está perto da barra mantém a distância proporcional até ela; faixas largas (linha, barrado) seguem a curva da barra. As regras antigas continuam na aba Peças.
+- **Tabela de graduação da modelista (DX/DY)** na aba Grade: marque os pontos da peça (botão "Pontos nos cantos" ou clique no contorno) e digite DX/DY de cada tamanho, igual ao caderno dela (DX + direita, DY + para cima; cada valor = do tamanho vizinho mais perto do base até ele). O contorno entre os pontos acompanha. Linha vermelha/verde mostra o menor e o maior tamanho na hora. Peça espelhada (short esquerdo/direito) usa a mesma tabela com DX invertido. Fica salva junto com a "Grade salva".
+- **dpi**: o motor agora lê a resolução gravada no PNG/JPG; com o PDF do tamanho base, corrige o dpi sozinho quando todas as peças estão na mesma proporção errada.

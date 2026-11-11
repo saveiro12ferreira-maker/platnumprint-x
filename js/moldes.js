@@ -210,16 +210,15 @@ const Moldes = (() => {
   }
   // Põe o molde na mesma posição da peça do arquivo (em pé/deitado, virado, espelhado): a que mais coincide.
   function orientar(f, mask, w, h) {
-    const ref = miniatura(mask, w, h), asp = w / h;
+    const ref = miniatura(mask, w, h), asp = w / h, fm = miniatura(f.m, f.w, f.h);
     let best = null;
     for (let t = 0; t < 8; t++) {
       const rot = t & 3, fw = rot % 2 ? f.h : f.w, fh = rot % 2 ? f.w : f.h;
       // só vale girar se a proporção combina (largura × altura parecidas com a peça do arquivo)
       const pen = Math.abs(Math.log((fw / fh) / asp));
-      const g = transformar({ w: f.w, h: f.h, m: miniatura(f.m, f.w, f.h) }, t);   // miniatura girada
-      const gm = miniatura(g.m, g.w, g.h);
+      const gm = transformar({ w: 40, h: 40, m: fm }, t).m;   // miniatura girada/espelhada (caixa já normalizada)
       let inter = 0, uni = 0; for (let i = 0; i < gm.length; i++) { if (gm[i] && ref[i]) inter++; if (gm[i] || ref[i]) uni++; }
-      const sc = (uni ? inter / uni : 0) - pen * 0.5 - (t >> 2) * 0.01;
+      const sc = (uni ? inter / uni : 0) - pen * 0.15 - (t >> 2) * 0.005;
       if (!best || sc > best.sc) best = { t, sc };
     }
     return Object.assign(transformar(f, best.t), { sc: best.sc });

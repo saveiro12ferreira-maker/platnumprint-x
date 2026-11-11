@@ -22,7 +22,48 @@ const Tiff = {
     const bmp = await createImageBitmap(file);
     const cv = document.createElement('canvas'); cv.width = bmp.width; cv.height = bmp.height;
     const ctx = cv.getContext('2d'); ctx.drawImage(bmp, 0, 0);
-    return { width: bmp.width, height: bmp.height, data: ctx.getImageData(0, 0, bmp.width, bmp.height).data, dpi: null };
+    let dpi = null;
+    try { dpi = Tiff.dpiDoArquivo(new Uint8Array(await file.slice(0, 262144).arrayBuffer())); } catch (e) { dpi = null; }
+    return { width: bmp.width, height: bmp.height, data: ctx.getImageData(0, 0, bmp.width, bmp.height).data, dpi };
+  },
+
+  // Resolução gravada no PNG (pHYs) ou no JPG (JFIF ou EXIF). Sem isso o motor usaria o dpi da tela e erraria a medida.
+  dpiDoArquivo(b) {
+    const u32 = i => ((b[i] << 24) | (b[i + 1] << 16) | (b[i + 2] << 8) | b[i + 3]) >>> 0;
+    if (b[0] === 0x89 && b[1] === 0x50) {                       // PNG
+      let i = 8;
+      while (i + 12 <= b.length) {
+        const len = u32(i), tipo = String.fromCharCode(b[i + 4], b[i + 5], b[i + 6], b[i + 7]);
+        if (tipo === 'pHYs' && b[i + 16] === 1) return Math.round(u32(i + 8) * 0.0254);
+        if (tipo === 'IDAT' || tipo === 'IEND') break;
+        i += 12 + len;
+      }
+      return null;
+    }
+    if (b[0] === 0xFF && b[1] === 0xD8) {                       // JPG
+      let i = 2;
+      while (i + 4 < b.length && b[i] === 0xFF) {
+        const mk = b[i + 1], len = (b[i + 2] << 8) | b[i + 3];
+        if (mk === 0xE0 && String.fromCharCode(b[i + 4], b[i + 5], b[i + 6], b[i + 7]) === 'JFIF') {
+          const un = b[i + 11], x = (b[i + 12] << 8) | b[i + 13];
+          if (un === 1 && x > 1) return x; if (un === 2 && x > 1) return Math.round(x * 2.54);
+        }
+        if (mk === 0xE1 && String.fromCharCode(b[i + 4], b[i + 5], b[i + 6], b[i + 7]) === 'Exif') {
+          const t = i + 10, le = b[t] === 0x49, r16 = o => le ? b[t + o] | (b[t + o + 1] << 8) : (b[t + o] << 8) | b[t + o + 1];
+          const r32 = o => le ? (b[t + o] | (b[t + o + 1] << 8) | (b[t + o + 2] << 16) | (b[t + o + 3] << 24)) >>> 0 : ((b[t + o] << 24) | (b[t + o + 1] << 16) | (b[t + o + 2] << 8) | b[t + o + 3]) >>> 0;
+          const ifd = r32(4), n = r16(ifd); let res = null, unit = 2;
+          for (let k = 0; k < n; k++) {
+            const e = ifd + 2 + k * 12, tag = r16(e);
+            if (tag === 0x011A) { const off = r32(e + 8); res = r32(off) / (r32(off + 4) || 1); }
+            if (tag === 0x0128) unit = r16(e + 8);
+          }
+          if (res > 1) return Math.round(unit === 3 ? res * 2.54 : res);
+        }
+        if (mk === 0xDA) break;
+        i += 2 + len;
+      }
+    }
+    return null;
   },
 
   // PackBits linha por linha (o padrão TIFF não deixa uma sequência passar de uma linha para a outra).

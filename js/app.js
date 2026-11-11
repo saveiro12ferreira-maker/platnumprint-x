@@ -2,7 +2,7 @@
 const App = (() => {
   const $ = s => document.querySelector(s);
   const TYPES = { saia: 'Saia da blusa', peito: 'Peito', circ: 'Círculo', vies: 'Viés', ret: 'Retângulo', outra: 'Outra peça' };
-  const RULES = { barra: 'Segue a barra', fixa: 'Estampa fixa', esticar: 'Estica com a peça', fundo: 'Só fundo' };
+  const RULES = { acompanha: 'Acompanha a graduação', barra: 'Segue a barra', fixa: 'Estampa fixa', esticar: 'Estica com a peça', fundo: 'Só fundo' };
   const ANCH = { left: 'esquerda', right: 'direita', center: 'centro', top: 'em cima', bottom: 'embaixo' };
   const PCT = { saia: { w: 4, h: 2 }, peito: { w: 4, h: 3 }, circ: { w: 2, h: 2 }, vies: { w: 4, h: 0 }, ret: { w: 4, h: 2 }, outra: { w: 4, h: 2 } };
 
@@ -116,6 +116,7 @@ const App = (() => {
     const t0 = U.now();
     try {
       logStep('Abrindo o arquivo…'); await U.tick();
+      st.dpiCorrigido = false;
       const img = await Tiff.readImage(st.file);
       if (img.dpi) $('#dpi').value = img.dpi;
       st.dpi = Math.round(U.num($('#dpi').value)) || 200;
@@ -414,6 +415,21 @@ const App = (() => {
   // Usado na hora de gerar: a peça sai com o formato do PDF daquele tamanho, não com a peça base esticada.
   async function prepararFormas(sizes, msg) {
     st.formas = st.formas || {};
+    if (st.mode === 'tabela') {
+      const chave = JSON.stringify(['tabela', st.dpi, st.base, st.sizes, st.regras]);
+      if (st.formasChave !== chave) { st.formas = {}; st.formasChave = chave; }
+      for (const size of sizes) {
+        if (size === st.base || st.formas[size]) continue;
+        const fs = {};
+        for (const g of st.groups) for (const p of g.items) {
+          const pol = poligonoTabela(g, size, p); if (!pol) continue;
+          if (msg) msg(`Graduando pela tabela da modelista: ${size} · ${nomeGrupo(g)}…`);
+          fs[p.n] = Regras.mascara(pol);
+        }
+        st.formas[size] = fs; await U.tick();
+      }
+      return;
+    }
     const m = st.moldes;
     if (st.mode !== 'moldes' || !m) return;
     const chave = JSON.stringify([st.dpi, m.casa, Object.keys(m.tams)]);
@@ -460,6 +476,23 @@ const App = (() => {
       pts.push({ i: idxTam(t), v: db ? base + d[dim] - db[dim] : d[dim] });
     }
     return pts.length > 1 ? Moldes.interpolar(pts, idxTam(size)) : null;
+  }
+
+  // ---------- Tabela de graduação da modelista (pontos + DX/DY) ----------
+  st.regras = {};
+  const regraDoItem = (g, p) => {
+    const r = st.regras[g.id]; if (!r || !r.pontos.length) return null;
+    const p0 = g.items[0]; if (p === p0) return r;
+    return Regras.espelhar(r, p0, p);
+  };
+  function poligonoTabela(g, size, p) {
+    p = p || g.items[0];
+    return Regras.graduar(p, regraDoItem(g, p), st.sizes, st.base, size, st.dpi);
+  }
+  function tabelaValue(g, dim, size) {
+    const pol = poligonoTabela(g, size); if (!pol) return null;
+    const bx = Regras.caixa(pol);
+    return U.cm((dim === 'w' ? bx.w : bx.h) + 1, st.dpi);
   }
 
   // ---------- Grade salva (padrão da casa) ----------
@@ -518,9 +551,9 @@ const App = (() => {
             const m = mercadoValue(g, dim, size);
             if (m != null) { cell[dim] = m; cell.src[dim] = 'mercado'; continue; }
             cell.src[dim] = 'auto';
-          } else if (st.mode === 'moldes' || st.mode === 'salva') {
-            const v = st.mode === 'moldes' ? moldeValue(g, dim, size) : salvaValue(g, dim, size);
-            if (v != null) { cell[dim] = v; cell.src[dim] = st.mode === 'moldes' ? 'modelista' : 'salva'; continue; }
+          } else if (st.mode === 'moldes' || st.mode === 'salva' || st.mode === 'tabela') {
+            const v = st.mode === 'moldes' ? moldeValue(g, dim, size) : st.mode === 'tabela' ? tabelaValue(g, dim, size) : salvaValue(g, dim, size);
+            if (v != null) { cell[dim] = v; cell.src[dim] = st.mode === 'moldes' ? 'modelista' : st.mode === 'tabela' ? 'tabela' : 'salva'; continue; }
             const m = mercadoValue(g, dim, size);
             if (m != null) { cell[dim] = m; cell.src[dim] = 'mercado'; continue; }
             cell.src[dim] = 'auto';
@@ -592,7 +625,7 @@ const App = (() => {
     } catch (e) { console.error(e); info.textContent = 'Não consegui ler esse arquivo: ' + e.message; }
   }
 
-  const MODOS = { padrao: '#padraoBox', auto: '#autoBox', pdf: '#pdfBox', calib: '#calibBox', moldes: '#moldesBox', salva: '#salvaBox' };
+  const MODOS = { padrao: '#padraoBox', auto: '#autoBox', pdf: '#pdfBox', calib: '#calibBox', moldes: '#moldesBox', salva: '#salvaBox', tabela: '#tabelaBox' };
   function setModo(modo) {
     st.mode = modo;
     const r = document.querySelector(`input[name=mode][value=${modo}]`); if (r) r.checked = true;
@@ -660,6 +693,9 @@ const App = (() => {
     const k = r[r.length >> 1];
     if (Math.abs(k - 1) < 0.04) return;
     const novo = Math.round(st.dpi / k);
+    // todas as peças erradas na mesma proporção = é o dpi: corrige sozinho (sem precisar clicar)
+    const espalhado = (r[r.length - 1] - r[0]) / k;
+    if (espalhado < 0.08 && !st.dpiCorrigido) { st.dpiCorrigido = true; corrigirDpi(novo); $('#moldesInfo').textContent += ` (corrigido sozinho: o arquivo estava em ${novo} dpi e não ${Math.round(novo * k)}).`; return; }
     box.hidden = false;
     box.append(el('b', { text: `⚠ As peças do arquivo da estampa estão ${U.fmt((k > 1 ? 1 - 1 / k : 1 / k - 1) * 100, 0)}% ${k > 1 ? 'MENORES' : 'MAIORES'} que o molde ${st.base} da modelista. ` }),
       el('span', { text: `O arquivo parece estar em ${novo} dpi, e o motor está lendo como ${st.dpi} dpi — por isso a grade sai ${k > 1 ? 'pequena' : 'grande'}. ` }),
@@ -673,6 +709,89 @@ const App = (() => {
   }
 
   // Lê o nome escrito em cada molde do PDF (ex.: "FRENTE 2X - 6 - 6" → FRENTE) e escreve na peça da estampa.
+  // ---------- Tela da tabela de graduação ----------
+  let tabSel = 0;   // ponto selecionado
+  function grupoTab() { const v = $('#tabPeca').value; return st.groups.find(g => g.id === v) || st.groups[0]; }
+  function renderTabela() {
+    const selP = $('#tabPeca'); if (!selP || !st.groups.length) return;
+    const cur = selP.value;
+    selP.replaceChildren(...st.groups.map(g => el('option', { value: g.id, selected: g.id === cur, text: `${nomeGrupo(g)} ×${g.items.length} (${U.fmt(cmW(g))} × ${U.fmt(cmH(g))} cm)${st.regras[g.id] && st.regras[g.id].pontos.length ? ' · ' + st.regras[g.id].pontos.length + ' pontos' : ''}` })));
+    const g = grupoTab(); if (!g) return;
+    const r = st.regras[g.id] || (st.regras[g.id] = { pontos: [] });
+    desenharTab(g);
+    const outros = st.sizes.filter(s => s !== st.base);
+    const head = el('tr', {}, el('th', { text: 'Ponto' }), el('th', { text: 'Nome' }), outros.map(s => el('th', { text: s, colspan: 2 })), el('th', { text: '' }));
+    const sub = el('tr', {}, el('th'), el('th'), outros.flatMap(() => [el('th', { text: 'DX' }), el('th', { text: 'DY' })]), el('th'));
+    const rows = r.pontos.map((q, k) => el('tr', { class: k === tabSel ? 'sel' : '', onclick: () => { tabSel = k; renderTabela(); } },
+      el('td', {}, el('b', { text: 'P' + (k + 1) })),
+      el('td', {}, el('input', { value: q.nome || '', style: 'width:90px', placeholder: 'ex.: ombro', onchange: e => { q.nome = e.target.value; } })),
+      outros.flatMap(s => [0, 1].map(d => el('td', {}, el('input', { type: 'number', step: '0.05', class: 'dxy', value: q.tab[s] && q.tab[s][d] !== '' && q.tab[s][d] != null ? q.tab[s][d] : '',
+        onchange: e => { const v = e.target.value === '' ? '' : U.num(e.target.value); q.tab[s] = q.tab[s] || ['', '']; q.tab[s][d] = v; tabMudou(g); } })))),
+      el('td', {}, el('button', { type: 'button', class: 'mini', title: 'Tirar este ponto', text: '✕', onclick: ev => { ev.stopPropagation(); r.pontos.splice(k, 1); tabSel = 0; tabMudou(g); renderTabela(); } }))));
+    $('#tblRegras').replaceChildren(el('thead', {}, head, sub), el('tbody', {}, rows));
+    $('#tabInfo').textContent = r.pontos.length ? `${r.pontos.length} ponto(s). Clique no contorno para pôr mais um ponto; clique numa linha para escolher o ponto.` : 'Clique em "Pontos nos cantos" ou clique no contorno da peça para marcar os pontos de graduação.';
+  }
+  function tabMudou(g) {
+    st.formasChave = null;
+    if (st.mode !== 'tabela') setModo('tabela');
+    computeTargets(); renderGrade(); desenharTab(g); agendar();
+  }
+  function desenharTab(g) {
+    const cv = $('#tabCanvas'); if (!cv || !g) return;
+    const p = g.items[0], r = st.regras[g.id] || { pontos: [] }, c = Regras.contorno(p);
+    const menor = st.sizes[0], maior = st.sizes[st.sizes.length - 1];
+    const pols = [menor, maior].filter(s => s !== st.base).map(s => ({ s, pol: Regras.graduar(p, r, st.sizes, st.base, s, st.dpi) })).filter(x => x.pol);
+    let bx = { x0: 0, y0: 0, x1: p.w, y1: p.h };
+    for (const { pol } of pols) { const b = Regras.caixa(pol); bx = { x0: Math.min(bx.x0, b.x0), y0: Math.min(bx.y0, b.y0), x1: Math.max(bx.x1, b.x1), y1: Math.max(bx.y1, b.y1) }; }
+    const pad = 20, maxW = Math.min(620, ($('#tabelaBox').clientWidth || 620) - 10), f = Math.min(maxW / (bx.x1 - bx.x0), 440 / (bx.y1 - bx.y0)) * 0.92;
+    cv.width = Math.round((bx.x1 - bx.x0) * f + 2 * pad); cv.height = Math.round((bx.y1 - bx.y0) * f + 2 * pad);
+    const ctx = cv.getContext('2d'), X = x => (x - bx.x0) * f + pad, Y = y => (y - bx.y0) * f + pad;
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height);
+    // a peça com a estampa
+    const tmp = document.createElement('canvas'); tmp.width = p.w; tmp.height = p.h;
+    const id = tmp.getContext('2d').createImageData(p.w, p.h); id.data.set(p.rgba); tmp.getContext('2d').putImageData(id, 0, 0);
+    ctx.globalAlpha = 0.55; ctx.drawImage(tmp, X(0), Y(0), p.w * f, p.h * f); ctx.globalAlpha = 1;
+    const linha = (pts, cor, larg) => { ctx.strokeStyle = cor; ctx.lineWidth = larg; ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo : ctx.moveTo).call(ctx, X(x), Y(y))); ctx.closePath(); ctx.stroke(); };
+    pols.forEach(({ s, pol }) => linha(pol, s === menor ? '#ef4444' : '#16a34a', 1.5));
+    linha(c, '#111', 2);
+    r.pontos.forEach((q, k) => {
+      const [x, y] = c[q.i]; ctx.fillStyle = k === tabSel ? '#f59e0b' : '#2563eb';
+      ctx.beginPath(); ctx.arc(X(x), Y(y), 9, 0, 7); ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 10px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('P' + (k + 1), X(x), Y(y));
+    });
+    ctx.font = 'bold 12px Arial'; ctx.textAlign = 'left';
+    pols.forEach(({ s }, k) => { ctx.fillStyle = s === menor ? '#ef4444' : '#16a34a'; ctx.fillText(`— tamanho ${s}`, 8, 14 + k * 15); });
+    ctx.fillStyle = '#111'; ctx.fillText(`— tamanho ${st.base} (arquivo)`, 8, 14 + pols.length * 15);
+    cv._map = { f, pad, bx };
+  }
+  function cliqueTab(ev) {
+    const g = grupoTab(); if (!g) return;
+    const cv = $('#tabCanvas'), mp = cv._map; if (!mp) return;
+    const rc = cv.getBoundingClientRect(), k = cv.width / rc.width;
+    const x = ((ev.clientX - rc.left) * k - mp.pad) / mp.f + mp.bx.x0, y = ((ev.clientY - rc.top) * k - mp.pad) / mp.f + mp.bx.y0;
+    const p = g.items[0], c = Regras.contorno(p), r = st.regras[g.id] || (st.regras[g.id] = { pontos: [] });
+    const perto = r.pontos.findIndex(q => Math.hypot(c[q.i][0] - x, c[q.i][1] - y) * mp.f < 12);
+    if (perto >= 0) { tabSel = perto; renderTabela(); return; }
+    const i = Regras.pontoPerto(p, x / p.w, y / p.h);
+    if (Math.hypot(c[i][0] - x, c[i][1] - y) * mp.f > 25) return;
+    r.pontos.push({ i, nome: '', tab: {} }); r.pontos.sort((a, b) => a.i - b.i);
+    tabSel = r.pontos.findIndex(q => q.i === i); renderTabela();
+  }
+  function cantosTab() {
+    const g = grupoTab(); if (!g) return;
+    const r = st.regras[g.id] || (st.regras[g.id] = { pontos: [] });
+    for (const i of Regras.cantos(g.items[0])) if (!r.pontos.some(q => q.i === i)) r.pontos.push({ i, nome: '', tab: {} });
+    r.pontos.sort((a, b) => a.i - b.i); renderTabela();
+  }
+  function preencherTab() {
+    const g = grupoTab(); if (!g) return;
+    const r = st.regras[g.id]; if (!r || !r.pontos[tabSel]) { $('#tabInfo').textContent = 'Escolha um ponto primeiro (clique nele ou na linha da tabela).'; return; }
+    const q = r.pontos[tabSel], v = id => { const t = $(id).value; return t === '' ? '' : U.num(t); };
+    const ib = st.sizes.indexOf(st.base);
+    st.sizes.forEach((s, i) => { if (i < ib) q.tab[s] = [v('#tabMenDx'), v('#tabMenDy')]; else if (i > ib) q.tab[s] = [v('#tabMaiDx'), v('#tabMaiDy')]; });
+    tabMudou(g); renderTabela();
+  }
+
   async function nomesDosPdfs(info) {
     const m = st.moldes; if (!m || !m.ref) return;
     const ref = m.ref, pz = m.tams[ref].pecas, doc = pz.doc; if (!doc) return;
@@ -734,6 +853,7 @@ const App = (() => {
       nome, base: st.base, sizes: [...st.sizes], salvo: new Date().toISOString(), usos: ant ? (ant.usos || 0) : 0,
       origem: st.mode === 'moldes' && st.moldes ? 'moldes da modelista: ' + Object.values(st.moldes.tams).map(t => t.arquivo).join(', ') : st.mode,
       pecas: st.groups.map(gr => ({ nome: nomeGrupo(gr), tipo: gr.type, qtd: gr.items.length,
+        regras: st.regras[gr.id] && st.regras[gr.id].pontos.length ? { pontos: st.regras[gr.id].pontos.map(q => { const c = Regras.contorno(gr.items[0])[q.i]; return { fx: c[0] / gr.items[0].w, fy: c[1] / gr.items[0].h, nome: q.nome, tab: q.tab }; }) } : null,
         w: Object.fromEntries(st.sizes.map(sz => [sz, +st.targets[gr.id][sz].w.toFixed(2)])),
         h: Object.fromEntries(st.sizes.map(sz => [sz, +st.targets[gr.id][sz].h.toFixed(2)])) })),
       config: Object.assign(Object.fromEntries(CONF.map(id => [id, $('#' + id).value])), Object.fromEntries(CONFCHK.map(id => [id, $('#' + id).checked]))),
@@ -753,7 +873,13 @@ const App = (() => {
       readOut(); desenharEtiquetas();
     }
     sv.usos = (sv.usos || 0) + 1; Moldes.salvar(sv);
-    setModo('salva'); renderSalvas();
+    // a grade salva tem a tabela da modelista: volta a graduar pelos pontos (o formato certo de cada tamanho)
+    let comTabela = false;
+    st.groups.forEach((g, i) => {
+      const c = st.salvaCasa[i], pc = c && sv.pecas[c.j];
+      if (pc && pc.regras && pc.regras.pontos.length) { st.regras[g.id] = { pontos: pc.regras.pontos.map(q => ({ i: Regras.pontoPerto(g.items[0], q.fx, q.fy), nome: q.nome, tab: q.tab })) }; comTabela = true; }
+    });
+    setModo(comTabela ? 'tabela' : 'salva'); renderSalvas(); renderTabela();
     if ($('#nomeGrade')) $('#nomeGrade').value = nome;
     computeTargets(); renderGrade(); agendar();
     const sem = st.groups.filter((g, i) => !st.salvaCasa[i]).map(nomeGrupo);
@@ -875,7 +1001,7 @@ const App = (() => {
 
   function renderGrade() {
     const head = el('tr', {}, el('th', { text: 'Peça' }), st.sizes.map(s => el('th', { text: s + (s === st.base ? ' (lido)' : '') })));
-    const badge = src => src === 'modelista' ? el('span', { class: 'src manual', text: 'modelista' }) : src === 'salva' ? el('span', { class: 'src manual', text: 'salva' }) : src === 'mercado' ? el('span', { class: 'src pdf', text: 'mercado' }) : src === 'manual' ? el('span', { class: 'src manual', text: 'manual' }) : src === 'pdf' ? el('span', { class: 'src pdf', text: 'PDF' }) : src === 'falta' ? el('span', { class: 'src falta', text: 'falta no PDF' }) : null;
+    const badge = src => src === 'modelista' ? el('span', { class: 'src manual', text: 'modelista' }) : src === 'salva' ? el('span', { class: 'src manual', text: 'salva' }) : src === 'tabela' ? el('span', { class: 'src manual', text: 'tabela' }) : src === 'mercado' ? el('span', { class: 'src pdf', text: 'mercado' }) : src === 'manual' ? el('span', { class: 'src manual', text: 'manual' }) : src === 'pdf' ? el('span', { class: 'src pdf', text: 'PDF' }) : src === 'falta' ? el('span', { class: 'src falta', text: 'falta no PDF' }) : null;
     const rows = st.groups.map(g => el('tr', {},
       el('td', {}, `${st.groupName(g)} `, el('span', { class: 'muted', text: `×${g.items.length} (nº ${g.items.map(p => p.n).join(', ')})` })),
       st.sizes.map(size => {
@@ -894,6 +1020,7 @@ const App = (() => {
   }
 
   function renderAll() {
+    renderTabela();
     drawPreview(); renderPieces(); renderEstampa(); renderAuto(); renderMercado(); renderMap(); renderGrade();
   }
 
@@ -1059,6 +1186,11 @@ const App = (() => {
     $('#fMoldes2').addEventListener('change', e => { if (e.target.files.length) onMoldes([...e.target.files]); e.target.value = ''; });
     $('#btnMoldesLimpar').addEventListener('click', () => { st.moldes = null; $('#moldesInfo').textContent = 'PDFs tirados.'; renderMoldes(); computeTargets(); renderGrade(); agendar(); });
     $('#btnSalvarGrade').addEventListener('click', salvarGrade);
+    $('#tabPeca').addEventListener('change', () => { tabSel = 0; renderTabela(); });
+    $('#tabCanvas').addEventListener('click', cliqueTab);
+    $('#btnTabCantos').addEventListener('click', cantosTab);
+    $('#btnTabLimpar').addEventListener('click', () => { const g = grupoTab(); if (!g) return; st.regras[g.id] = { pontos: [] }; tabSel = 0; tabMudou(g); renderTabela(); });
+    $('#btnTabPreencher').addEventListener('click', preencherTab);
     $('#selSalva').addEventListener('change', e => { if (e.target.value) usarSalva(e.target.value); });
     $('#btnExcluirSalva').addEventListener('click', () => {
       const n = $('#selSalva').value; if (!n) return;

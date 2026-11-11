@@ -37,9 +37,9 @@ const Analyze = (() => {
   function defaultRule(p) {
     const hasArt = p.artFrac > 0.005;
     if (!hasArt) return 'fundo';
-    if (p.type === 'saia') return 'barra';
     if (p.type === 'vies') return 'esticar';
-    return 'fixa';
+    // a estampa acompanha a graduação: os elementos mudam de lugar e de tamanho junto com a peça, sem deformar
+    return 'acompanha';
   }
 
   async function run(img, dpi, log) {
