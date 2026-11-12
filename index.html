@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400&family=Orbitron:wght@600;700&display=swap">
-<link rel="stylesheet" href="css/app.css?v=36">
+<link rel="stylesheet" href="css/app.css?v=37">
 <script src="https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
@@ -24,7 +24,7 @@
 </div>
 <header class="top">
   <div class="top-in">
-    <div class="brand"><b>PLATNUMPRINT-X</b><span>motor de grade</span><span class="versao" title="Versão do motor carregada neste navegador">v36</span><span class="user"><span id="quem"></span><button type="button" id="btnSair" class="ghost">Sair</button></span></div>
+    <div class="brand"><b>PLATNUMPRINT-X</b><span>motor de grade</span><span class="versao" title="Versão do motor carregada neste navegador">v37</span><span class="user"><span id="quem"></span><button type="button" id="btnSair" class="ghost">Sair</button></span></div>
     <nav class="tabs" id="tabs" role="tablist">
       <button class="tab on" data-tab="arquivo" role="tab"><span class="n">1</span>Arquivo</button>
       <button class="tab locked" data-tab="pecas" role="tab"><span class="n">2</span>Peças</button>
@@ -64,6 +64,26 @@
         <span id="status1" class="muted"></span>
       </div>
       <ol id="log1" class="log"></ol>
+    </div>
+
+    <div class="card" id="mtBox">
+      <h2>🎨 Montar a arte nos moldes <span class="new" style="font-size:11px;padding:2px 8px;border-radius:999px;background:rgba(167,139,250,.15);color:#a78bfa">novo</span></h2>
+      <p class="hint">Não tem o arquivo já estampado? Use os <b>moldes vazios da modelista</b>: escolha a arte de cada peça (frente, costas, manga…), como ela encaixa e a posição, ponha <b>nome, número ou logo</b> e clique em <b>Montar e ler</b>. O motor monta o arquivo base do tamanho escolhido em "Este arquivo é o tamanho" e a grade sai igual: cada tamanho no molde dele, com a arte acompanhando a peça.</p>
+      <div class="row">
+        <button type="button" id="mtPegar">📐 Pegar os moldes do tamanho base (dos PDFs do 2️⃣)</button>
+        <label class="file">ou escolher o PDF do tamanho base<input type="file" id="mtPdfIn" accept=".pdf"></label>
+      </div>
+      <div class="row">
+        <label class="file">🖼️ Artes (PNG, JPG ou TIFF — pode várias)<input type="file" id="mtArtesIn" accept=".png,.jpg,.jpeg,.tif,.tiff,.webp" multiple></label>
+        <label>Largura do arquivo montado <input id="mtLargura" type="number" value="150" min="60" step="1" style="width:80px"> cm</label>
+      </div>
+      <div id="mtArtes" class="mt-artes"></div>
+      <p id="mtInfo" class="muted"></p>
+      <div id="mtPecas" class="mt-pecas"></div>
+      <div class="row">
+        <button type="button" id="mtMontar" class="primary" disabled>✨ Montar e ler</button>
+        <button type="button" id="mtBaixar" title="Baixa o arquivo base montado (PNG) para abrir no Corel ou guardar">⬇ Baixar o arquivo montado (PNG)</button>
+      </div>
     </div>
   </section>
 
@@ -349,16 +369,17 @@
   </section>
 </main>
 
-<script src="js/acesso.js?v=36"></script>
-<script src="js/util.js?v=36"></script>
-<script src="js/tiff.js?v=36"></script>
-<script src="js/analyze.js?v=36"></script>
-<script src="js/corel.js?v=36"></script>
-<script src="js/grade.js?v=36"></script>
-<script src="js/pdfgrade.js?v=36"></script>
-<script src="js/moldes.js?v=36"></script>
-<script src="js/regras.js?v=36"></script>
-<script src="js/app.js?v=36"></script>
-<script src="js/provador.js?v=36"></script>
+<script src="js/acesso.js?v=37"></script>
+<script src="js/util.js?v=37"></script>
+<script src="js/tiff.js?v=37"></script>
+<script src="js/analyze.js?v=37"></script>
+<script src="js/corel.js?v=37"></script>
+<script src="js/grade.js?v=37"></script>
+<script src="js/pdfgrade.js?v=37"></script>
+<script src="js/moldes.js?v=37"></script>
+<script src="js/regras.js?v=37"></script>
+<script src="js/app.js?v=37"></script>
+<script src="js/montar.js?v=37"></script>
+<script src="js/provador.js?v=37"></script>
 </body>
 </html>

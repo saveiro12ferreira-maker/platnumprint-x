@@ -165,3 +165,11 @@ Gerado aqui com os arquivos reais da equipe. Três coisas estavam erradas e fora
 - O motor agora reconhece o contorno de cada peça do mesmo jeito que a parte Digiflash do Confex Molde: segue a beira da peça, simplifica a linha e acha os cantos. Cada trecho entre dois cantos é um lado da modelagem.
 - O nome fica preso a um lado: em que ponto do lado ele está e a que distância da beira. Nos outros tamanhos, o motor acha o mesmo lado (mesma direção e mesmo lugar da peça) e põe o nome no mesmo ponto, à mesma distância, crescendo junto com a graduação.
 - A caixa pontilhada não decide mais o lugar do nome.
+
+## v37 (12/11) — Montar a arte nos moldes (igual ao ClickMoldes do Corel)
+- Na aba Arquivo tem a caixa nova **🎨 Montar a arte nos moldes**: não precisa mais do arquivo já estampado.
+- **📐 Pegar os moldes do tamanho base**: usa o PDF da modelista do tamanho escolhido em "Este arquivo é o tamanho" (os do 2️⃣) ou um PDF escolhido ali. Cada molde vira um cartão com o nome e a quantidade lidos do molde (ex.: MANGA 2X).
+- **🖼️ Artes**: uma ou várias imagens (PNG, JPG, TIFF). Em cada peça você escolhe a arte, o encaixe (cobrir a peça toda, caber inteira, esticar até a beira ou só a cor de fundo), a posição (centro, em cima, embaixo, esquerda, direita), a margem (sangria) e a cor de fundo. **⧉ Igual em todas** copia os ajustes de uma peça para as outras; "em todas" na arte põe aquela arte em todas as peças.
+- **＋ Nome / número** e **＋ Logo / imagem**: texto (tamanho da letra em cm, cor, giro) ou imagem (largura em cm, giro). Clique em 📍 e depois na miniatura para pôr no lugar.
+- **⟳ girar o molde** 90° (a arte continua em pé). Peça com quantidade 2 sai em par, com o molde do par espelhado (a arte e os textos não espelham).
+- **✨ Montar e ler**: o motor monta o arquivo base (com a risca preta em volta de cada peça) e lê como se fosse o TIFF do Corel. Daí em diante é igual: Peças, Grade, Gerar, cada tamanho no molde da modelista. **⬇ Baixar o arquivo montado** salva o PNG.

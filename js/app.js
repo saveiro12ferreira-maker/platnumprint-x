@@ -107,7 +107,14 @@ const App = (() => {
     $('#log1').append(li);
   }
 
-  let busy = false;
+  let busy = false, pdfsArquivos = [];
+  // Arte montada nos moldes (montar.js): entra como se fosse o arquivo base
+  async function lerMontada(img, nome) {
+    if (busy) throw new Error('Espere terminar a leitura que está rodando.');
+    st.imgPronta = img;
+    setFile({ name: nome, size: img.data.length });
+    await ler();
+  }
   async function ler() {
     if (busy) return;
     busy = true;
@@ -117,7 +124,8 @@ const App = (() => {
     try {
       logStep('Abrindo o arquivo…'); await U.tick();
       st.dpiCorrigido = false;
-      const img = await Tiff.readImage(st.file);
+      const img = st.imgPronta || await Tiff.readImage(st.file);   // imgPronta = arte montada nos moldes (montar.js)
+      st.imgPronta = null;
       if (img.dpi) $('#dpi').value = img.dpi;
       st.dpi = Math.round(U.num($('#dpi').value)) || 200;
       if (st.bordaMm != null) st.thickOverride = Math.round(st.bordaMm / 25.4 * st.dpi);
@@ -824,6 +832,7 @@ const App = (() => {
   const ordemTam = t => /^\d+$/.test(t) ? +t : 1000 + (ORDEM_LETRA.indexOf(t) + 1 || 99);
   let moldesPendentes = null;
   async function onMoldes(files) {
+    pdfsArquivos = files.slice();
     const info = $('#moldesInfo');
     $('#moldesNome').className = 'chip'; $('#moldesNome').textContent = `${files.length} PDF(s): ${files.map(f => Moldes.tamDoNome(f.name) || '?').join(', ')}`;
     // os tamanhos da grade passam a ser os dos PDFs (mais o tamanho do arquivo da estampa)
@@ -1438,5 +1447,5 @@ const App = (() => {
   }
 
   init();
-  return { st, onPdf, gerar, ler, showTab, removeFile, removePdf, el, prepararFormas };
+  return { st, onPdf, gerar, ler, showTab, removeFile, removePdf, el, prepararFormas, lerMontada, pdfsGuardados: () => pdfsArquivos };
 })();
