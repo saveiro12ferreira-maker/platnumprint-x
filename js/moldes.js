@@ -90,8 +90,18 @@ const Moldes = (() => {
     for (let y = 0; y < H; y++) { pus(y * W); pus(y * W + W - 1); }
     while (a < b) { const i = fila[a++], x = i % W; if (x > 0) pus(i - 1); if (x < W - 1) pus(i + 1); if (i >= W) pus(i - W); if (i < W * (H - 1)) pus(i + W); }
     let d = new Uint8Array(W * H); for (let i = 0; i < W * H; i++) d[i] = fora[i] ? 0 : 1;
-    // volta o que fechou + meia linha (a linha do molde tem ~1,6 mm)
-    d = U.box(d, W, H, r + Math.max(1, Math.round(0.08 * k)), 'min');
+    // volta o que fechou + meia linha. A espessura da linha é medida no próprio PDF (antes era fixa em ~1,6 mm:
+    // com linha fina o molde saía ~1,5 mm menor de cada lado — pedido da Gaby, 12/11)
+    const runs = [];
+    for (const f of [0.2, 0.35, 0.5, 0.65, 0.8]) {
+      const y = Math.floor(H * f), o = y * W;
+      for (let x = 0; x < W; x++) if (escuro[o + x]) { let n = 0; while (x < W && escuro[o + x]) { n++; x++; } if (n < 0.5 * k) runs.push(n); }
+      const xx = Math.floor(W * f);
+      for (let y2 = 0; y2 < H; y2++) if (escuro[y2 * W + xx]) { let n = 0; while (y2 < H && escuro[y2 * W + xx]) { n++; y2++; } if (n < 0.5 * k) runs.push(n); }
+    }
+    runs.sort((a, b) => a - b);
+    const linha = runs.length ? runs[runs.length >> 1] : Math.round(0.16 * k);
+    d = U.box(d, W, H, r + Math.max(0, Math.round(linha / 2)), 'min');
     // fica só o bloco do meio (outra peça vizinha pode ter entrado na folga)
     const lab = new Int32Array(W * H); let best = 0, bestN = 0, id = 0;
     const cxp = Math.round(peca.cx * k) - x0, cyp = Math.round(peca.cy * k) - y0;

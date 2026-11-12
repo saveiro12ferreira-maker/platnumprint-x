@@ -30,6 +30,48 @@ const Grade = (() => {
   }
 
   // Refaz uma peça com largura Wt e altura Ht (pixels, sem sangria).
+  // Borda macia da estampa (vídeo/print 12/11: margaridas ganhavam contorno azul ao trocar o fundo para verde).
+  // Na beira de cada desenho, o pixel é uma mistura da cor do desenho com o fundo antigo. Aqui guardamos quanto de
+  // desenho tem em cada pixel da beira (255 = só desenho), para trocar só a parte do fundo pela cor nova.
+  function alfaDe(p, bg0) {
+    const key = bg0.join(',');
+    if (p._alfa && p._alfa.key === key) return p._alfa.a;
+    const W = p.w, H = p.h, A = p.art, S = p.rgba, M = p.mask, a = new Uint8Array(W * H).fill(255);
+    const R = 3;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const i = y * W + x; if (!A[i]) continue;
+      // só a beira: algum vizinho perto é fundo
+      let beira = false;
+      for (let dy = -2; dy <= 2 && !beira; dy++) for (let dx = -2; dx <= 2; dx++) {
+        const xx = x + dx, yy = y + dy; if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue;
+        const j = yy * W + xx; if (M[j] && !A[j] && !p.band[j]) { beira = true; break; }
+      }
+      if (!beira) continue;
+      // cor "cheia" do desenho ali perto = a mais longe do fundo antigo
+      let fr = -1, fg = 0, fb = 0, fd = 0;
+      for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
+        const xx = x + dx, yy = y + dy; if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue;
+        const j = yy * W + xx; if (!A[j]) continue;
+        const q = j * 4, d = (S[q] - bg0[0]) ** 2 + (S[q + 1] - bg0[1]) ** 2 + (S[q + 2] - bg0[2]) ** 2;
+        if (d > fd) { fd = d; fr = S[q]; fg = S[q + 1]; fb = S[q + 2]; }
+      }
+      if (fr < 0 || fd < 900) continue;
+      const q = i * 4, px = S[q] - bg0[0], py = S[q + 1] - bg0[1], pz = S[q + 2] - bg0[2];
+      const t = (px * (fr - bg0[0]) + py * (fg - bg0[1]) + pz * (fb - bg0[2])) / fd;
+      a[i] = Math.round(255 * Math.max(0, Math.min(1, t)));
+    }
+    p._alfa = { key, a };
+    return a;
+  }
+  // pinta o pixel k da estampa em out[q]: com fundo novo, a parte de fundo antigo da beira vira a cor nova
+  function pintaArte(out, q, S, k, alfa, bg, bg0) {
+    const s4 = k * 4;
+    if (alfa && alfa[k] < 255) {
+      const f = 1 - alfa[k] / 255;
+      out[q] = S[s4] + f * (bg[0] - bg0[0]); out[q + 1] = S[s4 + 1] + f * (bg[1] - bg0[1]); out[q + 2] = S[s4 + 2] + f * (bg[2] - bg0[2]);
+    } else { out[q] = S[s4]; out[q + 1] = S[s4 + 1]; out[q + 2] = S[s4 + 2]; }
+  }
+
   function renderPiece(p, Wt, Ht, o) {
     const W = p.w, H = p.h, sx = Wt / W, sy = Ht / H, b = o.bleed | 0, OW = Wt + 2 * b, OH = Ht + 2 * b;
     const mapX = new Int32Array(Wt), mapY = new Int32Array(Ht);
@@ -59,6 +101,9 @@ const Grade = (() => {
     }
 
     const rule = o.rule, A = p.art, S = p.rgba;
+    // fundo trocado: tira o "contorno" do fundo antigo em volta dos desenhos
+    const bg0 = o.bg0, trocou = bg0 && (bg0[0] !== br || bg0[1] !== bgG || bg0[2] !== bb);
+    const alfa = trocou && p.band ? alfaDe(p, bg0) : null;
     let dx = 0, dy = 0;
     if (rule === 'fixa') {
       dx = p.anchorX === 'left' ? 0 : p.anchorX === 'right' ? Wt - W : Math.round((Wt - W) / 2);
@@ -115,8 +160,10 @@ const Grade = (() => {
             if (E.lab[k] !== e.id || p.band[k]) continue;
             const art = A[k];
             if (!art && pint[i]) continue;
-            const q = ((y + b) * OW + x + b) * 4, s4 = k * 4;
-            out[q] = S[s4]; out[q + 1] = S[s4 + 1]; out[q + 2] = S[s4 + 2];
+            const q = ((y + b) * OW + x + b) * 4;
+            // pixel quase da cor do fundo dentro do desenho: com fundo novo, leva a cor nova (não fica o "quadrado" do fundo antigo)
+            if (!art && trocou) { const s4 = k * 4; out[q] = S[s4] + br - bg0[0]; out[q + 1] = S[s4 + 1] + bgG - bg0[1]; out[q + 2] = S[s4 + 2] + bb - bg0[2]; }
+            else pintaArte(out, q, S, k, alfa, o.bg, bg0);
             if (art) { pint[i] = 1; copied++; }
           }
         }
@@ -144,7 +191,7 @@ const Grade = (() => {
         const q = ((y + b) * OW + x + b) * 4;
         let k = -1;
         if (X >= 0 && X < W && Y >= 0 && Y < H) { k = Y * W + X; if (!A[k]) k = -1; }
-        if (k >= 0) { const s = k * 4; out[q] = S[s]; out[q + 1] = S[s + 1]; out[q + 2] = S[s + 2]; copied++; }
+        if (k >= 0) { pintaArte(out, q, S, k, alfa, o.bg, bg0); copied++; }
         else { out[q] = br; out[q + 1] = bgG; out[q + 2] = bb; }
         out[q + 3] = 255;
       }
@@ -718,7 +765,7 @@ const Grade = (() => {
       for (const p of g.items) {
         // a estampa sempre acompanha a graduação (desenho diminui/aumenta com a peça), a menos que alguém tenha escolhido outra regra na mão
         const regra = !p.regraManual && (p.rule === 'fixa' || p.rule === 'barra' || p.rule === 'barraEsc') ? 'acompanha' : p.rule;
-        const o = { bg: st.bg, thick: st.thickOverride != null ? st.thickOverride : p.thick, outline: st.outline, bleed: bleedPx, rule: regra, labels: labelsDe(p) }; o.label = o.labels[0] || null;
+        const o = { bg: st.bg, bg0: st.an && st.an.bg, thick: st.thickOverride != null ? st.thickOverride : p.thick, outline: st.outline, bleed: bleedPx, rule: regra, labels: labelsDe(p) }; o.label = o.labels[0] || null;
         // molde da modelista: a peça sai com o contorno do PDF e a medida real dele (a menos que tenham digitado a medida à mão)
         const F = (st.mode === 'moldes' || st.mode === 'tabela') && st.formas && st.formas[size] && st.formas[size][p.n];
         // peça girada de lado em relação à primeira do grupo: largura e altura trocam
@@ -888,7 +935,7 @@ const Grade = (() => {
     let ok = 0, tot = 0;
     const per = [];
     for (const p of st.pieces) {
-      const r = renderPiece(p, p.w, p.h, { bg: st.bg, thick: 0, outline: st.outline, bleed: 0, rule: p.rule });
+      const r = renderPiece(p, p.w, p.h, { bg: st.bg, bg0: st.an && st.an.bg, thick: 0, outline: st.outline, bleed: 0, rule: p.rule });
       let pk = 0, pt = 0;
       for (let i = 0; i < p.mask.length; i++) {
         if (!p.mask[i] || p.band[i]) continue;

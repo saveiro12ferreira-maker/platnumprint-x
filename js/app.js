@@ -435,7 +435,9 @@ const App = (() => {
     const chave = JSON.stringify([st.dpi, m.casa, Object.keys(m.tams)]);
     if (st.formasChave !== chave) { st.formas = {}; st.formasChave = chave; }
     for (const size of sizes) {
-      if (size === st.base || !m.tams[size] || st.formas[size]) continue;
+      // o tamanho base também sai em cima do PDF da modelista, quando ele foi enviado (a estampa do arquivo é só a base:
+      // se a peça desenhada no arquivo estiver menor que o molde da Gaby, o molde manda)
+      if (!m.tams[size] || st.formas[size]) continue;
       const doc = m.tams[size].pecas.doc; if (!doc) continue;
       const fs = {};
       for (const g of st.groups) {
