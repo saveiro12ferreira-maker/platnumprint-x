@@ -339,54 +339,92 @@ const Grade = (() => {
     return { cw, ch, g, mark: spans(grid, cw, ch, 0), test: spans(dil, PW, PH, g) };
   }
 
-  // Encaixe pelo formato real das peças: cada peça vai para a posição mais alta e mais à esquerda
-  // onde cabe sem encostar nas outras, testando também girada 180°.
-  function layout(items, rollPx, marginPx, gapPx, c, allowRot, tempoMs = 2500) {
-    const warn = [];
-    const g = Math.ceil(gapPx / c);
-    const shapes = items.map(it => {
-      if (it.shapes) return allowRot ? it.shapes : [it.shapes[0]];
-      const s = [cellShape(it, c, g, false)];
-      if (allowRot) s.push(cellShape(it, c, g, true));
-      return s;
-    });
-    let cols = Math.floor((rollPx - 2 * marginPx) / c);
-    for (const s of shapes) if (s[0].cw > cols) { cols = s[0].cw; warn.push('Uma peça é mais larga que o rolo. O arquivo ficou mais largo para ela caber.'); }
-    const area = i => shapes[i][0].mark.reduce((t, row) => t + row.reduce((u, [l, r]) => u + r - l + 1, 0), 0);
-    const idx = items.map((_, i) => i);
-    // Testa algumas ordens de entrada e fica com a que gasta menos papel.
-    const orders = [
-      idx.slice().sort((a, b) => area(b) - area(a)),
-      idx.slice().sort((a, b) => items[b].h - items[a].h),
-      idx.slice().sort((a, b) => items[b].w - items[a].w),
-      idx.slice().sort((a, b) => items[b].w * items[b].h - items[a].w * items[a].h),
-      idx.slice().sort((a, b) => Math.max(items[b].w, items[b].h) - Math.max(items[a].w, items[a].h)),
-    ];
-    // mais algumas tentativas misturando a ordem (sempre as mesmas, para o resultado não mudar de uma vez para outra)
-    let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-    for (let t = 0; t < (items.length > 60 ? 3 : 8); t++) orders.push(idx.slice().sort((a, b) => area(b) * (0.75 + rnd() * 0.5) - area(a) * (0.75 + rnd() * 0.5)));
-    let bestRun = null, bestOrder = null;
-    for (const order of orders) {
-      const run = place(order, shapes, items, cols, marginPx, c);
-      if (!bestRun || run.bottomPx < bestRun.bottomPx) { bestRun = run; bestOrder = order; }
+  // Giros que o encaixe pode usar: 0 sempre; 180 se "Permitir girar 180°" estiver marcado;
+  // mais os ângulos autorizados à mão (ex.: 90, 270 ou pequenos giros como 5 e 355).
+  function angulos(st) {
+    if (Array.isArray(st)) return st.length ? st : [0];
+    if (st === true) return [0, 180];
+    if (!st || typeof st !== 'object') return [0];
+    const a = [0];
+    if (st.allowRot) a.push(180);
+    for (const v of (st.girosExtra || [])) {
+      const g = ((Math.round(v) % 360) + 360) % 360;
+      if (!a.includes(g)) a.push(g);
     }
-    // Aperta mais: troca duas peças de lugar na ordem de entrada e fica com a troca se gastar menos rolo (até ~2,5 s).
-    const t0 = performance.now(), limite = items.length > 1 ? tempoMs : 0;
-    let tent = 0;
-    while (performance.now() - t0 < limite && tent < (tempoMs > 2500 ? 3000 : 400)) {
-      tent++;
-      const ord = bestOrder.slice(), i = Math.floor(rnd() * ord.length), j = Math.floor(rnd() * ord.length);
-      if (i === j) continue;
-      if (rnd() < 0.5) { [ord[i], ord[j]] = [ord[j], ord[i]]; } else { const [x] = ord.splice(i, 1); ord.splice(j, 0, x); }
-      const run = place(ord, shapes, items, cols, marginPx, c);
-      if (run.bottomPx < bestRun.bottomPx) { bestRun = run; bestOrder = ord; }
-    }
-    return { pos: bestRun.pos, width: Math.max(rollPx, cols * c + 2 * marginPx), height: bestRun.bottomPx + marginPx, warn: [...new Set(warn)] };
+    return a;
+  }
+  // Lê "90, 270" / "5; 355" do campo de giros autorizados.
+  function lerGiros(txt) {
+    return String(txt || '').split(/[^\d.-]+/).filter(Boolean).map(Number).filter(v => isFinite(v) && Math.round(v) % 360 !== 0);
   }
 
-  function place(order, shapes, items, cols, marginPx, c) {
-    const occ = [], pre = [];
-    const ensure = n => { while (occ.length < n) { occ.push(new Uint8Array(cols)); pre.push(new Int32Array(cols + 1)); } };
+  // Imagem da peça girada num ângulo qualquer (sentido horário, em volta do centro), já na caixa nova.
+  const girCache = new WeakMap();
+  function girarRGBA(r, ang) {
+    ang = ((Math.round(ang) % 360) + 360) % 360;
+    if (!ang) return r;
+    let m = girCache.get(r); if (!m) girCache.set(r, m = {});
+    if (m[ang]) return m[ang];
+    const w = r.w, h = r.h, src = r.rgba;
+    let W, H, rgba;
+    if (ang % 90 === 0) {
+      // giro reto: troca de pixels exata, sem perder nitidez
+      W = ang === 180 ? w : h; H = ang === 180 ? h : w;
+      rgba = new Uint8ClampedArray(W * H * 4);
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+        const X = ang === 90 ? h - 1 - y : ang === 180 ? w - 1 - x : y;
+        const Y = ang === 90 ? x : ang === 180 ? h - 1 - y : w - 1 - x;
+        const s = (y * w + x) * 4, d = (Y * W + X) * 4;
+        rgba[d] = src[s]; rgba[d + 1] = src[s + 1]; rgba[d + 2] = src[s + 2]; rgba[d + 3] = src[s + 3];
+      }
+    } else {
+      const rad = ang * Math.PI / 180, cs = Math.abs(Math.cos(rad)), sn = Math.abs(Math.sin(rad));
+      W = Math.ceil(w * cs + h * sn); H = Math.ceil(w * sn + h * cs);
+      const a = document.createElement('canvas'); a.width = w; a.height = h;
+      const id = a.getContext('2d').createImageData(w, h); id.data.set(src); a.getContext('2d').putImageData(id, 0, 0);
+      const b = document.createElement('canvas'); b.width = W; b.height = H;
+      const ctx = b.getContext('2d'); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+      ctx.translate(W / 2, H / 2); ctx.rotate(rad); ctx.drawImage(a, -w / 2, -h / 2);
+      rgba = ctx.getImageData(0, 0, W, H).data;
+      // borda limpa: o pixel é da peça ou não é (a linha de corte não fica esfumaçada)
+      for (let i = 3; i < rgba.length; i += 4) { if (rgba[i] < 128) { rgba[i - 3] = rgba[i - 2] = rgba[i - 1] = rgba[i] = 0; } else rgba[i] = 255; }
+    }
+    return (m[ang] = { w: W, h: H, rgba });
+  }
+
+  // Pixels de uma peça já posta no rolo: a imagem certa e se ela vai de cabeça para baixo.
+  function orientada(r, p) {
+    if (p && p.ang && p.ang !== 180) return { img: girarRGBA(r, p.ang), flip: false };
+    return { img: r, flip: !!(p && p.rot) };
+  }
+
+  // Formato da peça num giro qualquer, com o tamanho real (px) que ela ocupa assim.
+  function shapeFor(it, c, g, ang) {
+    let s;
+    if (!ang) s = cellShape(it, c, g, false);
+    else if (ang === 180) s = cellShape(it, c, g, true);
+    else { const R = girarRGBA(it, ang); s = cellShape(R, c, g, false); s.pw = R.w; s.ph = R.h; }
+    s.ang = ang;
+    if (s.pw == null) { s.pw = it.w; s.ph = it.h; }
+    return s;
+  }
+
+  // Rolo em células: o que já está ocupado, para testar onde cada peça cabe e tirar/recolocar peças.
+  function novoRolo(cols) {
+    const occ = [], pre = [], livre = [];   // livre[y]: o maior trecho vazio da linha (para pular linhas cheias rápido)
+    const ensure = n => { while (occ.length < n) { occ.push(new Uint8Array(cols)); pre.push(new Int32Array(cols + 1)); livre.push(cols); } };
+    const refaz = y => {
+      const p = pre[y], row = occ[y]; let run = 0, mx = 0;
+      for (let x = 0; x < cols; x++) { p[x + 1] = p[x] + row[x]; if (row[x]) run = 0; else if (++run > mx) mx = run; }
+      livre[y] = mx;
+    };
+    // a linha mais larga da peça (com a folga): se a linha do rolo não tem um vão desse tamanho, a peça não cabe ali
+    const larga = s => {
+      if (s.larga) return s.larga;
+      let w = 0, ri = 0;
+      s.test.forEach((row, r) => { for (const [l, rr] of row) if (rr - l + 1 > w) { w = rr - l + 1; ri = r; } });
+      return (s.larga = { w, ri });
+    };
     // -1 = cabe; senão devolve o próximo X que vale testar (pula a peça que está no caminho)
     const fits = (s, X, Y) => {
       if (X < 0 || X + s.cw > cols) return cols;
@@ -404,35 +442,177 @@ const Grade = (() => {
       }
       return -1;
     };
-    const pos = [];
-    let bottomPx = 0;
-    for (const i of order) {
+    // v = 1 põe a peça; v = 0 tira
+    const marca = (s, X, Y, v) => {
+      ensure(Y + s.ch);
+      for (let r = 0; r < s.ch; r++) {
+        const row = occ[Y + r];
+        for (const [l, rr] of s.mark[r]) row.fill(v, X + l, X + rr + 1);
+        refaz(Y + r);
+      }
+    };
+    // Lugar com o fundo mais baixo (e mais à esquerda) entre os giros autorizados.
+    // teto: não procura lugar com fundo acima disso (para recolocar uma peça só se for para baixo).
+    // modo 'topo': o lugar mais alto na tela (menor Y) e mais à esquerda, em vez do fundo mais baixo.
+    const melhor = (lista, teto, modo) => {
       let best = null;
-      shapes[i].forEach((s, rot) => {
-        // Abaixo de tudo (occ.length + folga) sempre cabe, então best nunca fica vazio.
+      const chave = (Y, bottom) => modo === 'topo' ? Y * 4 + bottom / 1e6 : bottom;
+      lista.forEach((s, si) => {
+        if (s.cw > cols) return;
+        const lg = larga(s);
+        // Abaixo de tudo (occ.length + folga) sempre cabe, então best nunca fica vazio sem teto.
         for (let Y = 0; Y <= occ.length + s.g; Y++) {
-          if (best && Y + s.ch > best.bottom) break;
+          const bottom = Y + s.ch;
+          if (best && (modo === 'topo' ? Y > best.Y : bottom > best.bottom)) break;
+          if (teto != null && bottom > teto) break;
+          const yr = Y + lg.ri - s.g;
+          if (yr >= 0 && yr < occ.length && livre[yr] < lg.w) continue;
           let X = 0;
           while (X + s.cw <= cols) { const nx = fits(s, X, Y); if (nx < 0) break; X = nx; }
           if (X + s.cw <= cols) {
-            const bottom = Y + s.ch;
-            if (!best || bottom < best.bottom || (bottom === best.bottom && X < best.X)) best = { X, Y, rot, bottom, s };
+            const k = chave(Y, bottom);
+            if (!best || k < best.k || (k === best.k && X < best.X)) best = { X, Y, si, bottom, s, k };
             break;
           }
         }
       });
-      const { X, Y, rot, s } = best;
-      ensure(Y + s.ch);
-      for (let r = 0; r < s.ch; r++) {
-        const row = occ[Y + r];
-        for (const [l, rr] of s.mark[r]) row.fill(1, X + l, X + rr + 1);
-        const p = pre[Y + r];
-        for (let x = 0; x < cols; x++) p[x + 1] = p[x] + row[x];
-      }
-      pos[i] = { x: marginPx + X * c, y: marginPx + Y * c, rot: rot === 1 };
-      bottomPx = Math.max(bottomPx, marginPx + Y * c + items[i].h);
+      return best;
+    };
+    return { marca, melhor };
+  }
+
+  // Encaixe pelo formato real das peças: cada peça vai para a posição mais baixa possível no rolo
+  // (mais alta na tela) e mais à esquerda, sem encostar nas outras, testando os giros autorizados.
+  // compacto: depois tira as peças de cima uma a uma e recoloca nos vãos que sobraram, até não dar mais para descer.
+  function layout(items, rollPx, marginPx, gapPx, c, giros, tempoMs = 2500, compacto = false) {
+    const warn = [];
+    const g = Math.ceil(gapPx / c), A = angulos(giros);
+    const shapes = items.map(it => {
+      if (it.shapes) { const f = it.shapes.filter(s => A.includes(s.ang || 0)); return f.length ? f : [it.shapes[0]]; }
+      return A.map(a => shapeFor(it, c, g, a));
+    });
+    let cols = Math.floor((rollPx - 2 * marginPx) / c);
+    for (const s of shapes) {
+      const menor = Math.min(...s.map(x => x.cw));
+      if (menor > cols) { cols = menor; warn.push('Uma peça é mais larga que o rolo. O arquivo ficou mais largo para ela caber.'); }
     }
-    return { pos, bottomPx };
+    const area = i => shapes[i][0].mark.reduce((t, row) => t + row.reduce((u, [l, r]) => u + r - l + 1, 0), 0);
+    const idx = items.map((_, i) => i);
+    // Testa algumas ordens de entrada e fica com a que gasta menos papel.
+    const orders = [
+      idx.slice().sort((a, b) => area(b) - area(a)),
+      idx.slice().sort((a, b) => items[b].h - items[a].h),
+      idx.slice().sort((a, b) => items[b].w - items[a].w),
+      idx.slice().sort((a, b) => items[b].w * items[b].h - items[a].w * items[a].h),
+      idx.slice().sort((a, b) => Math.max(items[b].w, items[b].h) - Math.max(items[a].w, items[a].h)),
+    ];
+    // mais algumas tentativas misturando a ordem (sempre as mesmas, para o resultado não mudar de uma vez para outra)
+    let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    for (let t = 0; t < (items.length > 60 ? 3 : 8); t++) orders.push(idx.slice().sort((a, b) => area(b) * (0.75 + rnd() * 0.5) - area(a) * (0.75 + rnd() * 0.5)));
+    // compactar: testa também o jeito "mais para cima e para a esquerda", que às vezes fecha melhor os vãos
+    const modos = compacto ? ['fundo', 'topo'] : ['fundo'];
+    // nota do encaixe: primeiro o comprimento do rolo; empatando, o que deixa as peças mais embaixo (mais fechado)
+    const nota = run => run.bottomPx * 1e7 + run.pos.reduce((t, p) => t + (p ? p.y + p.h : 0), 0);
+    let bestRun = null, bestOrder = null, bestModo = 'fundo';
+    for (const modo of modos) for (const order of orders) {
+      const run = place(order, shapes, items, cols, marginPx, c, modo);
+      if (!bestRun || nota(run) < nota(bestRun)) { bestRun = run; bestOrder = order; bestModo = modo; }
+    }
+    // Aperta mais: troca duas peças de lugar na ordem de entrada e fica com a troca se gastar menos rolo.
+    const t0 = performance.now(), limite = items.length > 1 ? tempoMs : 0;
+    let tent = 0;
+    while (performance.now() - t0 < limite && tent < (tempoMs > 2500 ? 3000 : 400)) {
+      tent++;
+      const ord = bestOrder.slice(), i = Math.floor(rnd() * ord.length), j = Math.floor(rnd() * ord.length);
+      if (i === j) continue;
+      if (rnd() < 0.5) { [ord[i], ord[j]] = [ord[j], ord[i]]; } else { const [x] = ord.splice(i, 1); ord.splice(j, 0, x); }
+      const run = place(ord, shapes, items, cols, marginPx, c, bestModo);
+      // compactar: aceita também empate no comprimento se fechar mais, para continuar procurando a partir dali
+      if (compacto ? nota(run) <= nota(bestRun) : run.bottomPx < bestRun.bottomPx) { bestRun = run; bestOrder = ord; }
+    }
+    let run = bestRun, antes = bestRun.bottomPx;
+    if (compacto && items.length > 1) run = compactar(run, shapes, items, marginPx, c, Math.max(1500, tempoMs));
+    return { pos: run.pos, width: Math.max(rollPx, cols * c + 2 * marginPx), height: run.bottomPx + marginPx, warn: [...new Set(warn)],
+      compactado: compacto ? Math.max(0, antes - run.bottomPx) : 0 };
+  }
+
+  function posDe(i, k, shapes, items, marginPx, c) {
+    const s = shapes[i][k.si];
+    return { x: marginPx + k.X * c, y: marginPx + k.Y * c, rot: s.ang === 180, ang: s.ang || 0, w: s.pw, h: s.ph, w0: items[i].w, h0: items[i].h };
+  }
+
+  function place(order, shapes, items, cols, marginPx, c, modo) {
+    const rolo = novoRolo(cols), cur = [], pos = [];
+    let bottomPx = 0;
+    for (const i of order) {
+      const b = rolo.melhor(shapes[i], null, modo);
+      rolo.marca(b.s, b.X, b.Y, 1);
+      cur[i] = { X: b.X, Y: b.Y, si: b.si };
+      pos[i] = posDe(i, cur[i], shapes, items, marginPx, c);
+      bottomPx = Math.max(bottomPx, pos[i].y + pos[i].h);
+    }
+    return { pos, bottomPx, rolo, cur };
+  }
+
+  // Compactar, em duas partes:
+  // 1) começando pelas peças do fim do rolo, tira cada uma e recoloca no lugar mais baixo que ela couber agora
+  //    (inclusive girada, se o giro for autorizado). Repete enquanto alguma descer.
+  // 2) "aperta o rolo": tenta um rolo um pouco mais curto. Tira as peças que passam do novo fim (e mais algumas
+  //    do alto, sorteadas) e recoloca todas nos vãos. Se couberem, fica; se não, volta como estava e tenta outra mistura.
+  function compactar(run, shapes, items, marginPx, c, tempoMs) {
+    const { rolo, cur } = run, t0 = performance.now();
+    const vivos = cur.map((k, i) => k ? i : -1).filter(i => i >= 0);
+    const fundo = i => cur[i].Y + shapes[i][cur[i].si].ch;
+    const area = i => shapes[i][0].mark.reduce((t, row) => t + row.reduce((u, [l, r]) => u + r - l + 1, 0), 0);
+    const tira = i => { const k = cur[i]; rolo.marca(shapes[i][k.si], k.X, k.Y, 0); };
+    const poe = (i, k) => { cur[i] = k; rolo.marca(shapes[i][k.si], k.X, k.Y, 1); };
+    let seed = 11; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+
+    let desceu = true, voltas = 0;
+    while (desceu && voltas < 40 && performance.now() - t0 < tempoMs * 0.4) {
+      desceu = false; voltas++;
+      for (const i of vivos.slice().sort((a, b) => fundo(b) - fundo(a))) {
+        const k = cur[i], f = fundo(i);
+        tira(i);
+        const b = rolo.melhor(shapes[i], f);
+        poe(i, b ? { X: b.X, Y: b.Y, si: b.si } : k);
+        if (b && b.bottom < f) desceu = true;
+      }
+    }
+
+    let tent = 0;
+    while (performance.now() - t0 < tempoMs && vivos.length > 1) {
+      tent++;
+      const L = Math.max(...vivos.map(fundo)), teto = L - 1;
+      const tirar = new Set(vivos.filter(i => fundo(i) > teto));
+      // mais algumas peças do alto do rolo, para abrir espaço de outro jeito a cada tentativa
+      const altas = vivos.filter(i => !tirar.has(i) && fundo(i) > L * 0.55);
+      const extra = Math.min(altas.length, tent % 5);
+      for (let e = 0; e < extra; e++) tirar.add(altas[Math.floor(rnd() * altas.length)]);
+      const lista = [...tirar], antes = new Map(lista.map(i => [i, cur[i]]));
+      lista.forEach(tira);
+      lista.sort((a, b) => area(b) * (0.8 + rnd() * 0.4) - area(a) * (0.8 + rnd() * 0.4));
+      const postos = []; let ok = true;
+      for (const i of lista) {
+        const b = rolo.melhor(shapes[i], teto);
+        if (!b) { ok = false; break; }
+        poe(i, { X: b.X, Y: b.Y, si: b.si }); postos.push(i);
+      }
+      if (!ok) { postos.forEach(tira); lista.forEach(i => poe(i, antes.get(i))); }
+    }
+    const pos = [];
+    let bottomPx = 0;
+    cur.forEach((k, i) => { if (!k) return; pos[i] = posDe(i, k, shapes, items, marginPx, c); bottomPx = Math.max(bottomPx, pos[i].y + pos[i].h); });
+    return { pos, bottomPx, rolo, cur };
+  }
+
+  // O encaixe que já foi montado ao gerar a grade, se ainda vale (mesmas peças e mesma configuração).
+  function assinatura(st) { return JSON.stringify([st.rollCm, st.marginMm, st.gapMm, st.bleedMm, angulos(st), !!st.compactar, st.dpi]); }
+  function laySalvo(st, size, parts) {
+    const s = st.results && st.results[size];
+    if (!s || !s.pos || s.assin !== assinatura(st) || s.pos.length !== parts.length) return null;
+    if (!s.pos.every((p, i) => p && p.w0 === parts[i].w && p.h0 === parts[i].h)) return null;
+    return { pos: s.pos, width: s.w, height: s.h, warn: [] };
   }
 
   function targetsPx(st, g, size) {
@@ -507,10 +687,12 @@ const Grade = (() => {
   }
 
   // Encaixa; se duas peças encostarem, abre mais espaço sozinho e encaixa de novo.
-  function layoutSemEncostar(items, st, rollPx, marginPx, cell, blit) {
+  function layoutSemEncostar(items, st, rollPx, marginPx, cell, blit, salvo) {
+    // o encaixe montado ao gerar a grade vale para o TIFF e o Corel, se nada mudou
+    if (salvo && (!blit || !blit(salvo))) return salvo;
     let gap = Math.round(st.gapMm / 25.4 * st.dpi), lay = null;
     for (let k = 0; k < 4; k++) {
-      lay = layout(items, rollPx, marginPx, gap, cell, st.allowRot);
+      lay = layout(items, rollPx, marginPx, gap, cell, angulos(st), 2500, !!st.compactar);
       if (!blit || !blit(lay)) return lay;
       gap += Math.max(2, Math.round(2 / 25.4 * st.dpi));
     }
@@ -534,8 +716,8 @@ const Grade = (() => {
       if (W * H * 3 > 1.8e9) throw new Error('O encaixe deste tamanho ficou grande demais para gerar de uma vez. Diminua a resolução.');
       const rgb = new Uint8Array(W * H * 3).fill(255), used = new Uint8Array(W * H);
       let overlap = 0;
-      res.forEach((r, i) => {
-        const { x: px, y: py, rot } = lay.pos[i];
+      res.forEach((r0, i) => {
+        const { x: px, y: py } = lay.pos[i], { img: R, flip: rot } = orientada(r0, lay.pos[i]), r = R;
         for (let y = 0; y < r.h; y++) {
           const so = rot ? (r.h - 1 - y) * r.w : y * r.w, oo = (py + y) * W + px;
           for (let x = 0; x < r.w; x++) {
@@ -549,10 +731,10 @@ const Grade = (() => {
       out = { W, H, rgb, overlap, lay };
       return overlap > 0;
     };
-    layoutSemEncostar(res, st, rollPx, marginPx, cell, compor);
+    layoutSemEncostar(res, st, rollPx, marginPx, cell, compor, laySalvo(st, size, res));
     lay_warn(out.lay, warns);
-    const rotated = out.lay.pos.filter(p => p.rot).length;
-    return { size, w: out.W, h: out.H, rgb: out.rgb, pieces: res.length, rotated, overlap: out.overlap, ajustes, ms: U.now() - t0, warns, parts: res, pos: out.lay.pos };
+    const rotated = out.lay.pos.filter(p => p.ang).length;
+    return { size, w: out.W, h: out.H, rgb: out.rgb, pieces: res.length, rotated, overlap: out.overlap, ajustes, ms: U.now() - t0, warns, parts: res, pos: out.lay.pos, assin: assinatura(st), compactado: out.lay.compactado || 0 };
   }
   function lay_warn(lay, warns) { (lay.warn || []).forEach(txt => warns.push({ lvl: 'alerta', txt })); }
 
@@ -560,7 +742,9 @@ const Grade = (() => {
   // Para caber na memória: desenha cada pedaço, guarda só o formato para encaixar e solta a imagem;
   // depois monta o TIFF em faixas, redesenhando os pedaços da faixa, já comprimido.
   async function encaixeGrade(st, qtd, onProg) {
-    const t0 = U.now(), dpi = st.dpi, cell = Math.max(4, Math.round(5 / 25.4 * dpi));
+    // compactar: células mais finas (cerca de 2 mm) para as peças chegarem bem perto umas das outras
+    const t0 = U.now(), dpi = st.dpi, cell = st.compactar ? Math.max(celula(st), Math.round(2 / 25.4 * dpi)) : Math.max(4, Math.round(5 / 25.4 * dpi));
+    const A = angulos(st);
     const rollPx = U.px(st.rollCm, dpi), marginPx = Math.round(st.marginMm / 25.4 * dpi);
     let gap = Math.round(st.gapMm / 25.4 * dpi);
     const items = [], warns = [];
@@ -572,14 +756,14 @@ const Grade = (() => {
       for (let c = 0; c < (qtd[s] | 0); c++) for (const sp of specs) {
         const r = drawSpec(sp);
         const g = Math.ceil(gap / cell);
-        const shapes = [cellShape(r, cell, g, false), cellShape(r, cell, g, true)];
+        const shapes = A.map(a => shapeFor(r, cell, g, a));
         items.push({ w: r.w, h: r.h, shapes, sp, rule: r.ajustada ? null : sp.o.rule });
         k++; if (onProg) onProg(`Preparando pedaço ${k} de ${total}…`);
         await U.tick();
       }
     }
     if (onProg) onProg('Encaixando todos os pedaços no rolo…'); await U.tick();
-    const lay = layout(items, rollPx, marginPx, gap, cell, st.allowRot, 12000);   // grade completa: procura por mais tempo
+    const lay = layout(items, rollPx, marginPx, gap, cell, A, st.compactar ? 8000 : 12000, !!st.compactar);   // grade completa: procura por mais tempo
     lay_warn(lay, warns);
     const W = lay.width, H = lay.height;
     // Faixas de 256 linhas, comprimidas em LZW (o Corel, o Photoshop e o RIP abrem).
@@ -591,9 +775,9 @@ const Grade = (() => {
     const ativos = new Map(); let next = 0;
     for (let y0 = 0; y0 < H; y0 += ROWS) {
       const rows = Math.min(ROWS, H - y0), buf = new Uint8Array(W * rows * 3).fill(255);
-      while (next < order.length && lay.pos[order[next]].y < y0 + rows) { const i = order[next++]; ativos.set(i, drawSpec(items[i].sp)); }
-      for (const [i, r] of ativos) {
-        const { x: px, y: py, rot } = lay.pos[i];
+      while (next < order.length && lay.pos[order[next]].y < y0 + rows) { const i = order[next++]; ativos.set(i, orientada(drawSpec(items[i].sp), lay.pos[i])); }
+      for (const [i, o] of ativos) {
+        const r = o.img, rot = o.flip, { x: px, y: py } = lay.pos[i];
         if (py + r.h <= y0) { ativos.delete(i); continue; }
         const ya = Math.max(y0, py), yb = Math.min(y0 + rows, py + r.h);
         for (let yy = ya; yy < yb; yy++) {
@@ -620,7 +804,7 @@ const Grade = (() => {
     pctx.putImageData(pid, 0, 0);
     const blob = Tiff.writeStrips(W, H, ROWS, strips, counts, dpi, 5);
     const porTam = {}; for (const it of items) porTam[it.sp.size] = (porTam[it.sp.size] || 0) + 1;
-    return { w: W, h: H, blob, preview: pv, pieces: items.length, porTam, rotated: lay.pos.filter(p => p.rot).length, ms: U.now() - t0, warns };
+    return { w: W, h: H, blob, preview: pv, pieces: items.length, porTam, rotated: lay.pos.filter(p => p.ang).length, compactado: lay.compactado || 0, ms: U.now() - t0, warns };
   }
 
   // Conferência: refaz o tamanho base e compara pixel a pixel com o arquivo original.
@@ -661,5 +845,5 @@ const Grade = (() => {
     return sp ? { fx: sp.cx / p.w, fy: sp.cy / p.h } : { fx: 0.5, fy: 0.85 };
   }
 
-  return { renderPiece, renderSize, autoPos, encaixeGrade, labelPos, celula, specsForSize, drawSpec, layout, selfCheck, RULE_NAMES };
+  return { renderPiece, renderSize, autoPos, encaixeGrade, labelPos, celula, specsForSize, drawSpec, layout, selfCheck, RULE_NAMES, angulos, lerGiros, laySalvo, girarRGBA };
 })();

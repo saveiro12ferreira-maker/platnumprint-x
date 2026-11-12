@@ -20,7 +20,7 @@ const App = (() => {
   const st = {
     file: null, sizes: [], base: 'M', dpi: 200, an: null, pieces: [], groups: [],
     bg: [255, 255, 255], thick: 4, outline: [26, 26, 26],
-    mode: 'moldes', mercado: JSON.parse(JSON.stringify(MERCADO)), marcarTamanho: true, labelMm: 4, allowRot: false, splitLong: true, autoPct: JSON.parse(JSON.stringify(PCT)), pdf: null, mapping: {}, overrides: {}, targets: {},
+    mode: 'moldes', mercado: JSON.parse(JSON.stringify(MERCADO)), marcarTamanho: true, labelMm: 4, allowRot: false, girosExtra: [], compactar: true, splitLong: true, autoPct: JSON.parse(JSON.stringify(PCT)), pdf: null, mapping: {}, overrides: {}, targets: {},
     rollCm: 150, marginMm: 10, gapMm: 10, bleedMm: 0, results: {},
     groupName: g => TYPES[g.type] + (g.letter ? ' ' + g.letter : ''),
   };
@@ -928,7 +928,7 @@ const App = (() => {
   }
 
   const nomeGrupo = g => (g.items[0] && g.items[0].nome) || st.groupName(g);
-  const CONF = ['roll', 'margin', 'gap', 'bordaMm', 'bleed', 'labelMm'], CONFCHK = ['marcarTam', 'marcarNome', 'allowRot', 'splitLong'];
+  const CONF = ['roll', 'margin', 'gap', 'bordaMm', 'bleed', 'labelMm', 'girosExtra'], CONFCHK = ['marcarTam', 'marcarNome', 'allowRot', 'splitLong', 'compactar'];
 
   function salvarGrade() {
     const nome = ($('#nomeGrade').value || '').trim();
@@ -1116,6 +1116,8 @@ const App = (() => {
     st.gapMm = U.num($('#gap').value) || 0;
     st.bleedMm = U.num($('#bleed').value) || 0;
     st.allowRot = $('#allowRot').checked;
+    st.girosExtra = Grade.lerGiros($('#girosExtra').value);
+    st.compactar = $('#compactar').checked;
     st.splitLong = $('#splitLong').checked;
     st.marcarTamanho = $('#marcarTam').checked;
     st.marcarNome = $('#marcarNome').checked;
@@ -1179,11 +1181,11 @@ const App = (() => {
         const r = await Grade.renderSize(st, size, k => { $('#status5').textContent = `Tamanho ${size}: peça ${k} de ${total}…`; });
         const pv = U.preview(r.rgb, r.w, r.h, 3, 700);
         r.rgb = null;
-        st.results[size] = { w: r.w, h: r.h, ms: r.ms };
+        st.results[size] = { w: r.w, h: r.h, ms: r.ms, pos: r.pos, assin: r.assin };
         // Sem avisos de grade: o motor já resolve sozinho. Só aparece o que precisa de outra largura de rolo.
         const fisicos = r.warns.filter(w => w.lvl === 'alerta');
         const warns = fisicos.length ? el('ul', {}, fisicos.map(w => el('li', { class: w.lvl, text: w.txt })))
-          : el('p', { class: 'ok-line', text: `✔ Pronto${r.rotated ? ` · ${r.rotated} pedaço(s) girado(s) 180°` : ' · nenhum pedaço girado'}${st.marcarTamanho ? ` · tamanho ${size}${st.marcarNome ? ' e nome' : ''} marcado em cada pedaço` : ''}` });
+          : el('p', { class: 'ok-line', text: `✔ Pronto${r.rotated ? ` · ${r.rotated} pedaço(s) girado(s)` : ' · nenhum pedaço girado'}${st.marcarTamanho ? ` · tamanho ${size}${st.marcarNome ? ' e nome' : ''} marcado em cada pedaço` : ''}` });
         $('#results').append(el('div', { class: 'res' },
           el('h4', { text: `Tamanho ${size}${size === st.base ? ' (base)' : ''}` }),
           el('div', { class: 'muted', text: `${r.pieces} peças · encaixe ${U.fmt(U.cm(r.w, st.dpi))} × ${U.fmt(U.cm(r.h, st.dpi))} cm · montado em ${U.secs(r.ms)}` }),
@@ -1223,7 +1225,7 @@ const App = (() => {
       const fis = r.warns.filter(w => w.lvl === 'alerta');
       $('#encRes').replaceChildren(
         el('div', { class: 'enc-num' }, el('b', { text: U.fmt(m, 2) + ' m' }), el('span', { text: `de tecido com ${U.fmt(st.rollCm / 100, 2)} m de largura` })),
-        el('p', { class: 'muted', text: `${r.pieces} pedaços (${porTam}) · encaixe ${U.fmt(U.cm(r.w, st.dpi))} × ${U.fmt(U.cm(r.h, st.dpi))} cm · ${r.rotated ? r.rotated + ' girado(s) 180°' : 'nenhum girado'} · montado em ${U.secs(r.ms)}` }),
+        el('p', { class: 'muted', text: `${r.pieces} pedaços (${porTam}) · encaixe ${U.fmt(U.cm(r.w, st.dpi))} × ${U.fmt(U.cm(r.h, st.dpi))} cm · ${r.rotated ? r.rotated + ' girado(s)' : 'nenhum girado'} · montado em ${U.secs(r.ms)}` }),
         r.preview,
         fis.length ? el('ul', {}, fis.map(w => el('li', { class: 'alerta', text: w.txt }))) : null,
         el('button', { class: 'primary', text: '⬇ Baixar TIFF do encaixe', onclick: () => download(encaixeBlob, `${fileBase()}_encaixe_grade_${U.fmt(m, 2).replace(',', '-')}m.tif`) }));
@@ -1297,7 +1299,7 @@ const App = (() => {
     $('#btnCorelTodos').addEventListener('click', corelTodos);
     $('#btnEncaixe').addEventListener('click', montarEncaixe);
     // Qualquer opção do Gerar mudou: refaz sozinho (obedece o que está marcado).
-    ['#roll', '#margin', '#gap', '#bleed', '#allowRot', '#splitLong', '#incBase', '#marcarTam', '#marcarNome', '#labelMm'].forEach(id => $(id).addEventListener('change', agendar));
+    ['#roll', '#margin', '#gap', '#bleed', '#allowRot', '#girosExtra', '#compactar', '#splitLong', '#incBase', '#marcarTam', '#marcarNome', '#labelMm'].forEach(id => $(id).addEventListener('change', agendar));
     ['#marcarTam', '#marcarNome', '#labelMm'].forEach(id => $(id).addEventListener('change', () => { readOut(); desenharEtiquetas(); }));
     $('#semNomeTodas').addEventListener('click', () => { st.pieces.forEach(p => { p.semEtiqueta = true; }); renderPieces(); desenharEtiquetas(); agendar(); });
     $('#comNomeTodas').addEventListener('click', () => { st.pieces.forEach(p => { p.semEtiqueta = false; }); renderPieces(); desenharEtiquetas(); agendar(); });

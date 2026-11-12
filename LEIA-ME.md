@@ -105,3 +105,10 @@ A prévia coloca a estampa do arquivo na posição certa por cima da roupa da mo
 ## v23 (11/11) — nome rente à borda
 - O lugar do nome/número agora é calculado pelo formato real das letras (antes era um círculo em volta do texto, que empurrava nomes compridos para o meio da estampa). Dá para deixar o nome no pezinho da peça, quase colado na borda preta (o laser corta e a bainha/overlock cobre), em qualquer giro.
 - Na tela, o nome não tem mais a barra grossa de cor: só um contorno fino, para ver exatamente onde ele fica.
+
+## v24 (11/11) — compactar o encaixe
+- **🗜️ Compactar o encaixe** (aba Gerar, já vem marcado): além de testar várias ordens de entrada, o motor testa dois jeitos de colocar as peças (fundo mais baixo / mais para cima e à esquerda) e depois "aperta o rolo": tira as peças do fim, recoloca nos vãos que sobraram e tenta um rolo cada vez mais curto. Vale para o TIFF de cada tamanho, o arquivo do Corel e o encaixe automático da grade completa (que também passa a usar células de ~2 mm em vez de 5 mm, para as peças chegarem mais perto). Demora alguns segundos a mais.
+- **Outros giros autorizados**: campo ao lado de "Permitir girar 180°". Escreva os ângulos que vocês liberam, separados por vírgula (ex.: `90, 270`, ou pequenos giros como `5, 355`). O motor só usa os giros marcados/escritos. Giros fora de 0°/180° mudam o sentido do fio do tecido na peça.
+- O Corel e o TIFF de cada tamanho usam **o mesmo encaixe** montado no "Gerar grade" (antes o Corel montava outro encaixe e podia sair diferente).
+- O encaixe ficou mais rápido para achar lugar (pula as linhas do rolo que não têm vão do tamanho da peça).
+- Dica: o espaço entre peças pesa muito no gasto de tecido. De 5 mm para 3 mm, o mesmo encaixe de teste ficou ~4% mais curto.

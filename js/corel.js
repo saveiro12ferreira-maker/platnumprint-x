@@ -66,15 +66,18 @@ const Corel = (() => {
       await U.tick();
     }
     const cell = Grade.celula(st);
-    const lay = Grade.layout(parts, rollPx, marginPx, Math.round(st.gapMm / 25.4 * dpi), cell, st.allowRot);
+    // mesmo encaixe do TIFF (o que foi montado ao gerar a grade), para o Corel bater com o TIFF
+    const lay = Grade.laySalvo(st, size, parts) || Grade.layout(parts, rollPx, marginPx, Math.round(st.gapMm / 25.4 * dpi), cell, Grade.angulos(st), 2500, !!st.compactar);
     const W = lay.width, H = lay.height;
     const out = [`<?xml version="1.0" encoding="UTF-8"?>`,
       `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${mm(W)}mm" height="${mm(H)}mm" viewBox="0 0 ${W} ${H}">`,
       `<title>Tamanho ${esc(size)} · ${parts.length} pedaços · ${U.fmt(U.cm(W, dpi))} × ${U.fmt(U.cm(H, dpi))} cm</title>`,
       `<g id="Tamanho_${idOk(size)}">`];
     for (let i = 0; i < parts.length; i++) {
-      const r = parts[i], { x, y, rot } = lay.pos[i];
-      const tf = rot ? ` transform="rotate(180 ${x + r.w / 2} ${y + r.h / 2})"` : '';
+      const r = parts[i], p = lay.pos[i], ang = p.ang || (p.rot ? 180 : 0);
+      // a peça gira em volta do centro do lugar dela no encaixe
+      const cx = p.x + (p.w || r.w) / 2, cy = p.y + (p.h || r.h) / 2, x = cx - r.w / 2, y = cy - r.h / 2;
+      const tf = ang ? ` transform="rotate(${ang} ${cx} ${cy})"` : '';
       const pts = simplify(trace(r.nm, r.Wt, r.Ht), Math.max(0.6, dpi * 0.004));
       const d = pts.length > 2 ? 'M' + pts.map(([px, py]) => `${(x + r.b + px + 0.5).toFixed(1)} ${(y + r.b + py + 0.5).toFixed(1)}`).join(' L') + ' Z' : '';
       out.push(`<g id="Peca_${r.n}_${idOk(r.name)}_tam_${idOk(size)}"${tf}>`);
