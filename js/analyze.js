@@ -90,7 +90,9 @@ const Analyze = (() => {
       const k = y * nw + x; nm[k] = 1; area++; nr[k * 4] = d[q]; nr[k * 4 + 1] = d[q + 1]; nr[k * 4 + 2] = d[q + 2]; nr[k * 4 + 3] = 255;
     }
     const cx = p.x + w / 2, cy = p.y + h / 2;
-    Object.assign(p, { x: Math.round(cx - nw / 2), y: Math.round(cy - nh / 2), w: nw, h: nh, mask: nm, rgba: nr, area, endireitada: Math.round(deg * 10) / 10 });
+    Object.assign(p, { x: Math.round(cx - nw / 2), y: Math.round(cy - nh / 2), w: nw, h: nh, mask: nm, rgba: nr, area, endireitada: Math.round(deg * 10) / 10,
+      // para desenhar a caixa e os nomes no arquivo como ele é (torto): centro do giro e deslocamento do recorte
+      giro0: { a: deg * Math.PI / 180, cx, cy, ox: x0 + nw / 2 - W2 / 2, oy: y0 + nh / 2 - H2 / 2 } });
   }
 
   async function run(img, dpi, log) {

@@ -154,3 +154,14 @@ Gerado aqui com os arquivos reais da equipe. Três coisas estavam erradas e fora
 
 ## v34 (12/11) — nome colado no contorno
 - O nome posto rente à beira continua **colado na beira** em todos os tamanhos, também nas beiras inclinadas (ex.: "COSTA" deitado ao longo da lateral da costas). O motor mede, no arquivo base, a distância do nome até a beira mais perto e põe o nome na mesma beira da peça nova, à mesma distância (acompanhando a graduação). Antes ele usava a caixa reta em volta da peça e, numa beira inclinada, o nome entrava para o meio. Teste com "COSTA" a 6,4 mm da beira no 12: 4,8 mm no 2, 5,3 mm no 6, 6,4 mm no 12, 6,6 mm no 14 — sempre na mesma altura da peça.
+
+## v35 (12/11) — caixa e nomes seguem a peça torta
+- Peça que no arquivo está girada (ex.: a COSTA nº 8 da Antonella) é endireitada para casar com o molde. A caixa pontilhada e os nomes eram desenhados retos, como se a peça não estivesse girada, e os nomes iam para onde a caixa mandava (até em cima de outra peça).
+- Agora a caixa pontilhada gira junto com a peça, e o nome aparece em cima da peça, girado junto. Ao arrastar o nome, ele vai exatamente para o ponto da peça onde você soltou, e esse ponto vale para a grade toda.
+- O clique para trocar cor de uma parte também acha o lugar certo nessas peças.
+- Na grade, o nome procura a mesma beira do contorno (com a mesma inclinação), não o lado da caixa.
+
+## v36 (12/11) — nome preso ao contorno, como o Digiflash do Confex Molde
+- O motor agora reconhece o contorno de cada peça do mesmo jeito que a parte Digiflash do Confex Molde: segue a beira da peça, simplifica a linha e acha os cantos. Cada trecho entre dois cantos é um lado da modelagem.
+- O nome fica preso a um lado: em que ponto do lado ele está e a que distância da beira. Nos outros tamanhos, o motor acha o mesmo lado (mesma direção e mesmo lugar da peça) e põe o nome no mesmo ponto, à mesma distância, crescendo junto com a graduação.
+- A caixa pontilhada não decide mais o lugar do nome.

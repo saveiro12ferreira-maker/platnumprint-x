@@ -181,6 +181,25 @@ const App = (() => {
       : `Conferência: refazendo o tamanho ${st.base} pelo motor, o resultado bate ${U.fmt(c.score * 100)}% com o arquivo original, pixel a pixel.`;
   }
 
+  // ---------- Peça endireitada (estava torta no arquivo): ponto da peça reta <-> ponto no arquivo ----------
+  // v35 (12/11: "os nomes acompanham a linha pontilhada, não a modelagem"): a caixa e os nomes eram desenhados
+  // retos em cima de uma peça que no arquivo está girada — agora seguem a peça como ela está.
+  function giroDe(p) {
+    if (!p.endireitada) return null;
+    return p.giro0 || { a: p.endireitada * Math.PI / 180, cx: p.x + p.w / 2, cy: p.y + p.h / 2, ox: 0, oy: 0 };
+  }
+  function noArquivo(p, lx, ly) {
+    const g = giroDe(p); if (!g) return [p.x + lx, p.y + ly];
+    const dx = lx - p.w / 2 + g.ox, dy = ly - p.h / 2 + g.oy, c = Math.cos(g.a), s = Math.sin(g.a);
+    return [g.cx + dx * c - dy * s, g.cy + dx * s + dy * c];
+  }
+  function naPeca(p, X, Y) {
+    const g = giroDe(p); if (!g) return [X - p.x, Y - p.y];
+    const dx = X - g.cx, dy = Y - g.cy, c = Math.cos(g.a), s = Math.sin(g.a);
+    return [dx * c + dy * s + p.w / 2 - g.ox, -dx * s + dy * c + p.h / 2 - g.oy];
+  }
+  const giroGraus = p => p.endireitada || 0;
+
   // ---------- Etapa 2 ----------
   function drawPreview() {
     const an = st.an, src = an.preview, cv = el('canvas');
@@ -190,8 +209,10 @@ const App = (() => {
     ctx.lineWidth = 2; ctx.setLineDash([6, 4]); ctx.strokeStyle = '#EF9F27';
     ctx.font = '600 13px Segoe UI, sans-serif';
     for (const p of st.pieces) {
-      const x = p.x * f, y = p.y * f, w = p.w * f, h = p.h * f;
-      ctx.strokeRect(x - 2, y - 2, w + 4, h + 4);
+      // caixa em volta da peça como ela está no arquivo (girada junto, se a peça está torta)
+      const cs = [[-2, -2], [p.w + 2, -2], [p.w + 2, p.h + 2], [-2, p.h + 2]].map(([a, b]) => noArquivo(p, a, b).map(v => v * f));
+      ctx.beginPath(); cs.forEach(([a, b], i) => (i ? ctx.lineTo : ctx.moveTo).call(ctx, a, b)); ctx.closePath(); ctx.stroke();
+      const topo = cs.reduce((a, c) => c[1] < a[1] ? c : a), x = topo[0] + 2, y = topo[1] + 2;   // número no canto de cima
       ctx.setLineDash([]); ctx.fillStyle = '#EF9F27'; ctx.fillRect(x - 2, y - 2, 22, 20);
       ctx.fillStyle = '#412402'; ctx.fillText(String(p.n), x + (p.n > 9 ? 1 : 5), y + 13); ctx.setLineDash([6, 4]);
     }
@@ -271,8 +292,9 @@ const App = (() => {
       title: 'Arraste para mudar de lugar · ⟳ gira (clique 15°, arraste livre, rodinha do mouse 5°) · ⤡ muda o tamanho da letra (arraste, ou Ctrl + rodinha) · ✂ separa número e nome · dois cliques escreve o nome. Vale para todos os tamanhos.', text: L.text });
     const escala = () => cv.clientWidth / cv.width;
     const pr = () => {
-      d.style.left = ((p.x + pos.fx * p.w) * f / cv.width * 100) + '%'; d.style.top = ((p.y + pos.fy * p.h) * f / cv.height * 100) + '%';
-      d.style.transform = `translate(-50%, -50%) rotate(${p[R] || 0}deg)`;
+      const [ax, ay] = noArquivo(p, pos.fx * p.w, pos.fy * p.h);
+      d.style.left = (ax * f / cv.width * 100) + '%'; d.style.top = (ay * f / cv.height * 100) + '%';
+      d.style.transform = `translate(-50%, -50%) rotate(${(p[R] || 0) + giroGraus(p)}deg)`;
       d.style.fontSize = Math.max(7, pxDe(p, k) * f * escala()) + 'px';
     };
     pr();
@@ -338,8 +360,8 @@ const App = (() => {
       ev.preventDefault(); d.setPointerCapture(ev.pointerId); d.classList.add('arrastando');
       const r = cv.getBoundingClientRect(), kk = cv.width / r.width / f;
       const mover = e2 => {
-        const ix = (e2.clientX - r.left) * kk, iy = (e2.clientY - r.top) * kk;
-        pos.fx = Math.min(1, Math.max(0, (ix - p.x) / p.w)); pos.fy = Math.min(1, Math.max(0, (iy - p.y) / p.h)); pr();
+        const [lx, ly] = naPeca(p, (e2.clientX - r.left) * kk, (e2.clientY - r.top) * kk);
+        pos.fx = Math.min(1, Math.max(0, lx / p.w)); pos.fy = Math.min(1, Math.max(0, ly / p.h)); pr();
       };
       const soltar = () => { d.removeEventListener('pointermove', mover); d.classList.remove('arrastando'); p[P] = { fx: pos.fx, fy: pos.fy }; d.classList.add('manual'); agendar(); };
       d.addEventListener('pointermove', mover); d.addEventListener('pointerup', soltar, { once: true });
@@ -401,7 +423,7 @@ const App = (() => {
     const pv = st.an.preview, cv = $('#coresImg');
     if (pv && (cv.width !== pv.width || cv.height !== pv.height || !cv._ok)) { cv.width = pv.width; cv.height = pv.height; cv.getContext('2d').drawImage(pv, 0, 0); cv._ok = true; }
     const ctx = cv.getContext('2d'); ctx.drawImage(pv, 0, 0);
-    C.regioes.forEach((r, j) => { const p = st.pieces.find(q => q.n === r.n); if (!p) return; const x = (p.x + r.x) * st.an.pf, y = (p.y + r.y) * st.an.pf;
+    C.regioes.forEach((r, j) => { const p = st.pieces.find(q => q.n === r.n); if (!p) return; const [x, y] = noArquivo(p, r.x, r.y).map(v => v * st.an.pf);
       ctx.fillStyle = U.hex(r.cor); ctx.strokeStyle = '#000'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, 7, 0, 7); ctx.fill(); ctx.stroke();
       ctx.fillStyle = '#000'; ctx.font = 'bold 12px sans-serif'; ctx.fillText(String(j + 1), x + 9, y + 4); });
     $('#coresPartes').replaceChildren(...C.regioes.map((r, j) => el('div', { style: 'display:flex;align-items:center;gap:6px;margin:3px 0' },
@@ -415,10 +437,10 @@ const App = (() => {
       if (!st.an || !st.cores) return;
       const cv = e.currentTarget, rc = cv.getBoundingClientRect();
       const X = (e.clientX - rc.left) * cv.width / rc.width / st.an.pf, Y = (e.clientY - rc.top) * cv.height / rc.height / st.an.pf;
-      const p = st.pieces.find(q => X >= q.x && Y >= q.y && X < q.x + q.w && Y < q.y + q.h && q.mask[Math.floor(Y - q.y) * q.w + Math.floor(X - q.x)]);
+      const p = st.pieces.find(q => { const [a, b] = naPeca(q, X, Y).map(Math.floor); return a >= 0 && b >= 0 && a < q.w && b < q.h && q.mask[b * q.w + a]; });
       if (!p) { alert('Aí não tem peça. Clique em cima de uma parte da estampa (listra, flor, vaso…).'); return; }
       // procura o pixel de desenho mais perto do clique (a imagem pequena perde detalhe)
-      let lx = Math.floor(X - p.x), ly = Math.floor(Y - p.y), achou = Grade.parteEm(p, st.cores, lx, ly);
+      let [lx, ly] = naPeca(p, X, Y).map(Math.floor), achou = Grade.parteEm(p, st.cores, lx, ly);
       const raio = Math.ceil(3 / st.an.pf);
       for (let r = 1; !achou && r <= raio; r++) for (let dy = -r; dy <= r && !achou; dy++) for (let dx = -r; dx <= r; dx++) {
         const x = lx + dx, y = ly + dy; if (x < 0 || y < 0 || x >= p.w || y >= p.h) continue;

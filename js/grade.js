@@ -429,10 +429,131 @@ const Grade = (() => {
     return best;
   }
   // Direção para dentro da peça num ponto da beira (média dos vizinhos que estão dentro)
-  function normalDentro(m, W, H, x, y) {
-    let sx = 0, sy = 0;
-    for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) { const a = x + dx, b = y + dy; if (a >= 0 && b >= 0 && a < W && b < H && m[b * W + a]) { sx += dx; sy += dy; } }
+  function normalDentro(m, W, H, x, y, R) {
+    let sx = 0, sy = 0; R = R || 3;
+    for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) { const a = x + dx, b = y + dy; if (a >= 0 && b >= 0 && a < W && b < H && m[b * W + a]) { sx += dx; sy += dy; } }
     const L = Math.hypot(sx, sy) || 1; return [sx / L, sy / L];
+  }
+
+  // Ponto da beira mais perto de (x, y) cuja beira tem a MESMA direção (normal para dentro parecida com n0):
+  // assim o nome fica na mesma linha do contorno (ex.: a lateral inclinada), não numa beira vizinha. {x, y, d, n}
+  function beiraIgual(m, W, H, x, y, n0) {
+    const cx = Math.round(x), cy = Math.round(y), em = (a, b) => a >= 0 && b >= 0 && a < W && b < H && m[b * W + a];
+    const beira = (a, b) => em(a, b) && (!em(a - 1, b) || !em(a + 1, b) || !em(a, b - 1) || !em(a, b + 1));
+    let best = null; const lim = Math.max(W, H);
+    for (let r = 0; r <= lim; r++) {
+      for (let k = -r; k <= r; k++) for (const [a, b] of [[cx + k, cy - r], [cx + k, cy + r], [cx - r, cy + k], [cx + r, cy + k]]) {
+        if (!beira(a, b)) continue;
+        const d = Math.hypot(a - x, b - y); if (best && d >= best.d) continue;
+        const n = normalDentro(m, W, H, a, b, 6); if (n[0] * n0[0] + n[1] * n0[1] < 0.8) continue;   // até ~37° de diferença
+        best = { x: a, y: b, d, n };
+      }
+      if (best && r > best.d * 1.42 + 1) break;
+    }
+    return best;
+  }
+
+  // ---------- Contorno da peça como no Digiflash do Confex Molde (12/11: "use a forma de reconhecer o molde") ----------
+  // 1) rastreia a beira da maior mancha (Moore), 2) simplifica (Douglas-Peucker), 3) acha os cantos pelo ângulo,
+  // 4) cada trecho entre dois cantos é um LADO da modelagem. O nome fica preso a um lado (em que ponto do lado e a
+  // que distância dele) — e não à caixa em volta da peça.
+  const _contornos = new WeakMap();
+  function contornoPeca(m, W, H) {
+    const c0 = _contornos.get(m); if (c0 && c0.W === W) return c0;
+    // maior mancha
+    const rot = new Int32Array(W * H), fila = new Int32Array(W * H);
+    let n = 0, melhor = { n: 0, qtd: 0, topo: 0 };
+    for (let i = 0; i < W * H; i++) {
+      if (!m[i] || rot[i]) continue;
+      n++; let a = 0, b = 0, qtd = 0, topo = i; fila[b++] = i; rot[i] = n;
+      while (a < b) {
+        const k = fila[a++]; qtd++; if (k < topo) topo = k;
+        const x = k % W, y = (k / W) | 0;
+        if (x > 0 && m[k - 1] && !rot[k - 1]) { rot[k - 1] = n; fila[b++] = k - 1; }
+        if (x < W - 1 && m[k + 1] && !rot[k + 1]) { rot[k + 1] = n; fila[b++] = k + 1; }
+        if (y > 0 && m[k - W] && !rot[k - W]) { rot[k - W] = n; fila[b++] = k - W; }
+        if (y < H - 1 && m[k + W] && !rot[k + W]) { rot[k + W] = n; fila[b++] = k + W; }
+      }
+      if (qtd > melhor.qtd) melhor = { n, qtd, topo };
+    }
+    if (!melhor.qtd) return null;
+    // Moore (sentido horário na tela)
+    const DX = [1, 1, 0, -1, -1, -1, 0, 1], DY = [0, 1, 1, 1, 0, -1, -1, -1];
+    const em = (x, y) => x >= 0 && y >= 0 && x < W && y < H && rot[y * W + x] === melhor.n;
+    let x = melhor.topo % W, y = (melhor.topo / W) | 0, dir = 7;
+    const x0 = x, y0 = y, raw = [[x, y]];
+    for (let passos = 0; passos < (W + H) * 40; passos++) {
+      let achou = false;
+      for (let k = 0; k < 8; k++) { const d = (dir + 6 + k) % 8, nx = x + DX[d], ny = y + DY[d]; if (em(nx, ny)) { x = nx; y = ny; dir = d; achou = true; break; } }
+      if (!achou || (x === x0 && y === y0)) break;
+      raw.push([x, y]);
+    }
+    if (raw.length < 12) return null;
+    // Douglas-Peucker (fechado: corta no ponto mais longe do início)
+    const tol = Math.max(1.5, Math.hypot(W, H) * 0.004);
+    const dp = (a, b) => {
+      const A = raw[a], B = raw[b], L = Math.hypot(B[0] - A[0], B[1] - A[1]) || 1; let mx = -1, mi = -1;
+      for (let i = a + 1; i < b; i++) { const P = raw[i], d = Math.abs((B[0] - A[0]) * (A[1] - P[1]) - (A[0] - P[0]) * (B[1] - A[1])) / L; if (d > mx) { mx = d; mi = i; } }
+      return mx > tol ? dp(a, mi).concat(dp(mi, b).slice(1)) : [a, b];
+    };
+    let far = 0, fd = -1; for (let i = 0; i < raw.length; i++) { const d = Math.hypot(raw[i][0] - x0, raw[i][1] - y0); if (d > fd) { fd = d; far = i; } }
+    const idx = dp(0, far).concat(dp(far, raw.length - 1).slice(1));
+    const V = idx.map(i => raw[i]); if (V.length > 2 && V[V.length - 1][0] === V[0][0] && V[V.length - 1][1] === V[0][1]) V.pop();
+    // cantos: onde a direção vira mais de 28°
+    const nV = V.length, cantos = [];
+    for (let i = 0; i < nV; i++) {
+      const P = V[(i - 1 + nV) % nV], Q = V[i], R = V[(i + 1) % nV];
+      const a1 = Math.atan2(Q[1] - P[1], Q[0] - P[0]), a2 = Math.atan2(R[1] - Q[1], R[0] - Q[0]);
+      let t = Math.abs(a2 - a1); if (t > Math.PI) t = 2 * Math.PI - t;
+      if (t > 28 * Math.PI / 180) cantos.push(i);
+    }
+    if (cantos.length < 2) cantos.splice(0, cantos.length, 0, nV >> 1);
+    // lados = trechos entre cantos, cada um com comprimento acumulado
+    const lados = cantos.map((c, j) => {
+      const fim = cantos[(j + 1) % cantos.length], pts = [];
+      for (let i = c; ; i = (i + 1) % nV) { pts.push(V[i]); if (i === fim) break; }
+      const acc = [0]; for (let i = 1; i < pts.length; i++) acc.push(acc[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+      return { pts, acc, L: acc[acc.length - 1] || 1 };
+    });
+    const r = { W, lados }; _contornos.set(m, r); return r;
+  }
+  // ponto do lado na fração t do comprimento: {x, y, tx, ty} (tx,ty = direção do lado ali)
+  function pontoNoLado(ld, t) {
+    const s = Math.min(1, Math.max(0, t)) * ld.L; let i = 1;
+    while (i < ld.pts.length - 1 && ld.acc[i] < s) i++;
+    const A = ld.pts[i - 1], B = ld.pts[i] || A, seg = (ld.acc[i] - ld.acc[i - 1]) || 1, u = (s - ld.acc[i - 1]) / seg;
+    const dx = B[0] - A[0], dy = B[1] - A[1], L = Math.hypot(dx, dy) || 1;
+    return { x: A[0] + dx * u, y: A[1] + dy * u, tx: dx / L, ty: dy / L };
+  }
+  // onde o ponto (x, y) está em relação aos lados: lado mais perto, fração t e distância
+  function presoAoLado(ct, x, y) {
+    let best = null;
+    ct.lados.forEach((ld, j) => {
+      for (let i = 1; i < ld.pts.length; i++) {
+        const A = ld.pts[i - 1], B = ld.pts[i], dx = B[0] - A[0], dy = B[1] - A[1], L2 = dx * dx + dy * dy || 1;
+        const u = Math.min(1, Math.max(0, ((x - A[0]) * dx + (y - A[1]) * dy) / L2)), px = A[0] + dx * u, py = A[1] + dy * u, d = Math.hypot(x - px, y - py);
+        if (!best || d < best.d) { const L = Math.sqrt(L2); best = { j, t: (ld.acc[i - 1] + u * L) / ld.L, d, x: px, y: py, tx: dx / L, ty: dy / L }; }
+      }
+    });
+    return best;
+  }
+  // mesmo lado na peça de outro tamanho: direção parecida e mesmo lugar (proporcional) — o mais parecido
+  function mesmoLado(ct0, w0, h0, a0, ct, Wt, Ht) {
+    let best = null;
+    const ex = a0.x / Math.max(1, w0) * Wt, ey = a0.y / Math.max(1, h0) * Ht, diag = Math.hypot(Wt, Ht);
+    for (const ld of ct.lados) {
+      const P = pontoNoLado(ld, a0.t), cos = P.tx * a0.tx + P.ty * a0.ty;
+      if (cos < 0.75) continue;
+      const custo = Math.hypot(P.x - ex, P.y - ey) / diag + (1 - cos) * 2 + Math.abs(ld.L / Math.max(Wt, Ht) - ct0.lados[a0.j].L / Math.max(w0, h0));
+      if (!best || custo < best.custo) best = { ...P, custo };
+    }
+    return best;
+  }
+  function paraDentro(m, W, H, x, y, tx, ty, d) {
+    const em = (a, b) => { a = Math.round(a); b = Math.round(b); return a >= 0 && b >= 0 && a < W && b < H && m[b * W + a]; };
+    let nx = -ty, ny = tx; const s = Math.max(2, Math.min(6, d));
+    if (!em(x + nx * s, y + ny * s) && em(x - nx * s, y - ny * s)) { nx = -nx; ny = -ny; }
+    return [nx, ny];
   }
 
   // Onde o texto vai na peça (mesma regra no TIFF e no Corel).
@@ -448,8 +569,28 @@ const Grade = (() => {
         // põe o texto na mesma beira, à mesma distância (crescendo junto com a graduação). Assim, numa beira inclinada,
         // o nome não "entra" na peça quando o tamanho muda (12/11: "6 COSTA" ia quase para o meio)
         const b0 = beiraMaisPerto(mask0, w0, h0, fx * w0, fy * h0);
-        const px1 = fx * Wt, py1 = fy * Ht, b1 = beiraMaisPerto(nm, Wt, Ht, px1, py1);
-        if (b0 && b1) {
+        // v35 (12/11: "os nomes acompanham a linha pontilhada, não a modelagem"): a beira certa na peça nova é achada
+        // pelo CONTORNO — a mesma beira (mesma inclinação) perto do ponto correspondente — e não pela caixa em volta.
+        let b1 = null, px1 = fx * Wt, py1 = fy * Ht;
+        // 1º: pelo contorno da modelagem (lados entre cantos, como o Digiflash)
+        const ct0 = contornoPeca(mask0, w0, h0), ct1 = contornoPeca(nm, Wt, Ht);
+        if (ct0 && ct1) {
+          const a0 = presoAoLado(ct0, fx * w0, fy * h0), P = a0 && mesmoLado(ct0, w0, h0, a0, ct1, Wt, Ht);
+          if (P) {
+            // distância medida na beira de verdade (pixel), não na linha simplificada
+            const d = (b0 ? b0.d : a0.d) * k, [nx, ny] = paraDentro(nm, Wt, Ht, P.x, P.y, P.tx, P.ty, d);
+            const bb = beiraMaisPerto(nm, Wt, Ht, P.x + nx * 4, P.y + ny * 4) || { x: P.x, y: P.y };
+            tx = bb.x + nx * d; ty = bb.y + ny * d;
+          }
+        }
+        if (tx == null && b0) {
+          const n0 = normalDentro(mask0, w0, h0, b0.x, b0.y, 6);
+          const bx = b0.x / Math.max(1, w0 - 1) * (Wt - 1), by = b0.y / Math.max(1, h0 - 1) * (Ht - 1);
+          b1 = beiraIgual(nm, Wt, Ht, bx, by, n0);
+          if (b1) { const d = b0.d * k; px1 = b1.x + b1.n[0] * d; py1 = b1.y + b1.n[1] * d; tx = px1; ty = py1; }
+          else b1 = beiraMaisPerto(nm, Wt, Ht, px1, py1);
+        }
+        if (tx == null && b0 && b1) {
           let ux = px1 - b1.x, uy = py1 - b1.y, L = Math.hypot(ux, uy);
           if (!nm[Math.round(Math.min(Ht - 1, Math.max(0, py1))) * Wt + Math.round(Math.min(Wt - 1, Math.max(0, px1)))]) { ux = -ux; uy = -uy; }
           if (L < 0.5) { const n = normalDentro(nm, Wt, Ht, b1.x, b1.y); ux = n[0]; uy = n[1]; L = 1; }
