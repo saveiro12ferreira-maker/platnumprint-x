@@ -349,6 +349,57 @@ const App = (() => {
     const mm = st.pieces.map(p => p.thick / st.dpi * 25.4), lo = Math.min(...mm), hi = Math.max(...mm);
     const faixa = Math.abs(hi - lo) < 0.05 ? `${U.fmt(lo, 1)} mm` : `de ${U.fmt(lo, 1)} a ${U.fmt(hi, 1)} mm, conforme a peça,`;
     $('#info3').textContent = `Fundo sólido ${U.hex(st.bg)}. Estampa encontrada em ${withArt} de ${st.pieces.length} peças. O contorno de corte tem ${faixa} e é redesenhado em cada tamanho com a mesma espessura.`;
+    renderCores();
+  }
+
+  // ---------- Cores da estampa: trocar qualquer cor, em todas as peças ou só numa parte (pedido 12/11) ----------
+  function renderCores() {
+    if (!st.an) return;
+    if (!st.cores || st.cores.an !== st.an) st.cores = { an: st.an, key: 'c' + Date.now(), pal: Grade.paleta(st.pieces), novas: [], regioes: [] };
+    const C = st.cores;
+    const caixa = (orig, nova) => el('span', { style: `display:inline-block;width:22px;height:22px;border-radius:4px;border:1px solid #888;background:${U.hex(nova || orig)}` });
+    $('#coresLista').replaceChildren(...C.pal.map((x, i) => {
+      const inp = el('input', { type: 'color', value: U.hex(C.novas[i] || x.c).toLowerCase(), title: 'Escolher a cor nova',
+        oninput: e => { C.novas[i] = U.rgb(e.target.value); renderCores(); agendar(); } });
+      return el('div', { style: 'display:flex;align-items:center;gap:4px;padding:4px 6px;border:1px solid #ddd;border-radius:8px;background:' + (C.novas[i] ? '#fff7e0' : '#fff') },
+        el('span', { title: 'Cor original ' + U.hex(x.c), style: `display:inline-block;width:22px;height:22px;border-radius:4px;border:1px solid #888;background:${U.hex(x.c)}` }),
+        el('span', { text: '→' }), inp,
+        el('span', { class: 'muted', style: 'font-size:11px', text: `${U.fmt(x.frac * 100, x.frac < 0.01 ? 1 : 0)}%` }),
+        C.novas[i] ? el('button', { type: 'button', class: 'mini', title: 'Voltar esta cor', text: '↺', onclick: () => { C.novas[i] = null; renderCores(); agendar(); } }) : '');
+    }));
+    // imagem para clicar numa parte
+    const pv = st.an.preview, cv = $('#coresImg');
+    if (pv && (cv.width !== pv.width || cv.height !== pv.height || !cv._ok)) { cv.width = pv.width; cv.height = pv.height; cv.getContext('2d').drawImage(pv, 0, 0); cv._ok = true; }
+    const ctx = cv.getContext('2d'); ctx.drawImage(pv, 0, 0);
+    C.regioes.forEach((r, j) => { const p = st.pieces.find(q => q.n === r.n); if (!p) return; const x = (p.x + r.x) * st.an.pf, y = (p.y + r.y) * st.an.pf;
+      ctx.fillStyle = U.hex(r.cor); ctx.strokeStyle = '#000'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, 7, 0, 7); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#000'; ctx.font = 'bold 12px sans-serif'; ctx.fillText(String(j + 1), x + 9, y + 4); });
+    $('#coresPartes').replaceChildren(...C.regioes.map((r, j) => el('div', { style: 'display:flex;align-items:center;gap:6px;margin:3px 0' },
+      el('b', { text: `${j + 1}.` }), el('span', { text: `Peça ${r.n} — só esta parte:` }), caixa(r.orig), el('span', { text: '→' }),
+      el('input', { type: 'color', value: U.hex(r.cor).toLowerCase(), oninput: e => { r.cor = U.rgb(e.target.value); renderCores(); agendar(); } }),
+      el('button', { type: 'button', class: 'mini', text: '✕ tirar', onclick: () => { C.regioes.splice(j, 1); renderCores(); agendar(); } }))));
+  }
+  function ligarCores() {
+    $('#coresVoltar').addEventListener('click', () => { if (!st.cores) return; st.cores.novas = []; st.cores.regioes = []; renderCores(); agendar(); });
+    $('#coresImg').addEventListener('click', e => {
+      if (!st.an || !st.cores) return;
+      const cv = e.currentTarget, rc = cv.getBoundingClientRect();
+      const X = (e.clientX - rc.left) * cv.width / rc.width / st.an.pf, Y = (e.clientY - rc.top) * cv.height / rc.height / st.an.pf;
+      const p = st.pieces.find(q => X >= q.x && Y >= q.y && X < q.x + q.w && Y < q.y + q.h && q.mask[Math.floor(Y - q.y) * q.w + Math.floor(X - q.x)]);
+      if (!p) { alert('Aí não tem peça. Clique em cima de uma parte da estampa (listra, flor, vaso…).'); return; }
+      // procura o pixel de desenho mais perto do clique (a imagem pequena perde detalhe)
+      let lx = Math.floor(X - p.x), ly = Math.floor(Y - p.y), achou = Grade.parteEm(p, st.cores, lx, ly);
+      const raio = Math.ceil(3 / st.an.pf);
+      for (let r = 1; !achou && r <= raio; r++) for (let dy = -r; dy <= r && !achou; dy++) for (let dx = -r; dx <= r; dx++) {
+        const x = lx + dx, y = ly + dy; if (x < 0 || y < 0 || x >= p.w || y >= p.h) continue;
+        const a = Grade.parteEm(p, st.cores, x, y); if (a) { achou = a; lx = x; ly = y; break; }
+      }
+      if (!achou) { alert('Aí é o fundo da peça. Para trocar o fundo use "Cor de fundo", logo acima.'); return; }
+      const pick = $('#coresPick');
+      pick.value = U.hex(achou.c).toLowerCase();
+      pick.onchange = () => { st.cores.regioes.push({ n: p.n, x: lx, y: ly, orig: achou.c, cor: U.rgb(pick.value) }); renderCores(); agendar(); };
+      pick.click();
+    });
   }
 
   // ---------- Etapa 4 ----------
@@ -388,7 +439,7 @@ const App = (() => {
     const m = st.moldes; if (!m) return;
     const ref = refMolde(); m.ref = ref; m.casa = {};
     if (!ref) return;
-    const pr = m.tams[ref].pecas, auto = Moldes.casar(dimsGrupo(), pr);
+    const pr = m.tams[ref].pecas, auto = Moldes.casar(dimsGrupo(), pr, true);
     st.groups.forEach((g, i) => {
       const man = (m.manual || {})[g.id];
       let c = auto[i];
@@ -1252,6 +1303,7 @@ const App = (() => {
     $('#sizes').addEventListener('change', () => { readSizes(); if (st.an) { computeTargets(); renderGrade(); renderMercado(); } renderQtd(); });
     $('#baseSize').addEventListener('change', () => { st.base = $('#baseSize').value; if (st.an) { computeTargets(); renderGrade(); renderMercado(); runCheck(); } });
     $('#btnLer').addEventListener('click', ler);
+    ligarCores();
     $('#bgColor').addEventListener('input', e => { st.bg = U.rgb(e.target.value); $('#bgHex').textContent = U.hex(st.bg); agendar(); });
     const setBorda = txt => {
       const v = U.num(txt);

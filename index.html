@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400&family=Orbitron:wght@600;700&display=swap">
-<link rel="stylesheet" href="css/app.css?v=26">
+<link rel="stylesheet" href="css/app.css?v=27">
 <script src="https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
@@ -24,7 +24,7 @@
 </div>
 <header class="top">
   <div class="top-in">
-    <div class="brand"><b>PLATNUMPRINT-X</b><span>motor de grade</span><span class="versao" title="Versão do motor carregada neste navegador">v26</span><span class="user"><span id="quem"></span><button type="button" id="btnSair" class="ghost">Sair</button></span></div>
+    <div class="brand"><b>PLATNUMPRINT-X</b><span>motor de grade</span><span class="versao" title="Versão do motor carregada neste navegador">v27</span><span class="user"><span id="quem"></span><button type="button" id="btnSair" class="ghost">Sair</button></span></div>
     <nav class="tabs" id="tabs" role="tablist">
       <button class="tab on" data-tab="arquivo" role="tab"><span class="n">1</span>Arquivo</button>
       <button class="tab locked" data-tab="pecas" role="tab"><span class="n">2</span>Peças</button>
@@ -101,6 +101,17 @@
         <span class="muted">Vazio = mantém o contorno original de cada peça.</span>
       </div>
       <p class="hint" id="info3"></p>
+      <div id="coresBox" style="margin-top:12px">
+        <h3 style="margin:6px 0">🎨 Cores da estampa</h3>
+        <p class="hint" style="margin:2px 0 8px">Todas as cores que aparecem nos desenhos. Clique numa cor para trocar <b>em todas as peças</b>. Para trocar <b>só uma parte</b> (uma listra, uma flor, um vaso), clique nela na imagem abaixo e escolha a cor nova.</p>
+        <div id="coresLista" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+        <div class="row" style="margin-top:8px"><button type="button" class="mini" id="coresVoltar">↺ Voltar todas as cores originais</button></div>
+        <div style="margin-top:10px;position:relative;display:inline-block;max-width:100%">
+          <canvas id="coresImg" style="max-width:100%;cursor:crosshair;border:1px solid #ccc;border-radius:6px"></canvas>
+        </div>
+        <input type="color" id="coresPick" style="position:absolute;opacity:0;width:0;height:0;pointer-events:none">
+        <div id="coresPartes" style="margin-top:8px"></div>
+      </div>
     </div>
   </section>
 
@@ -331,16 +342,16 @@
   </section>
 </main>
 
-<script src="js/acesso.js?v=26"></script>
-<script src="js/util.js?v=26"></script>
-<script src="js/tiff.js?v=26"></script>
-<script src="js/analyze.js?v=26"></script>
-<script src="js/corel.js?v=26"></script>
-<script src="js/grade.js?v=26"></script>
-<script src="js/pdfgrade.js?v=26"></script>
-<script src="js/moldes.js?v=26"></script>
-<script src="js/regras.js?v=26"></script>
-<script src="js/app.js?v=26"></script>
-<script src="js/provador.js?v=26"></script>
+<script src="js/acesso.js?v=27"></script>
+<script src="js/util.js?v=27"></script>
+<script src="js/tiff.js?v=27"></script>
+<script src="js/analyze.js?v=27"></script>
+<script src="js/corel.js?v=27"></script>
+<script src="js/grade.js?v=27"></script>
+<script src="js/pdfgrade.js?v=27"></script>
+<script src="js/moldes.js?v=27"></script>
+<script src="js/regras.js?v=27"></script>
+<script src="js/app.js?v=27"></script>
+<script src="js/provador.js?v=27"></script>
 </body>
 </html>

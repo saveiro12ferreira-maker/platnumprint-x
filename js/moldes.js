@@ -237,7 +237,10 @@ const Moldes = (() => {
 
   // Casa duas listas de peças (A = referência, B = outro tamanho). A peça pode estar deitada no PDF (largura e altura trocadas).
   // Devolve para cada índice de A: { j, girada } ou null.
-  function casar(A, B) {
+  // repetir: a peça do arquivo que sobrou pode usar um molde que já foi usado (ex.: o PDF tem um molde só
+  // "FRENTE E COSTA, cortar 2" e o arquivo tem a frente e a costas desenhadas separadas). Pedido 12/11: uma das duas
+  // ficava sem molde e saía com outra medida e outra abertura das costas.
+  function casar(A, B, repetir = false) {
     const ar = p => p.w * p.h;
     const a = [...A].sort((p, q) => ar(q) - ar(p)), b = [...B].sort((p, q) => ar(q) - ar(p));
     const k = []; for (let i = 0; i < Math.min(a.length, b.length); i++) k.push(Math.sqrt(ar(b[i]) / ar(a[i])));
@@ -254,6 +257,10 @@ const Moldes = (() => {
     for (const p of pares) {
       if (res[p.i] || usadoB.has(p.j) || p.c > 0.9) continue;
       res[p.i] = { j: p.j, girada: p.girada, custo: p.c }; usadoB.add(p.j);
+    }
+    if (repetir) for (const p of pares) {
+      if (res[p.i] || p.c > 0.35) continue;
+      res[p.i] = { j: p.j, girada: p.girada, custo: p.c, repetido: true };
     }
     return res;
   }

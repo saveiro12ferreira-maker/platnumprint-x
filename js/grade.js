@@ -64,12 +64,105 @@ const Grade = (() => {
     return a;
   }
   // pinta o pixel k da estampa em out[q]: com fundo novo, a parte de fundo antigo da beira vira a cor nova
-  function pintaArte(out, q, S, k, alfa, bg, bg0) {
+  function pintaArte(out, q, S, k, alfa, bg, bg0, tr) {
     const s4 = k * 4;
+    let r = S[s4], g = S[s4 + 1], b = S[s4 + 2];
+    const a = alfa ? alfa[k] / 255 : 1;
     if (alfa && alfa[k] < 255) {
-      const f = 1 - alfa[k] / 255;
-      out[q] = S[s4] + f * (bg[0] - bg0[0]); out[q + 1] = S[s4 + 1] + f * (bg[1] - bg0[1]); out[q + 2] = S[s4 + 2] + f * (bg[2] - bg0[2]);
-    } else { out[q] = S[s4]; out[q + 1] = S[s4 + 1]; out[q + 2] = S[s4 + 2]; }
+      const f = 1 - a;
+      r += f * (bg[0] - bg0[0]); g += f * (bg[1] - bg0[1]); b += f * (bg[2] - bg0[2]);
+    }
+    if (tr) {
+      // cor trocada (geral ou só daquela parte): leva a diferença de cor, mantendo sombra e beira macia
+      const d = tr.delta(k);
+      if (d) { r += a * d[0]; g += a * d[1]; b += a * d[2]; }
+    }
+    out[q] = r; out[q + 1] = g; out[q + 2] = b;
+  }
+
+  // ---------- Cores da estampa (pedido 12/11: ver e trocar todas as cores, de uma vez ou só de uma parte) ----------
+  // Paleta: as cores que aparecem nos desenhos de todas as peças (as parecidas viram uma só).
+  function paleta(pieces) {
+    const cont = new Map();
+    let total = 0;
+    for (const p of pieces) {
+      const A = p.art, S = p.rgba, passo = A.length > 4e6 ? 3 : A.length > 1e6 ? 2 : 1;
+      for (let i = 0; i < A.length; i += passo) {
+        if (!A[i]) continue;
+        const q = i * 4, key = ((S[q] >> 3) << 10) | ((S[q + 1] >> 3) << 5) | (S[q + 2] >> 3);
+        cont.set(key, (cont.get(key) || 0) + 1); total++;
+      }
+    }
+    const lista = [...cont.entries()].sort((a, b) => b[1] - a[1]);
+    const pal = [], min = Math.max(1, total * 0.002);
+    for (const [key, n] of lista) {
+      const c = [((key >> 10) & 31) * 8 + 4, ((key >> 5) & 31) * 8 + 4, (key & 31) * 8 + 4];
+      let perto = -1, pd = Infinity;
+      pal.forEach((x, i) => { const d = (x.c[0] - c[0]) ** 2 + (x.c[1] - c[1]) ** 2 + (x.c[2] - c[2]) ** 2; if (d < pd) { pd = d; perto = i; } });
+      if (perto >= 0 && (pd < 30 * 30 || n < min || pal.length >= 40)) {
+        const x = pal[perto], t = x.n + n;
+        if (pd < 30 * 30) x.c = x.c.map((v, j) => Math.round((v * x.n + c[j] * n) / t));
+        x.n = t;
+      } else pal.push({ c, n });
+    }
+    pal.forEach(x => x.frac = x.n / Math.max(1, total));
+    return pal.sort((a, b) => b.n - a.n);
+  }
+  // índice da cor de cada pixel de desenho da peça (255 = não é desenho)
+  function idxCores(p, pal, key) {
+    if (p._pi && p._pi.key === key) return p._pi.a;
+    const A = p.art, S = p.rgba, a = new Uint8Array(A.length).fill(255);
+    for (let i = 0; i < A.length; i++) {
+      if (!A[i]) continue;
+      const q = i * 4; let best = 0, bd = Infinity;
+      for (let j = 0; j < pal.length; j++) { const c = pal[j].c, d = (S[q] - c[0]) ** 2 + (S[q + 1] - c[1]) ** 2 + (S[q + 2] - c[2]) ** 2; if (d < bd) { bd = d; best = j; } }
+      a[i] = best;
+    }
+    p._pi = { key, a };
+    return a;
+  }
+  // partes da peça: pixels vizinhos da mesma cor formam uma parte (uma listra, uma flor, um vaso…)
+  function partesCores(p, idx, key) {
+    if (p._pc && p._pc.key === key) return p._pc.a;
+    const W = p.w, H = p.h, comp = new Int32Array(W * H).fill(-1), pilha = [];
+    let id = 0;
+    for (let i = 0; i < idx.length; i++) {
+      if (idx[i] === 255 || comp[i] >= 0) continue;
+      const cor = idx[i]; comp[i] = id; pilha.push(i);
+      while (pilha.length) {
+        const j = pilha.pop(), x = j % W, y = (j / W) | 0;
+        for (const n of [x > 0 ? j - 1 : -1, x < W - 1 ? j + 1 : -1, y > 0 ? j - W : -1, y < H - 1 ? j + W : -1]) {
+          if (n >= 0 && comp[n] < 0 && idx[n] === cor) { comp[n] = id; pilha.push(n); }
+        }
+      }
+      id++;
+    }
+    p._pc = { key, a: comp };
+    return comp;
+  }
+  // o que trocar nesta peça: devolve null se nada muda
+  function trocasDe(p, cores) {
+    if (!cores || !cores.pal || !cores.pal.length) return null;
+    const regs = (cores.regioes || []).filter(r => r.n === p.n);
+    const temGeral = cores.novas && cores.novas.some(Boolean);
+    if (!temGeral && !regs.length) return null;
+    const pal = cores.pal, idx = idxCores(p, pal, cores.key);
+    const geral = pal.map((x, i) => cores.novas && cores.novas[i] ? [cores.novas[i][0] - x.c[0], cores.novas[i][1] - x.c[1], cores.novas[i][2] - x.c[2]] : null);
+    let comp = null; const porParte = new Map();
+    if (regs.length) {
+      comp = partesCores(p, idx, cores.key);
+      for (const r of regs) {
+        const k = Math.round(r.y) * p.w + Math.round(r.x), c = comp[k];
+        if (c >= 0) { const o = pal[idx[k]].c; porParte.set(c, [r.cor[0] - o[0], r.cor[1] - o[1], r.cor[2] - o[2]]); }
+      }
+    }
+    return { delta: k => { const i = idx[k]; if (i === 255) return null; if (comp) { const d = porParte.get(comp[k]); if (d) return d; } return geral[i]; } };
+  }
+  // em que parte (x, y da peça) a pessoa clicou: cor original da parte
+  function parteEm(p, cores, x, y) {
+    const idx = idxCores(p, cores.pal, cores.key), k = Math.round(y) * p.w + Math.round(x);
+    if (k < 0 || k >= idx.length || idx[k] === 255) return null;
+    return { i: idx[k], c: cores.pal[idx[k]].c };
   }
 
   function renderPiece(p, Wt, Ht, o) {
@@ -103,7 +196,8 @@ const Grade = (() => {
     const rule = o.rule, A = p.art, S = p.rgba;
     // fundo trocado: tira o "contorno" do fundo antigo em volta dos desenhos
     const bg0 = o.bg0, trocou = bg0 && (bg0[0] !== br || bg0[1] !== bgG || bg0[2] !== bb);
-    const alfa = trocou && p.band ? alfaDe(p, bg0) : null;
+    const tr = trocasDe(p, o.cores);
+    const alfa = (trocou || tr) && p.band ? alfaDe(p, bg0 || [br, bgG, bb]) : null;
     let dx = 0, dy = 0;
     if (rule === 'fixa') {
       dx = p.anchorX === 'left' ? 0 : p.anchorX === 'right' ? Wt - W : Math.round((Wt - W) / 2);
@@ -163,7 +257,7 @@ const Grade = (() => {
             const q = ((y + b) * OW + x + b) * 4;
             // pixel quase da cor do fundo dentro do desenho: com fundo novo, leva a cor nova (não fica o "quadrado" do fundo antigo)
             if (!art && trocou) { const s4 = k * 4; out[q] = S[s4] + br - bg0[0]; out[q + 1] = S[s4 + 1] + bgG - bg0[1]; out[q + 2] = S[s4 + 2] + bb - bg0[2]; }
-            else pintaArte(out, q, S, k, alfa, o.bg, bg0);
+            else pintaArte(out, q, S, k, alfa, o.bg, bg0 || o.bg, tr);
             if (art) { pint[i] = 1; copied++; }
           }
         }
@@ -191,7 +285,7 @@ const Grade = (() => {
         const q = ((y + b) * OW + x + b) * 4;
         let k = -1;
         if (X >= 0 && X < W && Y >= 0 && Y < H) { k = Y * W + X; if (!A[k]) k = -1; }
-        if (k >= 0) { pintaArte(out, q, S, k, alfa, o.bg, bg0); copied++; }
+        if (k >= 0) { pintaArte(out, q, S, k, alfa, o.bg, bg0 || o.bg, tr); copied++; }
         else { out[q] = br; out[q + 1] = bgG; out[q + 2] = bb; }
         out[q + 3] = 255;
       }
@@ -765,7 +859,7 @@ const Grade = (() => {
       for (const p of g.items) {
         // a estampa sempre acompanha a graduação (desenho diminui/aumenta com a peça), a menos que alguém tenha escolhido outra regra na mão
         const regra = !p.regraManual && (p.rule === 'fixa' || p.rule === 'barra' || p.rule === 'barraEsc') ? 'acompanha' : p.rule;
-        const o = { bg: st.bg, bg0: st.an && st.an.bg, thick: st.thickOverride != null ? st.thickOverride : p.thick, outline: st.outline, bleed: bleedPx, rule: regra, labels: labelsDe(p) }; o.label = o.labels[0] || null;
+        const o = { bg: st.bg, bg0: st.an && st.an.bg, cores: st.cores, thick: st.thickOverride != null ? st.thickOverride : p.thick, outline: st.outline, bleed: bleedPx, rule: regra, labels: labelsDe(p) }; o.label = o.labels[0] || null;
         // molde da modelista: a peça sai com o contorno do PDF e a medida real dele (a menos que tenham digitado a medida à mão)
         const F = (st.mode === 'moldes' || st.mode === 'tabela') && st.formas && st.formas[size] && st.formas[size][p.n];
         // peça girada de lado em relação à primeira do grupo: largura e altura trocam
@@ -935,7 +1029,7 @@ const Grade = (() => {
     let ok = 0, tot = 0;
     const per = [];
     for (const p of st.pieces) {
-      const r = renderPiece(p, p.w, p.h, { bg: st.bg, bg0: st.an && st.an.bg, thick: 0, outline: st.outline, bleed: 0, rule: p.rule });
+      const r = renderPiece(p, p.w, p.h, { bg: st.bg, bg0: st.an && st.an.bg, cores: st.cores, thick: 0, outline: st.outline, bleed: 0, rule: p.rule });
       let pk = 0, pt = 0;
       for (let i = 0; i < p.mask.length; i++) {
         if (!p.mask[i] || p.band[i]) continue;
@@ -960,5 +1054,5 @@ const Grade = (() => {
     return sp ? { fx: sp.cx / p.w, fy: sp.cy / p.h } : { fx: 0.5, fy: 0.85 };
   }
 
-  return { renderPiece, renderSize, autoPos, encaixeGrade, labelPos, celula, specsForSize, drawSpec, layout, layoutOriginal, selfCheck, RULE_NAMES, angulos, lerGiros, laySalvo, girarRGBA };
+  return { renderPiece, renderSize, autoPos, encaixeGrade, labelPos, celula, specsForSize, paleta, parteEm, drawSpec, layout, layoutOriginal, selfCheck, RULE_NAMES, angulos, lerGiros, laySalvo, girarRGBA };
 })();
