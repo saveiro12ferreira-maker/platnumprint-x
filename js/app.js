@@ -1024,7 +1024,7 @@ const App = (() => {
   }
 
   const nomeGrupo = g => (g.items[0] && g.items[0].nome) || st.groupName(g);
-  const CONF = ['roll', 'margin', 'gap', 'bordaMm', 'bleed', 'labelMm', 'girosExtra', 'labelCor'], CONFCHK = ['marcarTam', 'marcarNome', 'allowRot', 'splitLong', 'compactar', 'manterEncaixe', 'labelCorAuto'];
+  const CONF = ['roll', 'margin', 'gap', 'bordaMm', 'bleed', 'labelMm', 'girosExtra', 'labelCor', 'corelQualidade'], CONFCHK = ['marcarTam', 'marcarNome', 'allowRot', 'splitLong', 'compactar', 'manterEncaixe', 'labelCorAuto'];
 
   function salvarGrade() {
     const nome = ($('#nomeGrade').value || '').trim();
@@ -1219,6 +1219,7 @@ const App = (() => {
     st.marcarTamanho = $('#marcarTam').checked;
     st.marcarNome = $('#marcarNome').checked;
     st.labelMm = U.num($('#labelMm').value) || 4;
+    st.corelQualidade = ($('#corelQualidade') && $('#corelQualidade').value) || 'semperda';
     st.labelCor = $('#labelCorAuto') && !$('#labelCorAuto').checked ? U.rgb($('#labelCor').value) : null;
   }
 

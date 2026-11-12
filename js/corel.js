@@ -52,6 +52,51 @@ const Corel = (() => {
     const ctx = cv.getContext('2d'), id = ctx.createImageData(r.w, r.h); id.data.set(r.rgba); ctx.putImageData(id, 0, 0);
     return cv.toDataURL('image/png');
   }
+  // PNG sem perda nenhuma, mas bem mais leve que o do navegador (pedido 12/11: "não pode perder qualidade"):
+  // pixel a pixel igual ao original, só que sem canal de transparência (fora da peça fica branco e a peça é recortada
+  // pela própria linha) e com o melhor filtro PNG escolhido linha a linha antes de compactar.
+  const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+  function crc32(buf, a, b) { let c = 0xffffffff; for (let i = a; i < b; i++) c = CRC[(c ^ buf[i]) & 255] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; }
+  async function pngSemPerda(r) {
+    const W = r.w, H = r.h, S = r.rgba, L = W * 3, raw = new Uint8Array((L + 1) * H);
+    const lin = new Uint8Array(L), ant = new Uint8Array(L), cand = [0, 1, 2, 3, 4].map(() => new Uint8Array(L));
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) { const q = (y * W + x) * 4, a = S[q + 3]; for (let k = 0; k < 3; k++) lin[x * 3 + k] = a ? S[q + k] : 255; }
+      let melhor = 0, menor = Infinity;
+      for (let f = 0; f < 5; f++) {
+        const c = cand[f]; let soma = 0;
+        for (let i = 0; i < L; i++) {
+          const v = lin[i], esq = i >= 3 ? lin[i - 3] : 0, cima = y ? ant[i] : 0, ce = i >= 3 && y ? ant[i - 3] : 0;
+          let p;
+          if (f === 0) p = 0; else if (f === 1) p = esq; else if (f === 2) p = cima; else if (f === 3) p = (esq + cima) >> 1;
+          else { const pp = esq + cima - ce, pa = Math.abs(pp - esq), pb = Math.abs(pp - cima), pc = Math.abs(pp - ce); p = pa <= pb && pa <= pc ? esq : pb <= pc ? cima : ce; }
+          const d = (v - p) & 255; c[i] = d; soma += d < 128 ? d : 256 - d;
+        }
+        if (soma < menor) { menor = soma; melhor = f; }
+      }
+      const o = y * (L + 1); raw[o] = melhor; raw.set(cand[melhor], o + 1); ant.set(lin);
+    }
+    const z = new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new CompressionStream('deflate'))).arrayBuffer());
+    const parte = (tipo, dados) => { const b = new Uint8Array(12 + dados.length), dv = new DataView(b.buffer); dv.setUint32(0, dados.length); for (let i = 0; i < 4; i++) b[4 + i] = tipo.charCodeAt(i); b.set(dados, 8); dv.setUint32(8 + dados.length, crc32(b, 4, 8 + dados.length)); return b; };
+    const ih = new Uint8Array(13), dv = new DataView(ih.buffer); dv.setUint32(0, W); dv.setUint32(4, H); ih[8] = 8; ih[9] = 2;
+    const png = new Blob([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]), parte('IHDR', ih), parte('IDAT', z), parte('IEND', new Uint8Array(0))], { type: 'image/png' });
+    const b64 = await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(png); });
+    return b64;
+  }
+
+  // Arquivo mais leve para o Corel (pedido 12/11: o SVG com PNG era tão pesado que o Corel quase não abria):
+  // a estampa vai em JPG (fundo branco fora da peça, recortado pela própria linha da peça) e, no modo "leve",
+  // com menos pontos por polegada. O TIFF de impressão continua na resolução cheia.
+  function jpgData(r, fator, qual) {
+    const a = document.createElement('canvas'); a.width = r.w; a.height = r.h;
+    const id = a.getContext('2d').createImageData(r.w, r.h); id.data.set(r.rgba); a.getContext('2d').putImageData(id, 0, 0);
+    const w = Math.max(1, Math.round(r.w * fator)), h = Math.max(1, Math.round(r.h * fator));
+    const b = document.createElement('canvas'); b.width = w; b.height = h;
+    const ctx = b.getContext('2d'); ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, h);
+    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high'; ctx.drawImage(a, 0, 0, w, h);
+    const url = b.toDataURL('image/jpeg', qual); a.width = a.height = b.width = b.height = 1;
+    return url;
+  }
 
   const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const idOk = t => String(t).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w-]+/g, '_');
@@ -84,7 +129,22 @@ const Corel = (() => {
         : simplify(trace(r.nm, r.Wt, r.Ht), Math.max(0.6, dpi * 0.004));
       const d = pts.length > 2 ? 'M' + pts.map(([px, py]) => `${(x + r.b + px + 0.5).toFixed(1)} ${(y + r.b + py + 0.5).toFixed(1)}`).join(' L') + ' Z' : '';
       out.push(`<g id="Peca_${r.n}_${idOk(r.name)}_tam_${idOk(size)}"${tf}>`);
-      out.push(`<image id="Estampa_${r.n}" x="${x}" y="${y}" width="${r.w}" height="${r.h}" xlink:href="${pngData(r)}"/>`);
+      const qual = st.corelQualidade || 'semperda';
+      if (qual === 'semperda') {
+        const fora = simplify(trace(r.nm, r.Wt, r.Ht), Math.max(0.6, dpi * 0.004));
+        const dc = fora.length > 2 ? 'M' + fora.map(([px, py]) => `${(x + r.b + px + 0.5).toFixed(1)} ${(y + r.b + py + 0.5).toFixed(1)}`).join(' L') + ' Z' : '';
+        const recorta = dc && !r.b;
+        if (recorta) out.push(`<clipPath id="Recorte_${r.n}_${i}"><path d="${dc}"/></clipPath>`);
+        out.push(`<image id="Estampa_${r.n}" x="${x}" y="${y}" width="${r.w}" height="${r.h}" preserveAspectRatio="none"${recorta ? ` clip-path="url(#Recorte_${r.n}_${i})"` : ''} xlink:href="${await pngSemPerda(r)}"/>`);
+      } else if (qual === 'original') out.push(`<image id="Estampa_${r.n}" x="${x}" y="${y}" width="${r.w}" height="${r.h}" xlink:href="${pngData(r)}"/>`);
+      else {
+        // JPG recortado pelo contorno da peça (a parte branca fora da peça não aparece)
+        const fora = simplify(trace(r.nm, r.Wt, r.Ht), Math.max(0.6, dpi * 0.004));
+        const dc = fora.length > 2 ? 'M' + fora.map(([px, py]) => `${(x + r.b + px + 0.5).toFixed(1)} ${(y + r.b + py + 0.5).toFixed(1)}`).join(' L') + ' Z' : '';
+        const fator = qual === 'leve' ? Math.min(1, 150 / dpi) : 1, jq = qual === 'leve' ? 0.85 : 0.92, recorta = dc && !r.b;
+        if (recorta) out.push(`<clipPath id="Recorte_${r.n}_${i}"><path d="${dc}"/></clipPath>`);
+        out.push(`<image id="Estampa_${r.n}" x="${x}" y="${y}" width="${r.w}" height="${r.h}" preserveAspectRatio="none"${recorta ? ` clip-path="url(#Recorte_${r.n}_${i})"` : ''} xlink:href="${jpgData(r, fator, jq)}"/>`);
+      }
       if (d) out.push(`<path id="Corte_${r.n}" d="${d}" fill="none" stroke="#000000" stroke-width="${(dpi * 0.25 / 25.4).toFixed(2)}"/>`);
       for (const L of (specs[i].o.labels || (specs[i].o.label ? [specs[i].o.label] : []))) {
         const lp = Grade.labelPos(r, L, specs[i].o.thick);

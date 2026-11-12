@@ -145,3 +145,9 @@ Gerado aqui com os arquivos reais da equipe. Três coisas estavam erradas e fora
 
 ## v31 (12/11) — salvar o lugar dos nomes
 - Embaixo da imagem da aba Peças: **💾 Salvar o lugar dos nomes** grava, para este arquivo da estampa, o lugar, o giro, o tamanho da letra, o nome e o "escrever na peça" de cada peça (fica neste computador). Quando o mesmo arquivo for aberto de novo, os nomes **voltam sozinhos** para os lugares salvos. **📌 Colar o lugar salvo** põe de volta na hora (por exemplo, depois de mexer e querer voltar). Cada peça é achada pelo número e pela medida (vale mesmo se a ordem mudar).
+
+## v32 (12/11) — Corel mais leve
+- O arquivo editável do Corel ficou bem mais leve: a estampa de cada peça vai em **JPG recortado pelo contorno da peça** (em vez de PNG) e, no modo **leve** (padrão), a 150 dpi. Vestido Antonella tamanho 12: **14,6 MB → 3,5 MB** (4 vezes menor). Escolha ao lado do botão do Corel (aba Gerar): **leve** (recomendado, para conferir e editar), **médio** (JPG na resolução do arquivo) ou **original** (PNG cheio, o pesado de antes). Peças, linha de corte, nomes e números continuam separados e editáveis. O TIFF de impressão continua sempre na resolução cheia.
+
+## v33 (12/11) — Corel sem perda (padrão)
+- Novo modo **sem perda** (padrão) no arquivo do Corel: a estampa vai pixel a pixel igual ao TIFF (conferido: 0 pixels diferentes em 23 milhões), num PNG compactado pelo próprio motor — sem canal de transparência (a peça é recortada pela linha dela) e com o melhor filtro escolhido linha a linha. Vestido Antonella 12: **14,6 MB → 9,6 MB** sem perder nada. Demora uns segundos a mais para montar. Os modos leve/médio (JPG, menores, com pequena perda) e original continuam na lista.

@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400&family=Orbitron:wght@600;700&display=swap">
-<link rel="stylesheet" href="css/app.css?v=31">
+<link rel="stylesheet" href="css/app.css?v=33">
 <script src="https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
@@ -24,7 +24,7 @@
 </div>
 <header class="top">
   <div class="top-in">
-    <div class="brand"><b>PLATNUMPRINT-X</b><span>motor de grade</span><span class="versao" title="Versão do motor carregada neste navegador">v31</span><span class="user"><span id="quem"></span><button type="button" id="btnSair" class="ghost">Sair</button></span></div>
+    <div class="brand"><b>PLATNUMPRINT-X</b><span>motor de grade</span><span class="versao" title="Versão do motor carregada neste navegador">v33</span><span class="user"><span id="quem"></span><button type="button" id="btnSair" class="ghost">Sair</button></span></div>
     <nav class="tabs" id="tabs" role="tablist">
       <button class="tab on" data-tab="arquivo" role="tab"><span class="n">1</span>Arquivo</button>
       <button class="tab locked" data-tab="pecas" role="tab"><span class="n">2</span>Peças</button>
@@ -254,6 +254,7 @@
       <div class="row">
         <button id="btnGerar" class="primary">Gerar grade</button>
         <button id="btnTodos" disabled>Baixar todos os TIFF</button>
+        <label title="Peso do arquivo do Corel. Sem perda: a estampa pixel a pixel igual ao TIFF, num PNG bem mais compactado (recomendado). Leve: JPG a 150 dpi (o menor, perde um pouco de nitidez). Médio: JPG na resolução do arquivo. Original: o PNG pesado de antes. O TIFF de impressão é sempre na resolução cheia.">Corel <select id="corelQualidade"><option value="semperda" selected>sem perda (recomendado)</option><option value="leve">leve (perde um pouco)</option><option value="medio">médio (JPG)</option><option value="original">original (PNG pesado)</option></select></label>
         <button id="btnCorelTodos" disabled title="Um SVG por tamanho: abre no CorelDRAW (Arquivo → Importar) com cada pedaço separado e editável">✏️ Baixar todos para o Corel (editável)</button>
         <span id="status5" class="muted"></span>
       </div>
@@ -348,16 +349,16 @@
   </section>
 </main>
 
-<script src="js/acesso.js?v=31"></script>
-<script src="js/util.js?v=31"></script>
-<script src="js/tiff.js?v=31"></script>
-<script src="js/analyze.js?v=31"></script>
-<script src="js/corel.js?v=31"></script>
-<script src="js/grade.js?v=31"></script>
-<script src="js/pdfgrade.js?v=31"></script>
-<script src="js/moldes.js?v=31"></script>
-<script src="js/regras.js?v=31"></script>
-<script src="js/app.js?v=31"></script>
-<script src="js/provador.js?v=31"></script>
+<script src="js/acesso.js?v=33"></script>
+<script src="js/util.js?v=33"></script>
+<script src="js/tiff.js?v=33"></script>
+<script src="js/analyze.js?v=33"></script>
+<script src="js/corel.js?v=33"></script>
+<script src="js/grade.js?v=33"></script>
+<script src="js/pdfgrade.js?v=33"></script>
+<script src="js/moldes.js?v=33"></script>
+<script src="js/regras.js?v=33"></script>
+<script src="js/app.js?v=33"></script>
+<script src="js/provador.js?v=33"></script>
 </body>
 </html>
