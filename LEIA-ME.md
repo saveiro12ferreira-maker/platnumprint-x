@@ -151,3 +151,6 @@ Gerado aqui com os arquivos reais da equipe. Três coisas estavam erradas e fora
 
 ## v33 (12/11) — Corel sem perda (padrão)
 - Novo modo **sem perda** (padrão) no arquivo do Corel: a estampa vai pixel a pixel igual ao TIFF (conferido: 0 pixels diferentes em 23 milhões), num PNG compactado pelo próprio motor — sem canal de transparência (a peça é recortada pela linha dela) e com o melhor filtro escolhido linha a linha. Vestido Antonella 12: **14,6 MB → 9,6 MB** sem perder nada. Demora uns segundos a mais para montar. Os modos leve/médio (JPG, menores, com pequena perda) e original continuam na lista.
+
+## v34 (12/11) — nome colado no contorno
+- O nome posto rente à beira continua **colado na beira** em todos os tamanhos, também nas beiras inclinadas (ex.: "COSTA" deitado ao longo da lateral da costas). O motor mede, no arquivo base, a distância do nome até a beira mais perto e põe o nome na mesma beira da peça nova, à mesma distância (acompanhando a graduação). Antes ele usava a caixa reta em volta da peça e, numa beira inclinada, o nome entrava para o meio. Teste com "COSTA" a 6,4 mm da beira no 12: 4,8 mm no 2, 5,3 mm no 6, 6,4 mm no 12, 6,6 mm no 14 — sempre na mesma altura da peça.

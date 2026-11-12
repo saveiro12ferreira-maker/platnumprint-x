@@ -414,14 +414,49 @@ const Grade = (() => {
     return null;
   }
 
+  // Pixel da beira da peça mais perto de (x, y): {x, y, d}
+  function beiraMaisPerto(m, W, H, x, y) {
+    const cx = Math.round(x), cy = Math.round(y), em = (a, b) => a >= 0 && b >= 0 && a < W && b < H && m[b * W + a];
+    const beira = (a, b) => em(a, b) && (!em(a - 1, b) || !em(a + 1, b) || !em(a, b - 1) || !em(a, b + 1));
+    let best = null, lim = Math.max(W, H);
+    for (let r = 0; r <= lim; r++) {
+      for (let k = -r; k <= r; k++) for (const [a, b] of [[cx + k, cy - r], [cx + k, cy + r], [cx - r, cy + k], [cx + r, cy + k]]) {
+        if (!beira(a, b)) continue;
+        const d = Math.hypot(a - x, b - y); if (!best || d < best.d) best = { x: a, y: b, d };
+      }
+      if (best && r > best.d * 1.42 + 1) break;
+    }
+    return best;
+  }
+  // Direção para dentro da peça num ponto da beira (média dos vizinhos que estão dentro)
+  function normalDentro(m, W, H, x, y) {
+    let sx = 0, sy = 0;
+    for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) { const a = x + dx, b = y + dy; if (a >= 0 && b >= 0 && a < W && b < H && m[b * W + a]) { sx += dx; sy += dy; } }
+    const L = Math.hypot(sx, sy) || 1; return [sx / L, sy / L];
+  }
+
   // Onde o texto vai na peça (mesma regra no TIFF e no Corel).
   function lugarTexto(nm, Wt, Ht, label0, thick) {
     // posição presa ao canto/beira mais perto de onde foi posto: se a peça cresceu 2 mm para aquele lado, o texto
     // anda os mesmos 2 mm (e a distância até a beira cresce junto com a graduação) — pedido 12/11
     let label = label0;
     if (label0.pos && label0.ancora) {
-      const { k, w0, h0 } = label0.ancora, fx = label0.pos.fx, fy = label0.pos.fy;
-      const tx = fx <= 0.5 ? fx * w0 * k : Wt - (1 - fx) * w0 * k, ty = fy <= 0.5 ? fy * h0 * k : Ht - (1 - fy) * h0 * k;
+      const { k, w0, h0, mask0 } = label0.ancora, fx = label0.pos.fx, fy = label0.pos.fy;
+      let tx, ty;
+      if (mask0) {
+        // colado no contorno: mede no arquivo base a distância do texto até a beira mais perto e, na peça nova,
+        // põe o texto na mesma beira, à mesma distância (crescendo junto com a graduação). Assim, numa beira inclinada,
+        // o nome não "entra" na peça quando o tamanho muda (12/11: "6 COSTA" ia quase para o meio)
+        const b0 = beiraMaisPerto(mask0, w0, h0, fx * w0, fy * h0);
+        const px1 = fx * Wt, py1 = fy * Ht, b1 = beiraMaisPerto(nm, Wt, Ht, px1, py1);
+        if (b0 && b1) {
+          let ux = px1 - b1.x, uy = py1 - b1.y, L = Math.hypot(ux, uy);
+          if (!nm[Math.round(Math.min(Ht - 1, Math.max(0, py1))) * Wt + Math.round(Math.min(Wt - 1, Math.max(0, px1)))]) { ux = -ux; uy = -uy; }
+          if (L < 0.5) { const n = normalDentro(nm, Wt, Ht, b1.x, b1.y); ux = n[0]; uy = n[1]; L = 1; }
+          const d = b0.d * k; tx = b1.x + ux / L * d; ty = b1.y + uy / L * d;
+        }
+      }
+      if (tx == null) { tx = fx <= 0.5 ? fx * w0 * k : Wt - (1 - fx) * w0 * k; ty = fy <= 0.5 ? fy * h0 * k : Ht - (1 - fy) * h0 * k; }
       label = { ...label0, pos: { fx: Math.min(1, Math.max(0, tx / Wt)), fy: Math.min(1, Math.max(0, ty / Ht)) } };
     }
     let px = Math.max(3, label.px | 0), t = null, spot = null;
@@ -888,7 +923,7 @@ const Grade = (() => {
         // nomes e números acompanham a graduação: a letra cresce/diminui junto com a peça e o lugar fica preso ao canto escolhido
         if (o.labels && o.labels.length) {
           const k = Math.sqrt((W / p.w) * (H / p.h)) || 1;
-          o.labels = o.labels.map(L => ({ ...L, px: Math.max(3, Math.round(L.px * k)), ancora: { k, w0: p.w, h0: p.h }, cor: st.labelCor || null }));
+          o.labels = o.labels.map(L => ({ ...L, px: Math.max(3, Math.round(L.px * k)), ancora: { k, w0: p.w, h0: p.h, mask0: p.mask }, cor: st.labelCor || null }));
           o.label = o.labels[0] || null;
         }
         const name = st.groupName(g);
