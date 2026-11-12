@@ -291,6 +291,8 @@ const Grade = (() => {
       }
     }
 
+    // nome e número do uniforme (por baixo da risca)
+    for (const E of (o.persona || [])) pintaPersona(out, OW, b, nm, Wt, Ht, E);
     if (o.thick > 0) {
       const er = U.box(nm, Wt, Ht, o.thick, 'min'), [r0, g0, b0] = o.outline;
       for (let y = 0; y < Ht; y++) for (let x = 0; x < Wt; x++) {
@@ -1023,6 +1025,38 @@ const Grade = (() => {
     return { W: U.px(t.w, st.dpi), H: U.px(t.h, st.dpi) };
   }
 
+  // Jogadores do tamanho (lista do uniforme). Lista vazia = um jogo de exemplo (o que aparece na aba Peças).
+  function jogadoresDo(st, size) {
+    const u = st.uni, js = (u.jogadores || []).filter(j => j && (j.nome || j.numero));
+    if (!js.length) return [{ nome: u.exNome || 'NOME', numero: u.exNumero || '10' }];
+    return js.filter(j => String(j.tam || '').toUpperCase() === String(size).toUpperCase());
+  }
+  // Nome / número do uniforme pintado na peça (fonte, cor e contorno), só dentro do molde
+  function pintaPersona(out, OW, b, nm, Wt, Ht, E) {
+    const mk = (w, h) => Object.assign(document.createElement('canvas'), { width: Math.max(1, w), height: Math.max(1, h) });
+    const font = `900 ${E.px}px "${E.fonte}", "Arial Black", Arial, sans-serif`;
+    let cv = mk(8, 8), ctx = cv.getContext('2d'); ctx.font = font;
+    const cont = E.contorno && E.contMm > 0 ? Math.max(1, Math.round(E.contMm / 25.4 * E.dpi)) : 0;
+    const tw = Math.ceil(ctx.measureText(E.text).width) + 2 * cont + 4, th = Math.ceil(E.px * 1.25) + 2 * cont + 4;
+    const rad = (E.rot || 0) * Math.PI / 180, c = Math.abs(Math.cos(rad)), sn = Math.abs(Math.sin(rad));
+    const fw = Math.ceil(tw * c + th * sn) + 2, fh = Math.ceil(tw * sn + th * c) + 2;
+    cv = mk(fw, fh); ctx = cv.getContext('2d'); ctx.font = font; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.translate(fw / 2, fh / 2); if (rad) ctx.rotate(rad);
+    if (cont) { ctx.lineJoin = 'round'; ctx.lineWidth = cont * 2; ctx.strokeStyle = E.contorno; ctx.strokeText(E.text, 0, 0); }
+    ctx.fillStyle = E.cor; ctx.fillText(E.text, 0, 0);
+    const d = ctx.getImageData(0, 0, fw, fh).data; cv.width = cv.height = 1;
+    const x0 = Math.round(E.fx * Wt - fw / 2), y0 = Math.round(E.fy * Ht - fh / 2);
+    for (let y = 0; y < fh; y++) {
+      const ty = y0 + y; if (ty < 0 || ty >= Ht) continue;
+      for (let x = 0; x < fw; x++) {
+        const tx = x0 + x; if (tx < 0 || tx >= Wt || !nm[ty * Wt + tx]) continue;
+        const i = (y * fw + x) * 4, a = d[i + 3]; if (!a) continue;
+        const q = ((ty + b) * OW + tx + b) * 4, f = a / 255;
+        out[q] = Math.round(d[i] * f + out[q] * (1 - f)); out[q + 1] = Math.round(d[i + 1] * f + out[q + 1] * (1 - f)); out[q + 2] = Math.round(d[i + 2] * f + out[q + 2] * (1 - f)); out[q + 3] = 255;
+      }
+    }
+  }
+
   // Especificação de cada pedaço de um tamanho (o que desenhar), sem desenhar ainda.
   function specsForSize(st, size) {
     const dpi = st.dpi, specs = [], warns = [];
@@ -1041,6 +1075,10 @@ const Grade = (() => {
       if (nome) a.push({ text: nome, curto: nome, px: pxMm(p.labelMm), pos: p.labelPos || null, rot: p.labelRot || 0, id: 'Nome' });
       return a;
     };
+    // Uniforme (v39): cada jogador do tamanho recebe o jogo completo de peças com o nome e o número dele
+    const U2 = st.uni && st.uni.ativo && st.uni.elems && st.uni.elems.length ? st.uni : null;
+    const lote = U2 ? jogadoresDo(st, size) : [null];
+    for (const jog of lote)
     for (const g of st.groups) {
       const alvo = targetsPx(st, g, size);
       for (const p of g.items) {
@@ -1067,7 +1105,15 @@ const Grade = (() => {
           o.labels = o.labels.map(L => ({ ...L, px: Math.max(3, Math.round(L.px * k)), ancora: { k, w0: p.w, h0: p.h, mask0: p.mask }, cor: st.labelCor || null }));
           o.label = o.labels[0] || null;
         }
-        const name = st.groupName(g);
+        if (jog) {
+          const k = Math.sqrt((W / p.w) * (H / p.h)) || 1;
+          o.persona = U2.elems.filter(e => e.n === p.n).map(e => {
+            const txt = e.tipo === 'numero' ? String(jog.numero || '') : String(jog.nome || '').toUpperCase();
+            const px = Math.max(3, Math.round((e.mm || 50) / 25.4 * dpi * (e.fixo === false ? k : 1)));
+            return { text: txt, px, fx: e.fx, fy: e.fy, rot: e.rot || 0, cor: e.cor || '#ffffff', contorno: e.contorno || null, contMm: e.contMm || 0, fonte: e.fonte || 'Arial Black', dpi };
+          }).filter(E => E.text);
+        }
+        const name = st.groupName(g) + (jog && (jog.nome || jog.numero) ? ` · ${jog.numero || ''} ${jog.nome || ''}`.trimEnd() : '');
         // Peça só de fundo mais comprida que o rolo (viés): divide em partes iguais sozinho.
         const tooLong = W + 2 * bleedPx > usable;
         if (tooLong && p.rule === 'fundo' && st.splitLong !== false) {
@@ -1278,5 +1324,5 @@ const Grade = (() => {
     return sp ? { fx: sp.cx / p.w, fy: sp.cy / p.h } : { fx: 0.5, fy: 0.85 };
   }
 
-  return { renderPiece, renderSize, autoPos, encaixeGrade, labelPos, celula, specsForSize, paleta, parteEm, drawSpec, layout, layoutOriginal, selfCheck, RULE_NAMES, angulos, lerGiros, laySalvo, girarRGBA };
+  return { jogadoresDo, renderPiece, renderSize, autoPos, encaixeGrade, labelPos, celula, specsForSize, paleta, parteEm, drawSpec, layout, layoutOriginal, selfCheck, RULE_NAMES, angulos, lerGiros, laySalvo, girarRGBA };
 })();

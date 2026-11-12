@@ -177,3 +177,10 @@ Gerado aqui com os arquivos reais da equipe. Três coisas estavam erradas e fora
 ## v38 (12/11) — pedaço branco por cima da peça vizinha no Corel
 - No arquivo do Corel "sem perda" (v33), a imagem de cada peça era um retângulo sem transparência: o que ficava fora da peça saía BRANCO. Com as peças encaixadas, o canto desse retângulo passava por cima da peça vizinha e aparecia como um pedaço branco em cima dela.
 - Agora a imagem sai com transparência (PNG RGBA, continua sem perder nada de qualidade) e cada peça é recortada pelo próprio contorno (também quando tem sangria). Nada de fora da peça cobre a vizinha.
+
+## v39 (12/11) — Uniforme: nomes e números (simples)
+- Fluxo de sempre: lê o arquivo base já estampado. Na aba **Peças** tem o quadro **👕 Uniforme: nomes e números**.
+- **＋ Número nas costas**, **＋ Nome nas costas**, **＋ Número na frente**: aparecem na imagem; arraste para o lugar (rodinha do mouse muda o tamanho). Em cada um: peça, tamanho da letra (mm), fonte, cor e contorno. Por padrão o número tem **o mesmo tamanho em toda a grade** (como no uniforme); desmarcando, ele cresce com a peça.
+- **Lista de jogadores**: uma linha por jogador — NOME; NÚMERO; TAMANHO (cola do Excel/WhatsApp). Mostra quantos por tamanho e avisa tamanho que não está na grade.
+- Ao gerar, cada tamanho que tem jogador sai num arquivo só, com o jogo completo de peças de cada jogador (nome e número dele) encaixado. Sem lista, sai um jogo de exemplo.
+- A caixa "Montar a arte nos moldes" (v37) continua lá, fechada, como opção avançada.

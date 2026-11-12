@@ -140,6 +140,7 @@ const App = (() => {
       nomesPadrao();
       renderAll();
       colarEtiquetas(true);   // se este arquivo já teve os nomes salvos, eles voltam para o lugar sozinhos
+      renderUni(); desenharUniforme();
       lockTabs(false);
       runCheck();
       if (st.moldes) { casarMoldes(); computeTargets(); renderGrade(); renderMoldes(); }
@@ -285,11 +286,112 @@ const App = (() => {
   function desenharEtiquetas() {
     const box = $('#preview'), cv = box.querySelector('canvas'); if (!cv || !st.an) return;
     box.querySelectorAll('.etq').forEach(e => e.remove());
+    desenharUniforme();
     if ($('#marcarTam') && !$('#marcarTam').checked) return;
     const f = st.an.pf;
     for (const p of st.pieces) {
       if (p.semEtiqueta) continue;
       for (const L of etiquetasDe(p)) box.append(etiquetaTela(p, L, cv, f));
+    }
+  }
+
+  // ---------- Uniforme: nomes e números (v39, pedido 12/11 — "edita só nome e número", para uniforme esportivo) ----------
+  // O arquivo base já vem com a arte. Aqui só se põe NOME e NÚMERO nas peças (arrastando na imagem) e se cola a lista
+  // de jogadores (nome; número; tamanho). Ao gerar, cada tamanho sai com o jogo de peças de cada jogador daquele tamanho.
+  const CHAVE_UNI = 'ppx_uniforme';
+  const FONTES = ['Arial Black', 'Impact', 'Arial', 'Verdana', 'Tahoma', 'Trebuchet MS', 'Segoe UI Black', 'Bahnschrift', 'Georgia', 'Courier New'];
+  function uniCarregar() {
+    let u = null; try { u = JSON.parse(localStorage.getItem(CHAVE_UNI) || 'null'); } catch (e) { u = null; }
+    st.uni = Object.assign({ ativo: false, elems: [], jogadores: [], texto: '', exNome: 'SILVA', exNumero: '10' }, u || {});
+  }
+  function uniSalvar() { try { localStorage.setItem(CHAVE_UNI, JSON.stringify(st.uni)); } catch (e) { /* cheio */ } }
+  function uniMudou() { uniSalvar(); desenharUniforme(); agendar(); }
+  function pecaPorNome(re) {
+    const ps = st.pieces.filter(p => re.test(p.nome || '')).sort((a, b) => b.w * b.h - a.w * a.h);
+    return ps[0] || st.pieces.slice().sort((a, b) => b.w * b.h - a.w * a.h)[0];
+  }
+  function uniNovo(tipo, onde) {
+    const p = onde === 'frente' ? pecaPorNome(/FRENT/) : pecaPorNome(/COST/);
+    if (!p) return;
+    const numero = tipo === 'numero';
+    st.uni.elems.push({ id: Date.now() + Math.random(), n: p.n, tipo, fx: 0.5, fy: numero ? (onde === 'frente' ? 0.4 : 0.52) : 0.24,
+      mm: numero ? (onde === 'frente' ? 100 : 200) : 60, fonte: 'Arial Black', cor: '#ffffff', contorno: '#000000', contMm: numero ? 2 : 1, fixo: true, rot: 0 });
+    st.uni.ativo = true; renderUni(); uniMudou();
+  }
+  // lista colada: uma linha por jogador — NOME; NÚMERO; TAMANHO (aceita ; , tab ou |)
+  function lerJogadores(txt) {
+    return String(txt || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean).map(l => {
+      const c = l.split(/\s*[;\t|,]\s*/).map(x => x.trim());
+      if (c.length >= 3) return { nome: c[0].toUpperCase(), numero: c[1], tam: c[2].toUpperCase() };
+      if (c.length === 2) return /^\d{1,3}$/.test(c[0]) ? { nome: '', numero: c[0], tam: c[1].toUpperCase() } : { nome: c[0].toUpperCase(), numero: '', tam: c[1].toUpperCase() };
+      return null;
+    }).filter(j => j && j.tam && /^(NOME|JOGADOR)$/.test(j.nome) === false);
+  }
+  function resumoJogadores() {
+    const js = st.uni.jogadores, por = {};
+    js.forEach(j => { por[j.tam] = (por[j.tam] || 0) + 1; });
+    const fora = Object.keys(por).filter(t => !st.sizes.includes(t));
+    return { txt: js.length ? `${js.length} jogador(es): ` + Object.entries(por).map(([t, n]) => `${t} ${n}`).join(' · ') : 'Sem lista: sai um jogo de exemplo em cada tamanho.', fora };
+  }
+  function renderUni() {
+    const box = $('#uniBox'); if (!box || !st.uni) return;
+    const u = st.uni, pecas = st.pieces || [];
+    const selPeca = e => el('select', { onchange: ev => { e.n = +ev.target.value; uniMudou(); } }, pecas.map(p => el('option', { value: p.n, selected: p.n === e.n, text: `${p.n} · ${p.nome || st.groupName(st.groups.find(g => g.items.includes(p)) || { type: 'outra' })}` })));
+    const linha = (e, i) => el('div', { class: 'uni-el ' + e.tipo }, [
+      el('b', { text: e.tipo === 'numero' ? '🔢 Número' : '🔤 Nome' }), ' na peça ', selPeca(e),
+      el('label', {}, ['letra ', el('input', { type: 'number', min: 5, step: 5, value: e.mm, style: 'width:70px', onchange: ev => { e.mm = Math.max(3, U.num(ev.target.value) || 50); uniMudou(); } }), ' mm']),
+      el('select', { onchange: ev => { e.fonte = ev.target.value; uniMudou(); } }, FONTES.map(f => el('option', { value: f, selected: f === e.fonte, text: f, style: `font-family:'${f}'` }))),
+      el('label', { title: 'Cor da letra' }, ['cor ', el('input', { type: 'color', value: e.cor, onchange: ev => { e.cor = ev.target.value; uniMudou(); } })]),
+      el('label', { title: 'Contorno em volta da letra' }, ['contorno ', el('input', { type: 'color', value: e.contorno || '#000000', onchange: ev => { e.contorno = ev.target.value; uniMudou(); } }),
+        el('input', { type: 'number', min: 0, step: 0.5, value: e.contMm, style: 'width:58px', onchange: ev => { e.contMm = Math.max(0, U.num(ev.target.value) || 0); uniMudou(); } }), ' mm']),
+      el('label', { title: 'Marcado: o número tem o mesmo tamanho em todos os tamanhos da grade (como no uniforme). Desmarcado: cresce e diminui com a peça.' }, [el('input', { type: 'checkbox', checked: e.fixo !== false, onchange: ev => { e.fixo = ev.target.checked; uniMudou(); } }), ' mesmo tamanho em toda a grade']),
+      el('button', { type: 'button', class: 'mini', title: 'Tirar', text: '✕', onclick: () => { u.elems.splice(i, 1); renderUni(); uniMudou(); } })]);
+    const res = resumoJogadores();
+    box.replaceChildren(
+      el('h2', { text: '👕 Uniforme: nomes e números' }),
+      el('p', { class: 'hint', text: 'Ponha o nome e o número nas peças e arraste na imagem acima para o lugar. Depois cole a lista de jogadores: cada tamanho sai com o jogo de peças de cada jogador, já com o nome e o número dele.' }),
+      el('div', { class: 'row' }, [
+        el('label', {}, [el('input', { type: 'checkbox', checked: u.ativo, onchange: ev => { u.ativo = ev.target.checked; uniMudou(); } }), ' Usar nomes e números na grade']),
+        el('button', { type: 'button', class: 'uni-b num', text: '＋ Número nas costas', onclick: () => uniNovo('numero', 'costas') }),
+        el('button', { type: 'button', class: 'uni-b nome', text: '＋ Nome nas costas', onclick: () => uniNovo('nome', 'costas') }),
+        el('button', { type: 'button', class: 'uni-b num', text: '＋ Número na frente', onclick: () => uniNovo('numero', 'frente') })]),
+      ...u.elems.map(linha),
+      el('div', { class: 'row' }, [
+        el('label', {}, ['Exemplo na tela: nome ', el('input', { value: u.exNome, style: 'width:120px', onchange: ev => { u.exNome = ev.target.value.toUpperCase(); uniMudou(); } })]),
+        el('label', {}, ['número ', el('input', { value: u.exNumero, style: 'width:60px', onchange: ev => { u.exNumero = ev.target.value; uniMudou(); } })])]),
+      el('h3', { text: 'Lista de jogadores' }),
+      el('p', { class: 'hint', text: 'Uma linha por jogador: NOME; NÚMERO; TAMANHO — pode colar do Excel ou do WhatsApp (separado por ponto e vírgula, vírgula ou tab). Ex.: SILVA; 10; M' }),
+      el('textarea', { id: 'uniLista', rows: 6, style: 'width:100%;max-width:560px', placeholder: 'SILVA; 10; M\nSOUZA; 7; G\nPEDRO; 9; P', oninput: ev => { u.texto = ev.target.value; u.jogadores = lerJogadores(u.texto); $('#uniResumo').textContent = resumoJogadores().txt; const f = resumoJogadores().fora; $('#uniFora').textContent = f.length ? `⚠ Tamanho fora da grade: ${f.join(', ')} (confira em "Tamanhos da grade").` : ''; uniSalvar(); agendar(); } }, []),
+      el('div', { class: 'uni-resumo' }, [el('span', { id: 'uniResumo', text: res.txt }), ' ', el('span', { id: 'uniFora', class: 'uni-fora', text: res.fora.length ? `⚠ Tamanho fora da grade: ${res.fora.join(', ')}` : '' })]),
+      el('p', { class: 'hint', text: 'Na aba Gerar, cada tamanho que tem jogador sai num arquivo só, com todos os jogadores daquele tamanho encaixados.' }));
+    $('#uniLista').value = u.texto || '';
+  }
+  function desenharUniforme() {
+    const box = $('#preview'), cv = box && box.querySelector('canvas'); if (!cv || !st.an || !st.uni) return;
+    box.querySelectorAll('.uni').forEach(e => e.remove());
+    if (!st.uni.ativo) return;
+    const f = st.an.pf;
+    for (const e of st.uni.elems) {
+      const p = st.pieces.find(q => q.n === e.n); if (!p) continue;
+      const txt = e.tipo === 'numero' ? st.uni.exNumero : st.uni.exNome;
+      const d = el('div', { class: 'uni', title: 'Arraste para o lugar · rodinha do mouse: tamanho da letra', text: txt });
+      const pr = () => {
+        const [ax, ay] = noArquivo(p, e.fx * p.w, e.fy * p.h), esc = cv.clientWidth / cv.width, px = e.mm / 25.4 * st.dpi * f * esc;
+        d.style.left = (ax * f / cv.width * 100) + '%'; d.style.top = (ay * f / cv.height * 100) + '%';
+        d.style.fontSize = Math.max(6, px) + 'px'; d.style.fontFamily = `'${e.fonte}', 'Arial Black', Arial, sans-serif`; d.style.color = e.cor;
+        d.style.webkitTextStroke = e.contMm > 0 ? `${Math.max(0.5, e.contMm / 25.4 * st.dpi * f * esc * 2)}px ${e.contorno}` : '';
+        d.style.transform = `translate(-50%, -50%) rotate(${(e.rot || 0) + giroGraus(p)}deg)`;
+      };
+      pr();
+      d.addEventListener('pointerdown', ev => {
+        ev.preventDefault(); d.setPointerCapture(ev.pointerId); d.classList.add('arrastando');
+        const r = cv.getBoundingClientRect(), kk = cv.width / r.width / f;
+        const mover = e2 => { const [lx, ly] = naPeca(p, (e2.clientX - r.left) * kk, (e2.clientY - r.top) * kk); e.fx = Math.min(1, Math.max(0, lx / p.w)); e.fy = Math.min(1, Math.max(0, ly / p.h)); pr(); };
+        d.addEventListener('pointermove', mover);
+        d.addEventListener('pointerup', () => { d.removeEventListener('pointermove', mover); d.classList.remove('arrastando'); uniSalvar(); agendar(); }, { once: true });
+      });
+      d.addEventListener('wheel', ev => { ev.preventDefault(); e.mm = Math.max(5, Math.round(e.mm + (ev.deltaY > 0 ? -5 : 5))); pr(); renderUni(); uniSalvar(); agendar(); }, { passive: false });
+      box.append(d);
     }
   }
 
@@ -1301,7 +1403,10 @@ const App = (() => {
     const bad = st.groups.flatMap(g => st.sizes.filter(s => !(st.targets[g.id][s].w > 0 && st.targets[g.id][s].h > 0)).map(s => `${st.groupName(g)} ${s}`));
     if (bad.length) { $('#status5').textContent = `Faltam medidas válidas: ${bad.join(', ')}.`; return; }
     if (st.bleedMm * 2 > st.gapMm) { $('#status5').textContent = 'O espaço entre peças precisa ser pelo menos o dobro da sangria, senão as sangrias se encostam.'; return; }
-    const sizes = st.sizes.filter(s => s !== st.base || $('#incBase').checked);
+    let sizes = st.sizes.filter(s => s !== st.base || $('#incBase').checked);
+    // uniforme com lista de jogadores: só os tamanhos que têm jogador (o base também, se tiver)
+    if (st.uni && st.uni.ativo && st.uni.elems.length && st.uni.jogadores.length) sizes = st.sizes.filter(s => st.uni.jogadores.some(j => j.tam === String(s).toUpperCase()));
+    if (!sizes.length) { $('#status5').textContent = 'Nenhum jogador da lista está num tamanho da grade.'; return; }
     $('#btnGerar').disabled = true; $('#btnTodos').disabled = true;
     $('#results').replaceChildren();
     const t0 = U.now();
@@ -1379,7 +1484,7 @@ const App = (() => {
     $('#sizes').addEventListener('change', () => { readSizes(); if (st.an) { computeTargets(); renderGrade(); renderMercado(); } renderQtd(); });
     $('#baseSize').addEventListener('change', () => { st.base = $('#baseSize').value; if (st.an) { computeTargets(); renderGrade(); renderMercado(); runCheck(); } });
     $('#btnLer').addEventListener('click', ler);
-    ligarCores();
+    ligarCores(); uniCarregar();
     $('#etqSalvar').addEventListener('click', salvarEtiquetas);
     $('#etqColar').addEventListener('click', () => colarEtiquetas(false));
     $('#bgColor').addEventListener('input', e => { st.bg = U.rgb(e.target.value); $('#bgHex').textContent = U.hex(st.bg); agendar(); });

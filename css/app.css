@@ -236,3 +236,14 @@ table.regras tr.sel td { background: rgba(245, 158, 11, .18); }
 .mt-campos select { max-width: 150px; }
 .mt-el { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 4px 0; padding: 4px 6px; border-left: 3px solid var(--ok); background: var(--ok-bg); border-radius: 6px; }
 .mt-on { border-color: var(--ok) !important; color: var(--ok); }
+
+/* Uniforme: nomes e números (v39) */
+.uni-card { border: 2px solid #22c55e; }
+.preview .uni { position: absolute; transform: translate(-50%, -50%); font-weight: 900; white-space: nowrap; cursor: grab; user-select: none; touch-action: none; line-height: 1; paint-order: stroke fill; outline: 1px dashed rgba(34, 197, 94, .9); outline-offset: 2px; z-index: 3; }
+.preview .uni.arrastando { cursor: grabbing; outline-style: solid; }
+.uni-el { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 0; padding: 8px 10px; border-radius: 10px; border-left: 5px solid #22c55e; background: rgba(34, 197, 94, .08); }
+.uni-el.nome { border-left-color: #38bdf8; background: rgba(56, 189, 248, .08); }
+.uni-b.num { border-color: #22c55e; color: #86efac; font-weight: 700; }
+.uni-b.nome { border-color: #38bdf8; color: #bae6fd; font-weight: 700; }
+.uni-resumo { margin: 8px 0; padding: 10px 14px; border: 2px solid #22c55e; border-radius: 10px; font-size: 16px; font-weight: 700; display: inline-block; }
+.uni-fora { color: #f87171; }
