@@ -478,7 +478,9 @@ const Grade = (() => {
       });
       return best;
     };
-    return { marca, melhor };
+    // teste rápido: a linha mais larga da peça tem um vão do tamanho dela nessa altura?
+    const linhaOk = (s, Y) => { const lg = larga(s), yr = Y + lg.ri - s.g; return yr < 0 || yr >= occ.length || livre[yr] >= lg.w; };
+    return { marca, melhor, fits, linhaOk };
   }
 
   // Encaixe pelo formato real das peças: cada peça vai para a posição mais baixa possível no rolo
@@ -606,8 +608,56 @@ const Grade = (() => {
     return { pos, bottomPx, rolo, cur };
   }
 
+  // ---------- Manter o encaixe original ----------
+  // Cada peça fica na mesma posição e no mesmo sentido do arquivo base (o encaixe montado pela equipe):
+  // mesma coluna (centro da peça no mesmo lugar da largura) e na mesma ordem de cima para baixo.
+  // A peça que cresceu empurra as de baixo; a que diminuiu sobe até encostar (com o espaço entre peças).
+  // A largura do rolo não muda: só a altura do encaixe acompanha o tamanho.
+  function layoutOriginal(items, rollPx, marginPx, gapPx, c) {
+    // Três jeitos de acomodar as peças que não cabem mais na coluna delas, do mais fiel ao original ao mais solto.
+    // Fica o mais fiel, a não ser que um mais solto gaste pelo menos 2% menos tecido.
+    const jeitos = [[0.12, 0.6], [1, 0.6], [1, 0.1]], res = jeitos.map(([d, p]) => layoutOriginal1(items, rollPx, marginPx, gapPx, c, d, p));
+    const menor = Math.min(...res.map(r => r.height));
+    return res.find(r => r.height <= menor * 1.02);
+  }
+  function layoutOriginal1(items, rollPx, marginPx, gapPx, c, desvio, peso) {
+    const warn = [], g = Math.ceil(gapPx / c);
+    const shapes = items.map(it => it.shapeOrig && it.shapeOrig.c === c && it.shapeOrig.g === g ? it.shapeOrig.s : (it.shapeOrig = { c, g, s: shapeFor(it, c, g, 0) }).s);
+    let cols = Math.floor((rollPx - 2 * marginPx) / c);
+    for (const s of shapes) if (s.cw > cols) { cols = s.cw; warn.push('Uma peça é mais larga que o rolo. O arquivo ficou mais largo para ela caber.'); }
+    const rolo = novoRolo(cols);
+    const o = it => it.orig || { x: 0, y: 0, w: it.w, h: it.h };
+    // de cima para baixo e da esquerda para a direita, como estão no arquivo base
+    const ordem = items.map((_, i) => i).sort((a, b) => (o(items[a]).y - o(items[b]).y) || (o(items[a]).x - o(items[b]).x));
+    const maxDesvio = Math.max(2, Math.round(cols * desvio));
+    const pos = [];
+    let bottomPx = 0;
+    for (const i of ordem) {
+      const s = shapes[i], it = items[i], oi = o(it);
+      const cx = oi.x + oi.w / 2;   // centro da peça no arquivo base
+      const X0 = Math.min(cols - s.cw, Math.max(0, Math.round((cx - it.w / 2 - marginPx) / c)));
+      let best = null;
+      for (let k = 0; k <= 2 * maxDesvio; k++) {
+        const d = k === 0 ? 0 : (k % 2 ? (k + 1) / 2 : -k / 2), X = X0 + d;
+        if (X < 0 || X + s.cw > cols) continue;
+        const custoLado = Math.abs(d) * peso;   // andar para o lado custa um pouco: prefere ficar na coluna original
+        if (best && custoLado >= best.nota) continue;
+        // sobe a peça o máximo possível nessa coluna (até encostar nas de cima)
+        for (let Y = 0; ; Y++) {
+          if (best && Y + custoLado >= best.nota) break;
+          if (rolo.linhaOk(s, Y) && rolo.fits(s, X, Y) === -1) { best = { X, Y, nota: Y + custoLado }; break; }
+        }
+      }
+      if (!best) best = { X: X0, Y: 0 };
+      rolo.marca(s, best.X, best.Y, 1);
+      pos[i] = { x: marginPx + best.X * c, y: marginPx + best.Y * c, rot: false, ang: 0, w: s.pw, h: s.ph, w0: it.w, h0: it.h };
+      bottomPx = Math.max(bottomPx, pos[i].y + s.ph);
+    }
+    return { pos, width: Math.max(rollPx, cols * c + 2 * marginPx), height: bottomPx + marginPx, warn };
+  }
+
   // O encaixe que já foi montado ao gerar a grade, se ainda vale (mesmas peças e mesma configuração).
-  function assinatura(st) { return JSON.stringify([st.rollCm, st.marginMm, st.gapMm, st.bleedMm, angulos(st), !!st.compactar, st.dpi]); }
+  function assinatura(st) { return JSON.stringify([st.rollCm, st.marginMm, st.gapMm, st.bleedMm, angulos(st), !!st.compactar, !!st.manterEncaixe, st.dpi]); }
   function laySalvo(st, size, parts) {
     const s = st.results && st.results[size];
     if (!s || !s.pos || s.assin !== assinatura(st) || s.pos.length !== parts.length) return null;
@@ -683,6 +733,7 @@ const Grade = (() => {
       }
     }
     r.n = sp.n; r.name = sp.name; r.size = sp.size;
+    if (sp.p) r.orig = { x: sp.p.x, y: sp.p.y, w: sp.p.w, h: sp.p.h };   // onde a peça estava no arquivo base
     return r;
   }
 
@@ -692,7 +743,7 @@ const Grade = (() => {
     if (salvo && (!blit || !blit(salvo))) return salvo;
     let gap = Math.round(st.gapMm / 25.4 * st.dpi), lay = null;
     for (let k = 0; k < 4; k++) {
-      lay = layout(items, rollPx, marginPx, gap, cell, angulos(st), 2500, !!st.compactar);
+      lay = st.manterEncaixe ? layoutOriginal(items, rollPx, marginPx, gap, cell) : layout(items, rollPx, marginPx, gap, cell, angulos(st), 2500, !!st.compactar);
       if (!blit || !blit(lay)) return lay;
       gap += Math.max(2, Math.round(2 / 25.4 * st.dpi));
     }
@@ -845,5 +896,5 @@ const Grade = (() => {
     return sp ? { fx: sp.cx / p.w, fy: sp.cy / p.h } : { fx: 0.5, fy: 0.85 };
   }
 
-  return { renderPiece, renderSize, autoPos, encaixeGrade, labelPos, celula, specsForSize, drawSpec, layout, selfCheck, RULE_NAMES, angulos, lerGiros, laySalvo, girarRGBA };
+  return { renderPiece, renderSize, autoPos, encaixeGrade, labelPos, celula, specsForSize, drawSpec, layout, layoutOriginal, selfCheck, RULE_NAMES, angulos, lerGiros, laySalvo, girarRGBA };
 })();

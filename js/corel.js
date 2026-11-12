@@ -67,7 +67,7 @@ const Corel = (() => {
     }
     const cell = Grade.celula(st);
     // mesmo encaixe do TIFF (o que foi montado ao gerar a grade), para o Corel bater com o TIFF
-    const lay = Grade.laySalvo(st, size, parts) || Grade.layout(parts, rollPx, marginPx, Math.round(st.gapMm / 25.4 * dpi), cell, Grade.angulos(st), 2500, !!st.compactar);
+    const lay = Grade.laySalvo(st, size, parts) || (st.manterEncaixe ? Grade.layoutOriginal(parts, rollPx, marginPx, Math.round(st.gapMm / 25.4 * dpi), cell) : Grade.layout(parts, rollPx, marginPx, Math.round(st.gapMm / 25.4 * dpi), cell, Grade.angulos(st), 2500, !!st.compactar));
     const W = lay.width, H = lay.height;
     const out = [`<?xml version="1.0" encoding="UTF-8"?>`,
       `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${mm(W)}mm" height="${mm(H)}mm" viewBox="0 0 ${W} ${H}">`,

@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400&family=Orbitron:wght@600;700&display=swap">
-<link rel="stylesheet" href="css/app.css?v=24">
+<link rel="stylesheet" href="css/app.css?v=25">
 <script src="https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
@@ -24,7 +24,7 @@
 </div>
 <header class="top">
   <div class="top-in">
-    <div class="brand"><b>PLATNUMPRINT-X</b><span>motor de grade</span><span class="versao" title="Versão do motor carregada neste navegador">v24</span><span class="user"><span id="quem"></span><button type="button" id="btnSair" class="ghost">Sair</button></span></div>
+    <div class="brand"><b>PLATNUMPRINT-X</b><span>motor de grade</span><span class="versao" title="Versão do motor carregada neste navegador">v25</span><span class="user"><span id="quem"></span><button type="button" id="btnSair" class="ghost">Sair</button></span></div>
     <nav class="tabs" id="tabs" role="tablist">
       <button class="tab on" data-tab="arquivo" role="tab"><span class="n">1</span>Arquivo</button>
       <button class="tab locked" data-tab="pecas" role="tab"><span class="n">2</span>Peças</button>
@@ -225,6 +225,7 @@
       <div class="row">
         <label><input type="checkbox" id="incBase" checked> Refazer também o tamanho base</label>
         <label><input type="checkbox" id="autoRefazer"> Refazer a grade sozinho quando eu mudar algo</label>
+        <label title="Cada peça fica no mesmo lugar e no mesmo sentido do arquivo base (o encaixe que vocês montaram). A largura do rolo não muda: só a altura cresce ou diminui com o tamanho. Desmarcado, o motor monta um encaixe novo sozinho (com os giros e o compactar ao lado)."><input type="checkbox" id="manterEncaixe" checked> 📐 Manter o encaixe original do arquivo (só muda a altura)</label>
         <label><input type="checkbox" id="allowRot"> Permitir girar peças 180° no encaixe</label>
         <label title="Outros giros que vocês autorizam, em graus, separados por vírgula. Ex.: 90, 270 (de lado) ou pequenos giros como 5, 355. Vazio = só os giros marcados ao lado. Atenção: girar fora de 180° muda o sentido do fio do tecido na peça.">Outros giros autorizados <input id="girosExtra" type="text" placeholder="ex.: 90, 270" style="width:110px"> °</label>
         <label title="Depois de encaixar, o motor tira as peças do fim do rolo uma a uma e recoloca nos vãos que sobraram (usando os giros autorizados), até não dar mais para descer. Fica bem fechadinho e gasta menos tecido. Demora alguns segundos a mais."><input type="checkbox" id="compactar" checked> 🗜️ Compactar o encaixe (bem fechadinho)</label>
@@ -330,16 +331,16 @@
   </section>
 </main>
 
-<script src="js/acesso.js?v=24"></script>
-<script src="js/util.js?v=24"></script>
-<script src="js/tiff.js?v=24"></script>
-<script src="js/analyze.js?v=24"></script>
-<script src="js/corel.js?v=24"></script>
-<script src="js/grade.js?v=24"></script>
-<script src="js/pdfgrade.js?v=24"></script>
-<script src="js/moldes.js?v=24"></script>
-<script src="js/regras.js?v=24"></script>
-<script src="js/app.js?v=24"></script>
-<script src="js/provador.js?v=24"></script>
+<script src="js/acesso.js?v=25"></script>
+<script src="js/util.js?v=25"></script>
+<script src="js/tiff.js?v=25"></script>
+<script src="js/analyze.js?v=25"></script>
+<script src="js/corel.js?v=25"></script>
+<script src="js/grade.js?v=25"></script>
+<script src="js/pdfgrade.js?v=25"></script>
+<script src="js/moldes.js?v=25"></script>
+<script src="js/regras.js?v=25"></script>
+<script src="js/app.js?v=25"></script>
+<script src="js/provador.js?v=25"></script>
 </body>
 </html>
