@@ -173,3 +173,7 @@ Gerado aqui com os arquivos reais da equipe. Três coisas estavam erradas e fora
 - **＋ Nome / número** e **＋ Logo / imagem**: texto (tamanho da letra em cm, cor, giro) ou imagem (largura em cm, giro). Clique em 📍 e depois na miniatura para pôr no lugar.
 - **⟳ girar o molde** 90° (a arte continua em pé). Peça com quantidade 2 sai em par, com o molde do par espelhado (a arte e os textos não espelham).
 - **✨ Montar e ler**: o motor monta o arquivo base (com a risca preta em volta de cada peça) e lê como se fosse o TIFF do Corel. Daí em diante é igual: Peças, Grade, Gerar, cada tamanho no molde da modelista. **⬇ Baixar o arquivo montado** salva o PNG.
+
+## v38 (12/11) — pedaço branco por cima da peça vizinha no Corel
+- No arquivo do Corel "sem perda" (v33), a imagem de cada peça era um retângulo sem transparência: o que ficava fora da peça saía BRANCO. Com as peças encaixadas, o canto desse retângulo passava por cima da peça vizinha e aparecia como um pedaço branco em cima dela.
+- Agora a imagem sai com transparência (PNG RGBA, continua sem perder nada de qualidade) e cada peça é recortada pelo próprio contorno (também quando tem sangria). Nada de fora da peça cobre a vizinha.
