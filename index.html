@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400&family=Orbitron:wght@600;700&display=swap">
-<link rel="stylesheet" href="css/app.css?v=30">
+<link rel="stylesheet" href="css/app.css?v=31">
 <script src="https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
@@ -24,7 +24,7 @@
 </div>
 <header class="top">
   <div class="top-in">
-    <div class="brand"><b>PLATNUMPRINT-X</b><span>motor de grade</span><span class="versao" title="Versão do motor carregada neste navegador">v30</span><span class="user"><span id="quem"></span><button type="button" id="btnSair" class="ghost">Sair</button></span></div>
+    <div class="brand"><b>PLATNUMPRINT-X</b><span>motor de grade</span><span class="versao" title="Versão do motor carregada neste navegador">v31</span><span class="user"><span id="quem"></span><button type="button" id="btnSair" class="ghost">Sair</button></span></div>
     <nav class="tabs" id="tabs" role="tablist">
       <button class="tab on" data-tab="arquivo" role="tab"><span class="n">1</span>Arquivo</button>
       <button class="tab locked" data-tab="pecas" role="tab"><span class="n">2</span>Peças</button>
@@ -79,6 +79,11 @@
         <button type="button" id="comNomeTodas">✍️ Escrever em todas</button>
       </div>
       <div id="preview" class="preview"></div>
+      <div class="row" style="margin:8px 0;gap:8px;align-items:center">
+        <button type="button" class="primary" id="etqSalvar" title="Grava o lugar, o giro, o tamanho da letra e o nome de cada peça. Quando este arquivo for aberto de novo, os nomes já vão para esses lugares sozinhos.">💾 Salvar o lugar dos nomes</button>
+        <button type="button" id="etqColar" title="Põe os nomes no lugar que foi salvo para este arquivo">📌 Colar o lugar salvo</button>
+        <span id="etqInfo" class="muted"></span>
+      </div>
       <div class="scroll"><table id="tblPecas"></table></div>
       <details class="hint"><summary>O que cada regra faz</summary>
         <ul>
@@ -343,16 +348,16 @@
   </section>
 </main>
 
-<script src="js/acesso.js?v=30"></script>
-<script src="js/util.js?v=30"></script>
-<script src="js/tiff.js?v=30"></script>
-<script src="js/analyze.js?v=30"></script>
-<script src="js/corel.js?v=30"></script>
-<script src="js/grade.js?v=30"></script>
-<script src="js/pdfgrade.js?v=30"></script>
-<script src="js/moldes.js?v=30"></script>
-<script src="js/regras.js?v=30"></script>
-<script src="js/app.js?v=30"></script>
-<script src="js/provador.js?v=30"></script>
+<script src="js/acesso.js?v=31"></script>
+<script src="js/util.js?v=31"></script>
+<script src="js/tiff.js?v=31"></script>
+<script src="js/analyze.js?v=31"></script>
+<script src="js/corel.js?v=31"></script>
+<script src="js/grade.js?v=31"></script>
+<script src="js/pdfgrade.js?v=31"></script>
+<script src="js/moldes.js?v=31"></script>
+<script src="js/regras.js?v=31"></script>
+<script src="js/app.js?v=31"></script>
+<script src="js/provador.js?v=31"></script>
 </body>
 </html>

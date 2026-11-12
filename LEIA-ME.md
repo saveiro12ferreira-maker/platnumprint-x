@@ -142,3 +142,6 @@ Gerado aqui com os arquivos reais da equipe. Três coisas estavam erradas e fora
 - **Lugar preso ao canto escolhido**: o texto fica preso à beira/canto mais perto de onde foi posto; se a peça cresceu para aquele lado, o texto anda junto o mesmo tanto (e a distância até a beira cresce na mesma proporção), sem sair do lugar escolhido.
 - **Cor dos nomes e números** (aba Gerar, ao lado de "Altura do número"): escolha a cor; com "automática" marcada continua preto no fundo claro e branco no escuro. Vale no TIFF e no Corel.
 - O texto continua girando junto com a peça no encaixe (no TIFF ele é desenhado na peça; no Corel fica dentro do grupo da peça).
+
+## v31 (12/11) — salvar o lugar dos nomes
+- Embaixo da imagem da aba Peças: **💾 Salvar o lugar dos nomes** grava, para este arquivo da estampa, o lugar, o giro, o tamanho da letra, o nome e o "escrever na peça" de cada peça (fica neste computador). Quando o mesmo arquivo for aberto de novo, os nomes **voltam sozinhos** para os lugares salvos. **📌 Colar o lugar salvo** põe de volta na hora (por exemplo, depois de mexer e querer voltar). Cada peça é achada pelo número e pela medida (vale mesmo se a ordem mudar).

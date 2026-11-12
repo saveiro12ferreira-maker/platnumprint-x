@@ -131,6 +131,7 @@ const App = (() => {
       regroup();
       nomesPadrao();
       renderAll();
+      colarEtiquetas(true);   // se este arquivo já teve os nomes salvos, eles voltam para o lugar sozinhos
       lockTabs(false);
       runCheck();
       if (st.moldes) { casarMoldes(); computeTargets(); renderGrade(); renderMoldes(); }
@@ -222,6 +223,35 @@ const App = (() => {
     p.separado = true;
   }
   function juntar(p) { p.separado = false; delete p.numPos; delete p.numRot; delete p.numMm; }
+
+  // ---------- Salvar o lugar dos nomes (pedido 12/11: "colar" os nomes nas peças, para não perder ao abrir de novo) ----------
+  // Fica guardado neste computador, por nome de arquivo da estampa. Cada peça é achada pelo número e pela medida.
+  const CHAVE_ETQ = 'ppx_lugar_nomes', CAMPOS_ETQ = ['labelPos', 'labelRot', 'labelMm', 'numPos', 'numRot', 'numMm', 'separado', 'semEtiqueta', 'nome', 'nomeManual'];
+  const lerEtq = () => { try { return JSON.parse(localStorage.getItem(CHAVE_ETQ) || '{}'); } catch (e) { return {}; } };
+  function salvarEtiquetas() {
+    if (!st.pieces || !st.pieces.length) return;
+    const tudo = lerEtq();
+    tudo[fileBase()] = { em: new Date().toISOString(), pecas: st.pieces.map(p => ({ n: p.n, w: p.w, h: p.h, x: p.x, y: p.y, ...Object.fromEntries(CAMPOS_ETQ.filter(c => p[c] !== undefined).map(c => [c, p[c]])) })) };
+    try { localStorage.setItem(CHAVE_ETQ, JSON.stringify(tudo)); } catch (e) { $('#etqInfo').textContent = '⚠ Não consegui salvar neste computador (memória do navegador cheia ou bloqueada).'; return; }
+    const n = st.pieces.filter(p => p.labelPos || p.numPos).length;
+    $('#etqInfo').textContent = `✔ Salvo: lugar dos nomes de ${st.pieces.length} peças (${n} postas à mão). Ao abrir "${fileBase()}" de novo, os nomes já vão para esses lugares.`;
+  }
+  function colarEtiquetas(sozinho) {
+    const s = lerEtq()[fileBase()];
+    if (!s || !st.pieces) { if (!sozinho) $('#etqInfo').textContent = 'Não tem lugar salvo para este arquivo ainda. Posicione os nomes e clique em "💾 Salvar o lugar dos nomes".'; return 0; }
+    const perto = (a, b) => Math.abs(a - b) <= Math.max(3, b * 0.02);
+    let n = 0;
+    for (const p of st.pieces) {
+      const q = s.pecas.find(q => q.n === p.n && perto(p.w, q.w) && perto(p.h, q.h))
+        || s.pecas.filter(q => perto(p.w, q.w) && perto(p.h, q.h)).sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y))[0];
+      if (!q) continue;
+      for (const c of CAMPOS_ETQ) { if (q[c] !== undefined) p[c] = q[c]; else if (c !== 'nome') delete p[c]; }
+      n++;
+    }
+    renderPieces(); desenharEtiquetas(); agendar();
+    $('#etqInfo').textContent = n ? `📌 Nomes colados no lugar salvo em ${new Date(s.em).toLocaleString('pt-BR')} (${n} de ${st.pieces.length} peças).` : 'O lugar salvo é de outro desenho (as peças não batem com este arquivo).';
+    return n;
+  }
 
   function desenharEtiquetas() {
     const box = $('#preview'), cv = box.querySelector('canvas'); if (!cv || !st.an) return;
@@ -1318,6 +1348,8 @@ const App = (() => {
     $('#baseSize').addEventListener('change', () => { st.base = $('#baseSize').value; if (st.an) { computeTargets(); renderGrade(); renderMercado(); runCheck(); } });
     $('#btnLer').addEventListener('click', ler);
     ligarCores();
+    $('#etqSalvar').addEventListener('click', salvarEtiquetas);
+    $('#etqColar').addEventListener('click', () => colarEtiquetas(false));
     $('#bgColor').addEventListener('input', e => { st.bg = U.rgb(e.target.value); $('#bgHex').textContent = U.hex(st.bg); agendar(); });
     const setBorda = txt => {
       const v = U.num(txt);
