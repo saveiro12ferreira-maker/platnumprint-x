@@ -78,7 +78,10 @@ const Corel = (() => {
       // a peça gira em volta do centro do lugar dela no encaixe
       const cx = p.x + (p.w || r.w) / 2, cy = p.y + (p.h || r.h) / 2, x = cx - r.w / 2, y = cy - r.h / 2;
       const tf = ang ? ` transform="rotate(${ang} ${cx} ${cy})"` : '';
-      const pts = simplify(trace(r.nm, r.Wt, r.Ht), Math.max(0.6, dpi * 0.004));
+      // linha de corte = a risca da modelagem (lado de dentro da borda preta), quando a peça veio do PDF da modelista
+      const fm = specs[i].o.formaMolde, tb = specs[i].o.bordaFora || 0, naRisca = fm && tb && r.Wt === fm.w + 2 * tb && r.Ht === fm.h + 2 * tb;
+      const pts = naRisca ? simplify(trace(fm.m, fm.w, fm.h), Math.max(0.6, dpi * 0.004)).map(([px, py]) => [px + tb, py + tb])
+        : simplify(trace(r.nm, r.Wt, r.Ht), Math.max(0.6, dpi * 0.004));
       const d = pts.length > 2 ? 'M' + pts.map(([px, py]) => `${(x + r.b + px + 0.5).toFixed(1)} ${(y + r.b + py + 0.5).toFixed(1)}`).join(' L') + ' Z' : '';
       out.push(`<g id="Peca_${r.n}_${idOk(r.name)}_tam_${idOk(size)}"${tf}>`);
       out.push(`<image id="Estampa_${r.n}" x="${x}" y="${y}" width="${r.w}" height="${r.h}" xlink:href="${pngData(r)}"/>`);

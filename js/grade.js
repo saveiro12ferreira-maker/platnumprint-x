@@ -428,7 +428,8 @@ const Grade = (() => {
           const pxi = Math.max(3, Math.round((label.px | 0) * f)), ti = textMask(txt, pxi, label.rot || 0);
           const sp = spotTexto(nm, Wt, Ht, ti, folga(thick, pxi), label.pos);
           if (!sp) continue;
-          const d = Math.hypot(sp.cx - tx, sp.cy - ty), perto = d <= Math.max(ti.h, pxi) * 0.75;
+          // perto = o texto continua no canto escolhido: pode escorregar ao longo da beira até meia palavra, sem ir para o meio
+          const d = Math.hypot(sp.cx - tx, sp.cy - ty), perto = d <= Math.max(ti.h * 1.5, pxi, ti.w * 0.6);
           if (!melhor || (perto && !melhor.perto) || (perto === melhor.perto && !perto && d < melhor.d)) melhor = { sp, t: ti, px: pxi, d, perto };
           if (perto) break;
         }
@@ -866,9 +867,13 @@ const Grade = (() => {
         const deLado = ((p.t || 0) & 3) % 2 === 1;
         let W = deLado ? alvo.H : alvo.W, H = deLado ? alvo.W : alvo.H;
         if (F) {
-          o.forma = F;
+          // a borda preta (contorno de corte, ex.: 3 mm) fica DA RISCA DA MODELAGEM PARA FORA: a peça cresce a borda
+          // para cada lado e o laser corta no lado de dentro da borda, exatamente na risca (pedido 12/11)
+          const tb = Math.max(0, Math.round(o.thick || 0));
+          const F2 = tb ? formaComBorda(F, tb) : F;
+          o.forma = F2; o.formaMolde = F; o.bordaFora = tb;
           const t = st.targets[g.id][size];
-          if (t.src.w !== 'manual') W = F.w; if (t.src.h !== 'manual') H = F.h;
+          if (t.src.w !== 'manual') W = F2.w; if (t.src.h !== 'manual') H = F2.h;
         }
         const name = st.groupName(g);
         // Peça só de fundo mais comprida que o rolo (viés): divide em partes iguais sozinho.
@@ -884,6 +889,33 @@ const Grade = (() => {
       }
     }
     return { specs, warns, rollPx, marginPx };
+  }
+
+  // Molde + borda para fora (dilatação redonda, pela distância exata até a risca). Guardado para não refazer.
+  const bordaCache = new WeakMap();
+  function formaComBorda(F, t) {
+    let c = bordaCache.get(F); if (!c) bordaCache.set(F, c = {});
+    if (c[t]) return c[t];
+    const w = F.w + 2 * t, h = F.h + 2 * t, INF = 1e12;
+    // distância (ao quadrado) até o pixel de molde mais perto: transformada de distância exata, linha e coluna
+    const d = new Float64Array(w * h).fill(INF);
+    for (let y = 0; y < F.h; y++) for (let x = 0; x < F.w; x++) if (F.m[y * F.w + x]) d[(y + t) * w + x + t] = 0;
+    const n = Math.max(w, h), f = new Float64Array(n), z = new Float64Array(n + 1), v = new Int32Array(n), o = new Float64Array(n);
+    const edt1 = (len) => {
+      let k = 0; v[0] = 0; z[0] = -INF; z[1] = INF;
+      for (let q = 1; q < len; q++) {
+        let sx = ((f[q] + q * q) - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]);
+        while (sx <= z[k]) { k--; sx = ((f[q] + q * q) - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]); }
+        k++; v[k] = q; z[k] = sx; z[k + 1] = INF;
+      }
+      k = 0;
+      for (let q = 0; q < len; q++) { while (z[k + 1] < q) k++; o[q] = (q - v[k]) * (q - v[k]) + f[v[k]]; }
+    };
+    for (let x = 0; x < w; x++) { for (let y = 0; y < h; y++) f[y] = d[y * w + x]; edt1(h); for (let y = 0; y < h; y++) d[y * w + x] = o[y]; }
+    for (let y = 0; y < h; y++) { for (let x = 0; x < w; x++) f[x] = d[y * w + x]; edt1(w); for (let x = 0; x < w; x++) d[y * w + x] = o[x]; }
+    const m = new Uint8Array(w * h), t2 = (t + 0.5) * (t + 0.5);
+    for (let i = 0; i < m.length; i++) if (d[i] <= t2) m[i] = 1;
+    return (c[t] = { w, h, m, borda: t });
   }
 
   // Desenha um pedaço. Se parte da estampa ficaria fora do molde novo, resolve sozinho:
