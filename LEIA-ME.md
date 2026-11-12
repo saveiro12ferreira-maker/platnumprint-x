@@ -112,3 +112,10 @@ A prévia coloca a estampa do arquivo na posição certa por cima da roupa da mo
 - O Corel e o TIFF de cada tamanho usam **o mesmo encaixe** montado no "Gerar grade" (antes o Corel montava outro encaixe e podia sair diferente).
 - O encaixe ficou mais rápido para achar lugar (pula as linhas do rolo que não têm vão do tamanho da peça).
 - Dica: o espaço entre peças pesa muito no gasto de tecido. De 5 mm para 3 mm, o mesmo encaixe de teste ficou ~4% mais curto.
+
+## v25 (11/11) — manter o encaixe original
+- **📐 Manter o encaixe original do arquivo (só muda a altura)** — aba Gerar, já vem marcado. Cada peça sai no mesmo lugar e no mesmo sentido do arquivo base montado pela equipe (mesma coluna da largura, mesma ordem de cima para baixo). A largura do rolo não muda; a peça que cresceu empurra as de baixo e a que diminuiu sobe até encostar. Só quando não cabe mais na coluna ela anda para o lado (fica o jeito mais fiel, a não ser que outro gaste pelo menos 2% menos tecido). Vale para o TIFF e o Corel. Desmarcado, volta o encaixe automático da v24.
+
+## v26 (12/11) — nome na pontinha
+- Nome/número colocado à mão (arrastado na aba Peças) agora fica **ali**: se o texto não cabe no lugar escolhido (ex.: pontinha da peça), a letra diminui e, se precisar, fica só o número — antes ele empurrava o texto inteiro para o meio da peça. Vale para o TIFF e para o Corel (mesma regra).
+- **Trocar a cor do fundo sem contorno nos desenhos**: na beira de cada desenho (margaridas, vasos, letras), o pixel é uma mistura do desenho com o fundo antigo. Ao trocar o fundo (ex.: azul-marinho → verde) essa mistura ficava com o azul e aparecia um contorno azul em volta das flores (e um "quadrado" do fundo antigo em volta de alguns desenhos). Agora o motor calcula quanto de desenho tem em cada pixel da beira e troca só a parte do fundo pela cor nova. Teste: círculo branco em azul-marinho trocado para verde — antes a beira saía até 74 tons fora, agora 1. Com a cor original do fundo nada muda.

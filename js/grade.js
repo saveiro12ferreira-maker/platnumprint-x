@@ -192,7 +192,7 @@ const Grade = (() => {
     }
     const d = ctx.getImageData(0, 0, fw, fh).data, a = new Uint8Array(fw * fh);
     for (let i = 0; i < a.length; i++) a[i] = d[i * 4 + 3];
-    const r = { w: fw, h: fh, a };
+    const r = { w: fw, h: fh, a, text };
     textCache.set(key, r);
     return r;
   }
@@ -273,9 +273,28 @@ const Grade = (() => {
     return null;
   }
 
-  function stampLabel(out, OW, OH, b, nm, Wt, Ht, label, thick) {
+  // Onde o texto vai na peça (mesma regra no TIFF e no Corel).
+  function lugarTexto(nm, Wt, Ht, label, thick) {
     let px = Math.max(3, label.px | 0), t = null, spot = null;
     const textos = label.curto && label.curto !== label.text ? [label.text, label.curto] : [label.text];
+    if (label.pos) {
+      // Lugar escolhido à mão (ex.: na pontinha da peça): o texto fica ALI. Se não couber no tamanho escolhido,
+      // diminui a letra (e depois usa só o número) em vez de empurrar o texto para o meio da peça.
+      const tx = label.pos.fx * Wt, ty = label.pos.fy * Ht;
+      let melhor = null;
+      for (const txt of textos) {
+        for (let f = 1; f >= 0.45; f -= 0.1) {
+          const pxi = Math.max(3, Math.round((label.px | 0) * f)), ti = textMask(txt, pxi, label.rot || 0);
+          const sp = spotTexto(nm, Wt, Ht, ti, folga(thick, pxi), label.pos);
+          if (!sp) continue;
+          const d = Math.hypot(sp.cx - tx, sp.cy - ty), perto = d <= Math.max(ti.h, pxi) * 0.75;
+          if (!melhor || (perto && !melhor.perto) || (perto === melhor.perto && !perto && d < melhor.d)) melhor = { sp, t: ti, px: pxi, d, perto };
+          if (perto) break;
+        }
+        if (melhor && melhor.perto) break;
+      }
+      if (melhor) { spot = melhor.sp; t = melhor.t; px = melhor.px; }
+    } else
     for (const txt of textos) {
       px = Math.max(3, label.px | 0);
       for (let k = 0; k < 3 && !spot; k++) {
@@ -285,7 +304,13 @@ const Grade = (() => {
       }
       if (spot) break;
     }
-    if (!spot) return;
+    return spot ? { spot, t, px, text: t.text } : null;
+  }
+
+  function stampLabel(out, OW, OH, b, nm, Wt, Ht, label, thick) {
+    const lg = lugarTexto(nm, Wt, Ht, label, thick); if (!lg) return;
+    const { spot, t } = lg;
+
     const x0 = spot.cx - (t.w >> 1), y0 = spot.cy - (t.h >> 1);
     // Cor do número: preto em fundo claro, branco em fundo escuro.
     let lum = 0, n = 0;
@@ -879,16 +904,8 @@ const Grade = (() => {
 
   // Onde vai o número do tamanho (para o arquivo do Corel, que leva o número como texto editável).
   function labelPos(r, label, thick) {
-    const textos = label.curto && label.curto !== label.text ? [label.text, label.curto] : [label.text];
-    for (const text of textos) {
-      let px = label.px;
-      for (let k = 0; k < 3; k++) {
-        const t = textMask(text, px, label.rot || 0), sp = spotTexto(r.nm, r.Wt, r.Ht, t, folga(thick, px), label.pos);
-        if (sp) return { x: sp.cx + r.b, y: sp.cy + r.b, px, text, rot: label.rot || 0 };
-        px = Math.round(px * 0.7);
-      }
-    }
-    return null;
+    const lg = lugarTexto(r.nm, r.Wt, r.Ht, label, thick);
+    return lg ? { x: lg.spot.cx + r.b, y: lg.spot.cy + r.b, px: lg.px, text: lg.text, rot: label.rot || 0 } : null;
   }
 
   function autoPos(p, text, px, rot = 0) {
