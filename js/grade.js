@@ -415,7 +415,15 @@ const Grade = (() => {
   }
 
   // Onde o texto vai na peça (mesma regra no TIFF e no Corel).
-  function lugarTexto(nm, Wt, Ht, label, thick) {
+  function lugarTexto(nm, Wt, Ht, label0, thick) {
+    // posição presa ao canto/beira mais perto de onde foi posto: se a peça cresceu 2 mm para aquele lado, o texto
+    // anda os mesmos 2 mm (e a distância até a beira cresce junto com a graduação) — pedido 12/11
+    let label = label0;
+    if (label0.pos && label0.ancora) {
+      const { k, w0, h0 } = label0.ancora, fx = label0.pos.fx, fy = label0.pos.fy;
+      const tx = fx <= 0.5 ? fx * w0 * k : Wt - (1 - fx) * w0 * k, ty = fy <= 0.5 ? fy * h0 * k : Ht - (1 - fy) * h0 * k;
+      label = { ...label0, pos: { fx: Math.min(1, Math.max(0, tx / Wt)), fy: Math.min(1, Math.max(0, ty / Ht)) } };
+    }
     let px = Math.max(3, label.px | 0), t = null, spot = null;
     const textos = label.curto && label.curto !== label.text ? [label.text, label.curto] : [label.text];
     if (label.pos) {
@@ -446,7 +454,7 @@ const Grade = (() => {
       }
       if (spot) break;
     }
-    return spot ? { spot, t, px, text: t.text } : null;
+    return spot ? { spot, t, px, text: t.text, cor: label.cor || null } : null;
   }
 
   function stampLabel(out, OW, OH, b, nm, Wt, Ht, label, thick) {
@@ -459,12 +467,14 @@ const Grade = (() => {
     for (let y = 0; y < t.h; y++) for (let x = 0; x < t.w; x++) {
       const q = ((y0 + y + b) * OW + x0 + x + b) * 4; lum += 0.299 * out[q] + 0.587 * out[q + 1] + 0.114 * out[q + 2]; n++;
     }
-    const ink = n && lum / n < 140 ? 255 : 0;
+    const auto = n && lum / n < 140 ? 255 : 0;
+    // cor escolhida para os nomes e números (aba Gerar); sem escolha: preto no claro, branco no escuro
+    const ink = label.cor || [auto, auto, auto];
     for (let y = 0; y < t.h; y++) for (let x = 0; x < t.w; x++) {
       const al = t.a[y * t.w + x]; if (!al) continue;
       const xx = x0 + x, yy = y0 + y; if (!nm[yy * Wt + xx]) continue;
       const q = ((yy + b) * OW + xx + b) * 4, f = al / 255;
-      out[q] = Math.round(out[q] * (1 - f) + ink * f); out[q + 1] = Math.round(out[q + 1] * (1 - f) + ink * f); out[q + 2] = Math.round(out[q + 2] * (1 - f) + ink * f);
+      out[q] = Math.round(out[q] * (1 - f) + ink[0] * f); out[q + 1] = Math.round(out[q + 1] * (1 - f) + ink[1] * f); out[q + 2] = Math.round(out[q + 2] * (1 - f) + ink[2] * f);
     }
   }
 
@@ -875,6 +885,12 @@ const Grade = (() => {
           const t = st.targets[g.id][size];
           if (t.src.w !== 'manual') W = F2.w; if (t.src.h !== 'manual') H = F2.h;
         }
+        // nomes e números acompanham a graduação: a letra cresce/diminui junto com a peça e o lugar fica preso ao canto escolhido
+        if (o.labels && o.labels.length) {
+          const k = Math.sqrt((W / p.w) * (H / p.h)) || 1;
+          o.labels = o.labels.map(L => ({ ...L, px: Math.max(3, Math.round(L.px * k)), ancora: { k, w0: p.w, h0: p.h }, cor: st.labelCor || null }));
+          o.label = o.labels[0] || null;
+        }
         const name = st.groupName(g);
         // Peça só de fundo mais comprida que o rolo (viés): divide em partes iguais sozinho.
         const tooLong = W + 2 * bleedPx > usable;
@@ -1078,7 +1094,7 @@ const Grade = (() => {
   // Onde vai o número do tamanho (para o arquivo do Corel, que leva o número como texto editável).
   function labelPos(r, label, thick) {
     const lg = lugarTexto(r.nm, r.Wt, r.Ht, label, thick);
-    return lg ? { x: lg.spot.cx + r.b, y: lg.spot.cy + r.b, px: lg.px, text: lg.text, rot: label.rot || 0 } : null;
+    return lg ? { x: lg.spot.cx + r.b, y: lg.spot.cy + r.b, px: lg.px, text: lg.text, rot: label.rot || 0, cor: label.cor || null } : null;
   }
 
   function autoPos(p, text, px, rot = 0) {

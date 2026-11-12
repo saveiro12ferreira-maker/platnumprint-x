@@ -994,7 +994,7 @@ const App = (() => {
   }
 
   const nomeGrupo = g => (g.items[0] && g.items[0].nome) || st.groupName(g);
-  const CONF = ['roll', 'margin', 'gap', 'bordaMm', 'bleed', 'labelMm', 'girosExtra'], CONFCHK = ['marcarTam', 'marcarNome', 'allowRot', 'splitLong', 'compactar', 'manterEncaixe'];
+  const CONF = ['roll', 'margin', 'gap', 'bordaMm', 'bleed', 'labelMm', 'girosExtra', 'labelCor'], CONFCHK = ['marcarTam', 'marcarNome', 'allowRot', 'splitLong', 'compactar', 'manterEncaixe', 'labelCorAuto'];
 
   function salvarGrade() {
     const nome = ($('#nomeGrade').value || '').trim();
@@ -1189,6 +1189,7 @@ const App = (() => {
     st.marcarTamanho = $('#marcarTam').checked;
     st.marcarNome = $('#marcarNome').checked;
     st.labelMm = U.num($('#labelMm').value) || 4;
+    st.labelCor = $('#labelCorAuto') && !$('#labelCorAuto').checked ? U.rgb($('#labelCor').value) : null;
   }
 
   function fileBase() { return (st.file ? st.file.name.replace(/\.[^.]+$/, '') : 'grade').replace(/[\\/:*?"<>|]/g, '_'); }
@@ -1367,7 +1368,7 @@ const App = (() => {
     $('#btnCorelTodos').addEventListener('click', corelTodos);
     $('#btnEncaixe').addEventListener('click', montarEncaixe);
     // Qualquer opção do Gerar mudou: refaz sozinho (obedece o que está marcado).
-    ['#roll', '#margin', '#gap', '#bleed', '#allowRot', '#girosExtra', '#compactar', '#manterEncaixe', '#splitLong', '#incBase', '#marcarTam', '#marcarNome', '#labelMm'].forEach(id => $(id).addEventListener('change', agendar));
+    ['#roll', '#margin', '#gap', '#bleed', '#allowRot', '#girosExtra', '#compactar', '#manterEncaixe', '#splitLong', '#incBase', '#marcarTam', '#marcarNome', '#labelMm', '#labelCor', '#labelCorAuto'].forEach(id => $(id).addEventListener('change', agendar));
     ['#marcarTam', '#marcarNome', '#labelMm'].forEach(id => $(id).addEventListener('change', () => { readOut(); desenharEtiquetas(); }));
     $('#semNomeTodas').addEventListener('click', () => { st.pieces.forEach(p => { p.semEtiqueta = true; }); renderPieces(); desenharEtiquetas(); agendar(); });
     $('#comNomeTodas').addEventListener('click', () => { st.pieces.forEach(p => { p.semEtiqueta = false; }); renderPieces(); desenharEtiquetas(); agendar(); });

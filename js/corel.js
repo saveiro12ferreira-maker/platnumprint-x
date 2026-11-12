@@ -88,7 +88,7 @@ const Corel = (() => {
       if (d) out.push(`<path id="Corte_${r.n}" d="${d}" fill="none" stroke="#000000" stroke-width="${(dpi * 0.25 / 25.4).toFixed(2)}"/>`);
       for (const L of (specs[i].o.labels || (specs[i].o.label ? [specs[i].o.label] : []))) {
         const lp = Grade.labelPos(r, L, specs[i].o.thick);
-        if (lp) out.push(`<text id="${L.id || 'Tamanho'}_${r.n}" x="${x + lp.x}" y="${y + lp.y}" font-family="Arial" font-weight="bold" font-size="${lp.px}" text-anchor="middle" dominant-baseline="central" fill="#000000"${lp.rot ? ` transform="rotate(${lp.rot} ${x + lp.x} ${y + lp.y})"` : ''}>${esc(lp.text)}</text>`);
+        if (lp) out.push(`<text id="${L.id || 'Tamanho'}_${r.n}" x="${x + lp.x}" y="${y + lp.y}" font-family="Arial" font-weight="bold" font-size="${lp.px}" text-anchor="middle" dominant-baseline="central" fill="${lp.cor ? U.hex(lp.cor) : '#000000'}"${lp.rot ? ` transform="rotate(${lp.rot} ${x + lp.x} ${y + lp.y})"` : ''}>${esc(lp.text)}</text>`);
       }
       out.push('</g>');
       parts[i] = null;
