@@ -42,6 +42,57 @@ const Analyze = (() => {
     return 'acompanha';
   }
 
+  // Menor retângulo em volta da peça (por qualquer ângulo). Se a peça está torta (o retângulo reto em volta dela é
+  // bem maior que o menor), gira a peça para ficar reta. Guarda o giro em p.endireitada (graus).
+  function endireitar(p) {
+    const { w, h, mask } = p, pts = [];
+    for (let y = 0; y < h; y++) {
+      let l = -1, r = -1; const o = y * w;
+      for (let x = 0; x < w; x++) if (mask[o + x]) { if (l < 0) l = x; r = x; }
+      if (l >= 0) { pts.push([l, y], [r + 1, y], [l, y + 1], [r + 1, y + 1]); }
+    }
+    if (pts.length < 8) return;
+    pts.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+    const lo = [], up = [];
+    for (const q of pts) { while (lo.length >= 2 && cross(lo[lo.length - 2], lo[lo.length - 1], q) <= 0) lo.pop(); lo.push(q); }
+    for (let i = pts.length - 1; i >= 0; i--) { const q = pts[i]; while (up.length >= 2 && cross(up[up.length - 2], up[up.length - 1], q) <= 0) up.pop(); up.push(q); }
+    const hull = lo.slice(0, -1).concat(up.slice(0, -1));
+    let melhor = { area: w * h, a: 0 };
+    for (let i = 0; i < hull.length; i++) {
+      const A = hull[i], B = hull[(i + 1) % hull.length], a = Math.atan2(B[1] - A[1], B[0] - A[0]);
+      const c = Math.cos(-a), s = Math.sin(-a);
+      let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+      for (const [x, y] of hull) { const X = x * c - y * s, Y = x * s + y * c; if (X < x0) x0 = X; if (X > x1) x1 = X; if (Y < y0) y0 = Y; if (Y > y1) y1 = Y; }
+      const ar = (x1 - x0) * (y1 - y0);
+      if (ar < melhor.area) melhor = { area: ar, a };
+    }
+    let deg = melhor.a * 180 / Math.PI;
+    deg = ((deg % 90) + 90) % 90; if (deg > 45) deg -= 90;          // o giro menor que deixa a peça reta
+    if (Math.abs(deg) < 4 || melhor.area > 0.9 * w * h) return;      // já está reta (ou o formato é assim mesmo)
+    const rad = -deg * Math.PI / 180, cs = Math.abs(Math.cos(rad)), sn = Math.abs(Math.sin(rad));
+    const W2 = Math.ceil(w * cs + h * sn) + 2, H2 = Math.ceil(w * sn + h * cs) + 2;
+    const a1 = document.createElement('canvas'); a1.width = w; a1.height = h;
+    const id = a1.getContext('2d').createImageData(w, h); id.data.set(p.rgba);
+    for (let i = 0; i < w * h; i++) if (!mask[i]) id.data[i * 4 + 3] = 0;
+    a1.getContext('2d').putImageData(id, 0, 0);
+    const b1 = document.createElement('canvas'); b1.width = W2; b1.height = H2;
+    const ctx = b1.getContext('2d'); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+    ctx.translate(W2 / 2, H2 / 2); ctx.rotate(rad); ctx.drawImage(a1, -w / 2, -h / 2);
+    const d = ctx.getImageData(0, 0, W2, H2).data; a1.width = a1.height = b1.width = b1.height = 1;
+    let x0 = W2, y0 = H2, x1 = -1, y1 = -1;
+    for (let y = 0; y < H2; y++) for (let x = 0; x < W2; x++) if (d[(y * W2 + x) * 4 + 3] >= 128) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    if (x1 < 0) return;
+    const nw = x1 - x0 + 1, nh = y1 - y0 + 1, nm = new Uint8Array(nw * nh), nr = new Uint8ClampedArray(nw * nh * 4);
+    let area = 0;
+    for (let y = 0; y < nh; y++) for (let x = 0; x < nw; x++) {
+      const q = ((y + y0) * W2 + x + x0) * 4; if (d[q + 3] < 128) continue;
+      const k = y * nw + x; nm[k] = 1; area++; nr[k * 4] = d[q]; nr[k * 4 + 1] = d[q + 1]; nr[k * 4 + 2] = d[q + 2]; nr[k * 4 + 3] = 255;
+    }
+    const cx = p.x + w / 2, cy = p.y + h / 2;
+    Object.assign(p, { x: Math.round(cx - nw / 2), y: Math.round(cy - nh / 2), w: nw, h: nh, mask: nm, rgba: nr, area, endireitada: Math.round(deg * 10) / 10 });
+  }
+
   async function run(img, dpi, log) {
     const { width: w, height: h, data: d } = img, N = w * h;
     const times = {};
@@ -97,6 +148,9 @@ const Analyze = (() => {
       }
       return { n: k + 1, x: c.x0, y: c.y0, w: W, h: H, area: c.area, mask, rgba };
     });
+    // peça desenhada torta no arquivo (ex.: uma costas girada uns 30°): endireita, senão ela não casa com o molde
+    // da modelista e sai com outra medida (Vestido Antonella, 12/11)
+    pieces.forEach(endireitar);
 
     // Espessura do contorno de cada peça: pixels escuros seguidos a partir das bordas esquerda e de cima.
     const median = a => { a.sort((x, y) => x - y); return a[Math.floor(a.length / 2)]; };

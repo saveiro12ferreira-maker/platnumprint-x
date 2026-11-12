@@ -443,6 +443,9 @@ const App = (() => {
     st.groups.forEach((g, i) => {
       const man = (m.manual || {})[g.id];
       let c = auto[i];
+      // escolhido pelo formato (frente ≠ costas), quando os nomes dos moldes foram lidos
+      const pf = (m.porForma || {})[g.id];
+      if (pf != null && pr[pf] && (man == null)) { const p = pr[pf], d = dimsGrupo()[i]; c = { j: pf, girada: Math.abs(Math.log(p.h / p.w) + Math.log(d.w / d.h)) < Math.abs(Math.log(p.w / p.h) + Math.log(d.w / d.h)) }; }
       if (man === -1) c = null;
       else if (man != null && pr[man]) { const p = pr[man], d = dimsGrupo()[i]; c = { j: man, girada: Math.abs(Math.log(p.h / p.w) + Math.log(d.w / d.h)) < Math.abs(Math.log(p.w / p.h) + Math.log(d.w / d.h)) }; }
       m.casa[g.id] = {}; if (c) m.casa[g.id][ref] = { j: c.j, girada: c.girada };
@@ -505,11 +508,15 @@ const App = (() => {
         for (const j of cands) raws[j] = await Moldes.forma(doc, pz[j], st.dpi);
         const usados = new Set();
         for (const p of g.items) {
-          let best = null;
+          // o molde do grupo vale, a não ser que outro molde parecido coincida CLARAMENTE melhor com esta peça
+          // (12/11: no tamanho 14 a frente pegava o molde da costas por uma diferença mínima)
+          const fc = Moldes.orientar(raws[c.j], p.mask, p.w, p.h);
+          let best = { f: fc, sc: fc.sc + 0.04, j: c.j };
           for (const j of cands) {
+            if (j === c.j) continue;
             const f = Moldes.orientar(raws[j], p.mask, p.w, p.h);
             const sc = f.sc - (usados.has(j) && cands.length >= g.items.length ? 0.02 : 0);
-            if (!best || sc > best.sc) best = { f, sc, j };
+            if (sc > best.sc) best = { f, sc, j };
           }
           usados.add(best.j); fs[p.n] = best.f;
         }
@@ -938,18 +945,24 @@ const App = (() => {
         pz[j].mini = f;   // forma pequena para saber qual peça do arquivo é qual
       }
       // cada peça do arquivo: o molde de formato mais parecido entre os do grupo (frente ≠ costas)
-      let n = 0;
+      let n = 0, trocou = false;
       for (const g of st.groups) {
         const c = m.casa[g.id] && m.casa[g.id][ref]; if (!c) continue;
         const pc = pz[c.j], ok = (a, b) => Math.abs(a - b) / b < 0.06;
         const cands = pz.map((q, j) => j).filter(j => j === c.j || (ok(pz[j].w, pc.w) && ok(pz[j].h, pc.h)) || (ok(pz[j].w, pc.h) && ok(pz[j].h, pc.w)));
+        const votos = {};
         for (const p of g.items) {
           let best = null;
           for (const j of cands) { const o = Moldes.orientar(pz[j].mini, p.mask, p.w, p.h); if (!best || o.sc > best.sc) best = { j, sc: o.sc }; }
+          votos[best.j] = (votos[best.j] || 0) + 1;
           const r = pz[best.j].rotulo;
           if (r && r.nome && !p.nomeManual) { p.nome = r.nome; p.nomePdf = true; n++; }
         }
+        // o molde também passa a ser o de formato mais parecido (antes era só pela medida: frente e costas trocavam)
+        const jv = +Object.keys(votos).sort((a, b) => votos[b] - votos[a])[0];
+        if (jv !== c.j) { (m.porForma = m.porForma || {})[g.id] = jv; trocou = true; }
       }
+      if (trocou) { casarMoldes(); computeTargets(); renderGrade(); }
       renderPieces(); desenharEtiquetas(); renderMoldes(); agendar();
       info.textContent = txt0 + (n ? ` ✔ Nomes dos moldes copiados para ${n} peça(s).` : ' (Não consegui ler os nomes escritos nos moldes; escreva na peça com dois cliques.)');
     } catch (e) { console.error(e); info.textContent = txt0 + ' (Não consegui ler os nomes dos moldes: ' + e.message + ')'; }
@@ -1369,5 +1382,5 @@ const App = (() => {
   }
 
   init();
-  return { st, onPdf, gerar, ler, showTab, removeFile, removePdf, el };
+  return { st, onPdf, gerar, ler, showTab, removeFile, removePdf, el, prepararFormas };
 })();

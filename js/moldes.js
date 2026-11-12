@@ -57,7 +57,10 @@ const Moldes = (() => {
         }
         const w = x1 - x0 + 1, h = y1 - y0 + 1;
         if (w * h < min) continue;
-        pecas.push({ w: U.cm(w, DPI), h: U.cm(h, DPI), area: U.cm(1, DPI) ** 2 * n, pag: pn, x: U.cm(x0, DPI), y: U.cm(y0, DPI), cx: U.cm((x0 + x1) / 2, DPI), cy: U.cm((y0 + y1) / 2, DPI) });
+        // formato pequeno da peça (para saber qual molde é qual entre os tamanhos: frente ≠ costas mesmo com medida parecida)
+        const pm = new Uint8Array(w * h);
+        for (let k = 0; k < b; k++) { const i = fila[k], x = i % W, y = (i / W) | 0; pm[(y - y0) * w + (x - x0)] = 1; }
+        pecas.push({ w: U.cm(w, DPI), h: U.cm(h, DPI), area: U.cm(1, DPI) ** 2 * n, pag: pn, x: U.cm(x0, DPI), y: U.cm(y0, DPI), cx: U.cm((x0 + x1) / 2, DPI), cy: U.cm((y0 + y1) / 2, DPI), sig: miniatura(pm, w, h, 32) });
       }
     }
     pecas.sort((p, q) => q.area - p.area);
@@ -246,21 +249,40 @@ const Moldes = (() => {
     const k = []; for (let i = 0; i < Math.min(a.length, b.length); i++) k.push(Math.sqrt(ar(b[i]) / ar(a[i])));
     k.sort((x, y) => x - y);
     const s = k.length ? k[k.length >> 1] : 1;
-    const pares = [];
+    const pares = [], comForma = !!(A[0] && A[0].sig && B[0] && B[0].sig);
+    // formato: quando as duas listas têm o formato pequeno (PDF com PDF), compara o desenho também — a frente e a
+    // costas têm medida quase igual, mas a costas tem a abertura (12/11: as duas trocavam de molde entre os tamanhos)
+    const forma = (ma, mb, gira) => {
+      if (!ma || !mb) return 0;
+      const G = 32, b2 = gira ? transformar({ w: G, h: G, m: mb }, 1).m : mb;
+      let best = 1;
+      for (const bb of gira ? [b2, transformar({ w: G, h: G, m: mb }, 3).m] : [b2]) {
+        let i2 = 0, u = 0; for (let k = 0; k < ma.length; k++) { if (ma[k] && bb[k]) i2++; if (ma[k] || bb[k]) u++; }
+        best = Math.min(best, u ? 1 - i2 / u : 1);
+      }
+      return best * 3;
+    };
     A.forEach((p, i) => B.forEach((q, j) => {
-      const reto = Math.abs(Math.log(q.w / (s * p.w))) + Math.abs(Math.log(q.h / (s * p.h)));
-      const deit = Math.abs(Math.log(q.h / (s * p.w))) + Math.abs(Math.log(q.w / (s * p.h)));
+      const reto = Math.abs(Math.log(q.w / (s * p.w))) + Math.abs(Math.log(q.h / (s * p.h))) + forma(p.sig, q.sig, false);
+      const deit = Math.abs(Math.log(q.h / (s * p.w))) + Math.abs(Math.log(q.w / (s * p.h))) + forma(p.sig, q.sig, true);
       pares.push({ i, j, c: Math.min(reto, deit), girada: deit < reto });
     }));
     pares.sort((x, y) => x.c - y.c);
     const res = A.map(() => null), usadoB = new Set();
     for (const p of pares) {
-      if (res[p.i] || usadoB.has(p.j) || p.c > 0.9) continue;
+      if (res[p.i] || usadoB.has(p.j) || p.c > (comForma ? 1.8 : 0.9)) continue;
       res[p.i] = { j: p.j, girada: p.girada, custo: p.c }; usadoB.add(p.j);
     }
+    // só repete quando é o MESMO pedaço repetido no arquivo da estampa (mesma medida da peça que já casou com
+    // aquele molde, de pé ou deitada, até ~6% de diferença): aí faz nele exatamente o que fez no outro (pedido 12/11)
     if (repetir) for (const p of pares) {
       if (res[p.i] || p.c > 0.35) continue;
-      res[p.i] = { j: p.j, girada: p.girada, custo: p.c, repetido: true };
+      const dono = res.findIndex((r, i) => r && !r.repetido && r.j === p.j && i !== p.i);
+      if (dono < 0) continue;
+      const a = A[p.i], d = A[dono];
+      const igual = Math.min(Math.abs(Math.log(a.w / d.w)) + Math.abs(Math.log(a.h / d.h)), Math.abs(Math.log(a.w / d.h)) + Math.abs(Math.log(a.h / d.w)));
+      if (igual > 0.12) continue;
+      res[p.i] = { j: p.j, girada: p.girada, custo: p.c, repetido: true, igualA: dono };
     }
     return res;
   }
