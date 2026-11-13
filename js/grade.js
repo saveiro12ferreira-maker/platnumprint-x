@@ -140,12 +140,77 @@ const Grade = (() => {
     p._pc = { key, a: comp };
     return comp;
   }
+  // ---------- v42: trocar uma cor COM OS TONS dela (bordado, degradê, sombra) — designers 13/11 ----------
+  // O bordado tem dezenas de tons (luz e sombra da linha). Em vez de uma cor exata, pega todos os tons da mesma
+  // família da cor clicada (mesmo matiz; branco/cinza pela claridade) e leva para a cor nova mantendo a luz e a sombra.
+  function hsl(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn;
+    if (!d) return [0, 0, l];
+    const s = d / (1 - Math.abs(2 * l - 1));
+    let h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    h *= 60; if (h < 0) h += 360;
+    return [h, s, l];
+  }
+  function rgbDe(h, s, l) {
+    const c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = l - c / 2;
+    const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+    return [(r + m) * 255, (g + m) * 255, (b + m) * 255];
+  }
+  // o pixel é da família da cor de origem? tol de 10 a 100 (padrão 45)
+  function daFamilia(o, px, tol) {
+    if (o[1] >= 0.15) {
+      if (px[1] < 0.08) return false;
+      const dh = Math.min(Math.abs(px[0] - o[0]), 360 - Math.abs(px[0] - o[0]));
+      return dh <= 8 + tol * 0.35 && Math.abs(px[2] - o[2]) <= 0.15 + tol / 180;
+    }
+    return px[1] < 0.12 + tol / 600 && Math.abs(px[2] - o[2]) <= 0.08 + tol / 220;
+  }
+  function tomNovo(o, n, px) {
+    // matiz e saturação da cor nova; a claridade mexe o mesmo tanto que mexeu da origem para a nova (luz e sombra ficam)
+    const s = o[1] >= 0.15 ? Math.min(1, n[1] * px[1] / Math.max(0.05, o[1])) : n[1];
+    const l = Math.max(0, Math.min(1, px[2] + (n[2] - o[2])));
+    return rgbDe(n[0], s, l);
+  }
+  // pixels da peça que mudam por cada troca de tons ("só esta parte" = os tons ligados ao ponto clicado)
+  function mapaTons(p, cores, tons) {
+    const sig = cores.key + JSON.stringify(tons.map(t => [t.c, t.cor, t.tol, t.n, t.x, t.y]));
+    if (p._tons && p._tons.sig === sig) return p._tons.m;
+    const A = p.art, S = p.rgba, W = p.w, H = p.h, m = new Int16Array(W * H).fill(-1);
+    const HS = new Float32Array(W * H * 3);
+    for (let i = 0; i < A.length; i++) if (A[i]) { const q = i * 4, v = hsl(S[q], S[q + 1], S[q + 2]); HS[i * 3] = v[0]; HS[i * 3 + 1] = v[1]; HS[i * 3 + 2] = v[2]; }
+    const px = i => [HS[i * 3], HS[i * 3 + 1], HS[i * 3 + 2]];
+    tons.forEach((t, j) => {
+      const o = hsl(...t.c), tol = t.tol || 45;
+      if (t.n == null) { for (let i = 0; i < A.length; i++) if (A[i] && m[i] < 0 && daFamilia(o, px(i), tol)) m[i] = j; return; }
+      if (t.n !== p.n) return;
+      // só a parte clicada: espalha pelos tons vizinhos (8 direções, pulando 1 pixel de falha da linha do bordado)
+      let k0 = Math.round(t.y) * W + Math.round(t.x); if (k0 < 0 || k0 >= A.length) return;
+      const pilha = [k0], vis = new Uint8Array(W * H); vis[k0] = 1;
+      while (pilha.length) {
+        const k = pilha.pop(); if (A[k] && daFamilia(o, px(k), tol)) { if (m[k] < 0) m[k] = j; } else if (k !== k0) continue;
+        const x = k % W, y = (k / W) | 0;
+        for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+          const xx = x + dx, yy = y + dy; if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue;
+          const n = yy * W + xx; if (vis[n]) continue; vis[n] = 1;
+          if (A[n] && daFamilia(o, px(n), tol)) pilha.push(n);
+        }
+      }
+    });
+    p._tons = { sig, m };
+    return m;
+  }
+
   // o que trocar nesta peça: devolve null se nada muda
   function trocasDe(p, cores) {
     if (!cores || !cores.pal || !cores.pal.length) return null;
     const regs = (cores.regioes || []).filter(r => r.n === p.n);
     const temGeral = cores.novas && cores.novas.some(Boolean);
-    if (!temGeral && !regs.length) return null;
+    const tons = (cores.tons || []).filter(t => t.n == null || t.n === p.n);
+    if (!temGeral && !regs.length && !tons.length) return null;
+    let mt = null;
+    if (tons.length) mt = mapaTons(p, cores, tons);
+    const S0 = p.rgba, HSL0 = tons.map(t => [hsl(...t.c), hsl(...t.cor)]);
     const pal = cores.pal, idx = idxCores(p, pal, cores.key);
     const geral = pal.map((x, i) => cores.novas && cores.novas[i] ? [cores.novas[i][0] - x.c[0], cores.novas[i][1] - x.c[1], cores.novas[i][2] - x.c[2]] : null);
     let comp = null; const porParte = new Map();
@@ -156,7 +221,10 @@ const Grade = (() => {
         if (c >= 0) { const o = pal[idx[k]].c; porParte.set(c, [r.cor[0] - o[0], r.cor[1] - o[1], r.cor[2] - o[2]]); }
       }
     }
-    return { delta: k => { const i = idx[k]; if (i === 255) return null; if (comp) { const d = porParte.get(comp[k]); if (d) return d; } return geral[i]; } };
+    return { delta: k => {
+      // tons (bordado/degradê) vêm por cima: cada pixel da família vai para o tom novo com a mesma luz/sombra
+      if (mt && mt[k] >= 0) { const [o, n] = HSL0[mt[k]], q = k * 4, v = hsl(S0[q], S0[q + 1], S0[q + 2]), c = tomNovo(o, n, v); return [c[0] - S0[q], c[1] - S0[q + 1], c[2] - S0[q + 2]]; }
+      const i = idx[k]; if (i === 255) return null; if (comp) { const d = porParte.get(comp[k]); if (d) return d; } return geral[i]; } };
   }
   // em que parte (x, y da peça) a pessoa clicou: cor original da parte
   function parteEm(p, cores, x, y) {

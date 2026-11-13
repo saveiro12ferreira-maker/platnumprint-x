@@ -134,6 +134,8 @@ const App = (() => {
       const an = await Analyze.run(img, st.dpi, logStep);
       img.data = null;
       st.an = an; st.pieces = an.pieces; st.bg = an.bg; st.thick = an.thick; st.outline = an.outline;
+      st.arteBase = null; st.corNova = null;
+      if ($('#novaCorNome')) { $('#novaCorNome').textContent = 'Nenhuma cor nova (usando a arte do arquivo base)'; $('#novaCorVoltar').hidden = true; $('#novaCorInfo').textContent = ''; }
       logStep(`${an.pieces.length} peças encontradas` + (an.ignored ? ` (${an.ignored} marcas pequenas ignoradas, como textos)` : ''));
       $('#log1').lastElementChild.classList.add('done');
       $('#status1').textContent = `Leitura completa em ${U.secs(U.now() - t0)}`;
@@ -537,13 +539,24 @@ const App = (() => {
     C.regioes.forEach((r, j) => { const p = st.pieces.find(q => q.n === r.n); if (!p) return; const [x, y] = noArquivo(p, r.x, r.y).map(v => v * st.an.pf);
       ctx.fillStyle = U.hex(r.cor); ctx.strokeStyle = '#000'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, 7, 0, 7); ctx.fill(); ctx.stroke();
       ctx.fillStyle = '#000'; ctx.font = 'bold 12px sans-serif'; ctx.fillText(String(j + 1), x + 9, y + 4); });
+    C.tons = C.tons || [];
+    $('#coresTons').replaceChildren(...C.tons.map((t, j) => el('div', { style: 'display:flex;align-items:center;gap:6px;margin:3px 0' },
+      el('b', { text: `T${j + 1}.` }), el('span', { text: t.n == null ? 'Todas as peças — a cor com os tons:' : `Peça ${t.n} — esta parte, com os tons:` }), caixa(t.c), el('span', { text: '→' }),
+      el('input', { type: 'color', value: U.hex(t.cor).toLowerCase(), oninput: e => { t.cor = U.rgb(e.target.value); renderCores(); agendar(); } }),
+      el('label', { title: 'Quanto dos tons parecidos entra (mais = pega sombras e luzes mais diferentes)' }, ' tons ', el('input', { type: 'range', min: '10', max: '100', value: t.tol, style: 'vertical-align:middle;width:90px', onchange: e => { t.tol = +e.target.value; renderCores(); agendar(); } })),
+      el('button', { type: 'button', class: 'mini', text: '✕ tirar', onclick: () => { C.tons.splice(j, 1); renderCores(); agendar(); } }))));
+    C.tons.forEach((t, j) => { if (t.n == null) return; const p = st.pieces.find(q => q.n === t.n); if (!p) return; const [x, y] = noArquivo(p, t.x, t.y).map(v => v * st.an.pf);
+      ctx.fillStyle = U.hex(t.cor); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.rect(x - 6, y - 6, 12, 12); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#000'; ctx.font = 'bold 12px sans-serif'; ctx.fillText('T' + (j + 1), x + 9, y + 4); });
     $('#coresPartes').replaceChildren(...C.regioes.map((r, j) => el('div', { style: 'display:flex;align-items:center;gap:6px;margin:3px 0' },
       el('b', { text: `${j + 1}.` }), el('span', { text: `Peça ${r.n} — só esta parte:` }), caixa(r.orig), el('span', { text: '→' }),
       el('input', { type: 'color', value: U.hex(r.cor).toLowerCase(), oninput: e => { r.cor = U.rgb(e.target.value); renderCores(); agendar(); } }),
       el('button', { type: 'button', class: 'mini', text: '✕ tirar', onclick: () => { C.regioes.splice(j, 1); renderCores(); agendar(); } }))));
   }
   function ligarCores() {
-    $('#coresVoltar').addEventListener('click', () => { if (!st.cores) return; st.cores.novas = []; st.cores.regioes = []; renderCores(); agendar(); });
+    $('#coresVoltar').addEventListener('click', () => { if (!st.cores) return; st.cores.novas = []; st.cores.regioes = []; st.cores.tons = []; renderCores(); agendar(); });
+    document.querySelectorAll('input[name=coresModo]').forEach(r => r.addEventListener('change', () => { const t = document.querySelector('input[name=coresModo]:checked').value === 'tons'; $('#coresTonsOp').hidden = !t; $('#coresTonsTudo').hidden = !t; }));
+    $('#coresTol').addEventListener('input', e => { $('#coresTolV').textContent = e.target.value; });
     $('#coresImg').addEventListener('click', e => {
       if (!st.an || !st.cores) return;
       const cv = e.currentTarget, rc = cv.getBoundingClientRect();
@@ -558,11 +571,97 @@ const App = (() => {
         const a = Grade.parteEm(p, st.cores, x, y); if (a) { achou = a; lx = x; ly = y; break; }
       }
       if (!achou) { alert('Aí é o fundo da peça. Para trocar o fundo use "Cor de fundo", logo acima.'); return; }
+      if ((document.querySelector('input[name=coresModo]:checked') || {}).value === 'tons') {
+        const q = (Math.round(ly) * p.w + Math.round(lx)) * 4, c = [p.rgba[q], p.rgba[q + 1], p.rgba[q + 2]];
+        const pick = $('#coresPick'); pick.value = U.hex(c).toLowerCase();
+        pick.onchange = () => { (st.cores.tons = st.cores.tons || []).push({ n: $('#coresTudo').checked ? null : p.n, x: lx, y: ly, c, cor: U.rgb(pick.value), tol: +$('#coresTol').value || 45 }); renderCores(); agendar(); };
+        pick.click(); return;
+      }
       const pick = $('#coresPick');
       pick.value = U.hex(achou.c).toLowerCase();
       pick.onchange = () => { st.cores.regioes.push({ n: p.n, x: lx, y: ly, orig: achou.c, cor: U.rgb(pick.value) }); renderCores(); agendar(); };
       pick.click();
     });
+  }
+
+  // ---------- v42: outra cor da mesma estampa (designers 13/11: "cada cor que troca no Photoshop muda o consumo") ----------
+  // Lê o arquivo da cor nova e copia SÓ os pixels da arte para dentro das peças já lidas, pelo mesmo lugar no arquivo
+  // (as peças tortas seguem o mesmo giro). Contorno, máscara, grade, nomes, encaixe e dpi ficam os do arquivo base.
+  const ehEscuro = (r, g, b) => { const mx = Math.max(r, g, b), mn = Math.min(r, g, b); return mx < 100 && mx - mn < 45; };
+  function guardarArteBase() {
+    if (st.arteBase && st.arteBase.an === st.an) return;
+    st.arteBase = { an: st.an, rgba: st.pieces.map(p => p.rgba), art: st.pieces.map(p => p.art), bg: st.an.bg.slice(), bgEsc: st.bg.slice(), preview: st.an.preview, pf: st.an.pf,
+      frac: st.pieces.map(p => [p.artCount, p.artFrac]) };
+  }
+  function recalcularArte(bg) {
+    for (const p of st.pieces) {
+      p.art = new Uint8Array(p.w * p.h); let ac = 0;
+      for (let i = 0; i < p.mask.length; i++) {
+        if (!p.mask[i]) continue;
+        const q = i * 4, r = p.rgba[q], g = p.rgba[q + 1], b = p.rgba[q + 2];
+        let isArt = (r - bg[0]) ** 2 + (g - bg[1]) ** 2 + (b - bg[2]) ** 2 > 300;
+        if (isArt && p.band && p.band[i]) isArt = !ehEscuro(r, g, b) && (0.299 * r + 0.587 * g + 0.114 * b) >= 110;
+        if (isArt) { p.art[i] = 1; ac++; }
+      }
+      p.artCount = ac; p.artFrac = ac / Math.max(1, p.area);
+      ['_pi', '_pc', '_elem', '_alfa', '_f'].forEach(k => delete p[k]);
+    }
+    st.cores = null;   // a paleta de cores é refeita com a arte nova
+  }
+  async function onNovaCor(file) {
+    const info = $('#novaCorInfo'), chip = $('#novaCorNome');
+    if (!file) return;
+    if (!st.an) { info.textContent = 'Leia primeiro o arquivo base (o de uma cor) na caixa de cima.'; return; }
+    info.textContent = 'Abrindo a cor nova…'; await U.tick();
+    let img = await Tiff.readImage(file);
+    const W = st.an.w, H = st.an.h;
+    if (img.width !== W || img.height !== H) {
+      const r1 = img.width / img.height, r0 = W / H;
+      if (Math.abs(r1 - r0) / r0 > 0.01) { info.textContent = `Esse arquivo não tem o mesmo formato do arquivo base (${img.width} × ${img.height} px contra ${W} × ${H} px). Exporte do Photoshop sem cortar nem mudar o tamanho da tela.`; return; }
+      // mesmo desenho salvo em outra resolução: põe no tamanho do arquivo base (o consumo não muda)
+      const a = document.createElement('canvas'); a.width = img.width; a.height = img.height;
+      const id = a.getContext('2d').createImageData(img.width, img.height); id.data.set(img.data); a.getContext('2d').putImageData(id, 0, 0);
+      const b = document.createElement('canvas'); b.width = W; b.height = H; const cb = b.getContext('2d'); cb.imageSmoothingQuality = 'high'; cb.drawImage(a, 0, 0, W, H);
+      img = { width: W, height: H, data: cb.getImageData(0, 0, W, H).data }; a.width = a.height = b.width = b.height = 1;
+    }
+    guardarArteBase();
+    const d = img.data;
+    for (const p of st.pieces) {
+      const nr = new Uint8ClampedArray(p.rgba.length);
+      for (let y = 0; y < p.h; y++) for (let x = 0; x < p.w; x++) {
+        const k = y * p.w + x; if (!p.mask[k]) continue;
+        const [fx, fy] = noArquivo(p, x + 0.5, y + 0.5);
+        const ix = Math.min(W - 1, Math.max(0, Math.floor(fx))), iy = Math.min(H - 1, Math.max(0, Math.floor(fy))), o = (iy * W + ix) * 4, q = k * 4;
+        nr[q] = d[o]; nr[q + 1] = d[o + 1]; nr[q + 2] = d[o + 2]; nr[q + 3] = 255;
+      }
+      p.rgba = nr;
+    }
+    // fundo da peça na cor nova (o designer pode ter trocado o fundo também)
+    const cnt = new Uint32Array(32768), sum = new Float64Array(32768 * 3);
+    for (const p of st.pieces) for (let i = 0; i < p.mask.length; i++) {
+      if (!p.mask[i] || (p.band && p.band[i])) continue;
+      const q = i * 4, r = p.rgba[q], g = p.rgba[q + 1], b = p.rgba[q + 2], key = (r >> 3) << 10 | (g >> 3) << 5 | (b >> 3);
+      cnt[key]++; sum[key * 3] += r; sum[key * 3 + 1] += g; sum[key * 3 + 2] += b;
+    }
+    let mode = 0; for (let k = 1; k < 32768; k++) if (cnt[k] > cnt[mode]) mode = k;
+    const bg = cnt[mode] ? [0, 1, 2].map(j => Math.round(sum[mode * 3 + j] / cnt[mode])) : st.an.bg.slice();
+    const mudouFundo = U.hex(bg) !== U.hex(st.an.bg);
+    st.an.bg = bg; st.bg = bg.slice();
+    const pv = U.preview(d, W, H, 4, 1400); st.an.preview = pv.canvas; st.an.pf = pv.f;
+    recalcularArte(bg);
+    st.corNova = file.name;
+    chip.textContent = file.name; chip.classList.remove('empty'); $('#novaCorVoltar').hidden = false;
+    info.textContent = `Arte trocada pela cor nova${mudouFundo ? ` (fundo ${U.hex(bg)})` : ''}. Peças, grade, nomes e encaixe continuam os mesmos: o consumo não muda. Vá em Gerar e baixe os TIFF desta cor.`;
+    const cv = $('#coresImg'); if (cv) cv._ok = false;
+    drawPreview(); renderPieces(); renderEstampa(); agendar();
+  }
+  function voltarArteBase() {
+    const B = st.arteBase; if (!B || B.an !== st.an) return;
+    st.pieces.forEach((p, i) => { p.rgba = B.rgba[i]; p.art = B.art[i]; [p.artCount, p.artFrac] = B.frac[i]; ['_pi', '_pc', '_elem', '_alfa', '_f'].forEach(k => delete p[k]); });
+    st.an.bg = B.bg.slice(); st.bg = B.bgEsc.slice(); st.an.preview = B.preview; st.an.pf = B.pf; st.cores = null; st.corNova = null;
+    $('#novaCorNome').textContent = 'Arte do arquivo base'; $('#novaCorVoltar').hidden = true; $('#novaCorInfo').textContent = 'Voltou a arte do arquivo base.';
+    const cv = $('#coresImg'); if (cv) cv._ok = false;
+    drawPreview(); renderPieces(); renderEstampa(); agendar();
   }
 
   // ---------- Etapa 4 ----------
@@ -1486,6 +1585,8 @@ const App = (() => {
       showTab(t.dataset.tab);
     }));
     $('#fBase').addEventListener('change', e => setFile(e.target.files[0] || null));
+    $('#fNovaCor').addEventListener('change', e => { const f = e.target.files[0] || null; e.target.value = ''; onNovaCor(f).catch(err => { $('#novaCorInfo').textContent = 'Não consegui abrir a cor nova: ' + err.message; }); });
+    $('#novaCorVoltar').addEventListener('click', voltarArteBase);
     $('#sizes').addEventListener('change', () => { readSizes(); if (st.an) { computeTargets(); renderGrade(); renderMercado(); } renderQtd(); });
     $('#baseSize').addEventListener('change', () => { st.base = $('#baseSize').value; if (st.an) { computeTargets(); renderGrade(); renderMercado(); runCheck(); } });
     $('#btnLer').addEventListener('click', ler);
@@ -1571,5 +1672,5 @@ const App = (() => {
   }
 
   init();
-  return { st, onPdf, gerar, ler, showTab, removeFile, removePdf, el, prepararFormas, lerMontada, pdfsGuardados: () => pdfsArquivos };
+  return { st, onNovaCor, onPdf, gerar, ler, showTab, removeFile, removePdf, el, prepararFormas, lerMontada, pdfsGuardados: () => pdfsArquivos };
 })();

@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400&family=Orbitron:wght@600;700&display=swap">
-<link rel="stylesheet" href="css/app.css?v=41">
+<link rel="stylesheet" href="css/app.css?v=42">
 <script src="https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
@@ -24,7 +24,7 @@
 </div>
 <header class="top">
   <div class="top-in">
-    <div class="brand"><b>PLATNUMPRINT-X</b><span>motor de grade</span><span class="versao" title="Versão do motor carregada neste navegador">v41</span><span class="user"><span id="quem"></span><button type="button" id="btnSair" class="ghost">Sair</button></span></div>
+    <div class="brand"><b>PLATNUMPRINT-X</b><span>motor de grade</span><span class="versao" title="Versão do motor carregada neste navegador">v42</span><span class="user"><span id="quem"></span><button type="button" id="btnSair" class="ghost">Sair</button></span></div>
     <nav class="tabs" id="tabs" role="tablist">
       <button class="tab on" data-tab="arquivo" role="tab"><span class="n">1</span>Arquivo</button>
       <button class="tab locked" data-tab="pecas" role="tab"><span class="n">2</span>Peças</button>
@@ -64,6 +64,19 @@
         <span id="status1" class="muted"></span>
       </div>
       <ol id="log1" class="log"></ol>
+    </div>
+
+    <div class="card" id="novaCorBox">
+      <h2>🎨 Outra cor da mesma estampa (mantém a modelagem e o consumo)</h2>
+      <p class="hint">Trocou a cor no Photoshop (ex.: bordado que o motor não consegue trocar)? Envie aqui o arquivo da cor nova.
+        O motor <b>só troca a arte</b>: as peças, a grade, os nomes, o encaixe e a resolução continuam os do arquivo lido acima,
+        então o <b>consumo fica igual em todas as cores</b>. Não precisa clicar em "Ler arquivo" de novo.</p>
+      <div class="row">
+        <label class="file">Arquivo da cor nova<input type="file" id="fNovaCor" accept=".tif,.tiff,.png,.jpg,.jpeg"></label>
+        <span id="novaCorNome" class="chip empty">Leia primeiro o arquivo base acima</span>
+        <button type="button" class="mini" id="novaCorVoltar" hidden>↺ Voltar para a arte do arquivo base</button>
+      </div>
+      <p id="novaCorInfo" class="muted"></p>
     </div>
 
     <details class="card" id="mtBox">
@@ -137,6 +150,14 @@
         </div>
         <input type="color" id="coresPick" style="position:absolute;opacity:0;width:0;height:0;pointer-events:none">
         <div id="coresPartes" style="margin-top:8px"></div>
+        <div class="row" style="margin-top:10px;align-items:center;gap:10px;flex-wrap:wrap">
+          <b>Ao clicar na imagem:</b>
+          <label><input type="radio" name="coresModo" value="exata" checked> trocar a cor exata</label>
+          <label title="Para bordado, degradê e desenho com sombra: pega todos os tons da mesma cor e mantém a luz e a sombra"><input type="radio" name="coresModo" value="tons"> trocar a cor <b>com os tons</b> (bordado, degradê)</label>
+          <label id="coresTonsOp" hidden>quanto pegar <input type="range" id="coresTol" min="10" max="100" value="45" style="vertical-align:middle"> <span id="coresTolV">45</span></label>
+          <label id="coresTonsTudo" hidden><input type="checkbox" id="coresTudo"> em todas as peças</label>
+        </div>
+        <div id="coresTons" style="margin-top:6px"></div>
       </div>
     </div>
   </section>
@@ -371,17 +392,17 @@
   </section>
 </main>
 
-<script src="js/acesso.js?v=41"></script>
-<script src="js/util.js?v=41"></script>
-<script src="js/tiff.js?v=41"></script>
-<script src="js/analyze.js?v=41"></script>
-<script src="js/corel.js?v=41"></script>
-<script src="js/grade.js?v=41"></script>
-<script src="js/pdfgrade.js?v=41"></script>
-<script src="js/moldes.js?v=41"></script>
-<script src="js/regras.js?v=41"></script>
-<script src="js/app.js?v=41"></script>
-<script src="js/montar.js?v=41"></script>
-<script src="js/provador.js?v=41"></script>
+<script src="js/acesso.js?v=42"></script>
+<script src="js/util.js?v=42"></script>
+<script src="js/tiff.js?v=42"></script>
+<script src="js/analyze.js?v=42"></script>
+<script src="js/corel.js?v=42"></script>
+<script src="js/grade.js?v=42"></script>
+<script src="js/pdfgrade.js?v=42"></script>
+<script src="js/moldes.js?v=42"></script>
+<script src="js/regras.js?v=42"></script>
+<script src="js/app.js?v=42"></script>
+<script src="js/montar.js?v=42"></script>
+<script src="js/provador.js?v=42"></script>
 </body>
 </html>

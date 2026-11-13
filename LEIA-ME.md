@@ -185,6 +185,19 @@ Gerado aqui com os arquivos reais da equipe. Três coisas estavam erradas e fora
 - Ao gerar, cada tamanho que tem jogador sai num arquivo só, com o jogo completo de peças de cada jogador (nome e número dele) encaixado. Sem lista, sai um jogo de exemplo.
 - A caixa "Montar a arte nos moldes" (v37) continua lá, fechada, como opção avançada.
 
+## v42 (13/11) — bordado e consumo diferente em cada cor (vídeos dos designers, estampa da Milena)
+- **Trocar a cor com os tons (bordado, degradê):** na aba Estampa → Cores, marque "trocar a cor com os tons" e clique
+  no bordado. O motor pega todos os tons da mesma cor (luz e sombra da linha) e leva para a cor nova mantendo a sombra.
+  "quanto pegar" aumenta ou diminui os tons que entram; "em todas as peças" troca em todo o arquivo.
+  (Antes, no bordado, só mudava um pontinho: no teste, 1 pixel com a cor exata contra 9.842 com os tons.)
+- **Outra cor da mesma estampa (aba Arquivo):** quando a cor for trocada no Photoshop, envie o arquivo novo na caixa
+  "Outra cor da mesma estampa". O motor troca só a arte e mantém as peças, a grade, os nomes, o encaixe e o dpi do
+  arquivo base — o consumo fica igual em todas as cores. Arquivo salvo com outra resolução (ex.: 72 dpi do Photoshop)
+  é ajustado sozinho. "↺ Voltar para a arte do arquivo base" desfaz.
+- Por que mudava o consumo: ao reler o arquivo do Photoshop, ele vinha com outro dpi ou com o contorno mexido, e o motor
+  media as peças de novo. Agora a medida vem sempre do arquivo base.
+- Nada da v41, v40 e anteriores foi mexido (a troca de cor exata e por parte continua igual).
+
 ## v41 (13/11) — "Faltam medidas válidas: Peito G1, G2, G3" (blusa nova)
 - Os tamanhos plus size G1, G2, G3, G4 e G5 não estavam na tabela de medidas de mercado. A tela criava a linha deles vazia
   e o vazio era lido como medida 0, então a grade travava dizendo que faltava medida (só a modelagem nova da blusa tinha G1 a G3).
