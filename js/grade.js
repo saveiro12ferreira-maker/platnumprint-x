@@ -1316,7 +1316,19 @@ const Grade = (() => {
   // Onde vai o número do tamanho (para o arquivo do Corel, que leva o número como texto editável).
   function labelPos(r, label, thick) {
     const lg = lugarTexto(r.nm, r.Wt, r.Ht, label, thick);
-    return lg ? { x: lg.spot.cx + r.b, y: lg.spot.cy + r.b, px: lg.px, text: lg.text, rot: label.rot || 0, cor: label.cor || null } : null;
+    if (!lg) return null;
+    // v40: cor automática igual à do TIFF (branco no fundo escuro, preto no claro). Antes o Corel saía sempre preto.
+    let cor = label.cor || null;
+    if (!cor && r.rgba) {
+      const cx = lg.spot.cx + r.b, cy = lg.spot.cy + r.b, hw = Math.max(2, lg.px * String(lg.text).length * 0.3), hh = Math.max(2, lg.px * 0.5);
+      let lum = 0, n = 0;
+      for (let y = Math.max(0, Math.round(cy - hh)); y <= Math.min(r.h - 1, Math.round(cy + hh)); y += 2)
+        for (let x = Math.max(0, Math.round(cx - hw)); x <= Math.min(r.w - 1, Math.round(cx + hw)); x += 2) {
+          const q = (y * r.w + x) * 4; if (!r.rgba[q + 3]) continue; lum += 0.299 * r.rgba[q] + 0.587 * r.rgba[q + 1] + 0.114 * r.rgba[q + 2]; n++;
+        }
+      const a = n && lum / n < 140 ? 255 : 0; cor = [a, a, a];
+    }
+    return { x: lg.spot.cx + r.b, y: lg.spot.cy + r.b, px: lg.px, text: lg.text, rot: label.rot || 0, cor };
   }
 
   function autoPos(p, text, px, rot = 0) {

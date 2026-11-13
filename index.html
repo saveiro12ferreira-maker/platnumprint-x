@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400&family=Orbitron:wght@600;700&display=swap">
-<link rel="stylesheet" href="css/app.css?v=39">
+<link rel="stylesheet" href="css/app.css?v=41">
 <script src="https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
@@ -24,7 +24,7 @@
 </div>
 <header class="top">
   <div class="top-in">
-    <div class="brand"><b>PLATNUMPRINT-X</b><span>motor de grade</span><span class="versao" title="Versão do motor carregada neste navegador">v39</span><span class="user"><span id="quem"></span><button type="button" id="btnSair" class="ghost">Sair</button></span></div>
+    <div class="brand"><b>PLATNUMPRINT-X</b><span>motor de grade</span><span class="versao" title="Versão do motor carregada neste navegador">v41</span><span class="user"><span id="quem"></span><button type="button" id="btnSair" class="ghost">Sair</button></span></div>
     <nav class="tabs" id="tabs" role="tablist">
       <button class="tab on" data-tab="arquivo" role="tab"><span class="n">1</span>Arquivo</button>
       <button class="tab locked" data-tab="pecas" role="tab"><span class="n">2</span>Peças</button>
@@ -270,6 +270,7 @@
         <label><input type="checkbox" id="marcarTam" checked> Marcar o tamanho em cada pedaço</label>
         <label><input type="checkbox" id="marcarNome" checked> Junto com o nome do pedaço (FRENTE, COSTAS…)</label>
         <label>Altura do número <input id="labelMm" type="number" min="0.3" max="20" step="0.1" value="4" style="width:60px"> mm</label>
+        <button type="button" id="etqIgualar" class="mini" title="Todas as peças com a mesma altura de letra (tira a letra própria que alguma peça tenha, ex.: a manga maior)">🔠 Mesma letra em todas</button>
         <label title="Cor dos nomes e números escritos nas peças. Marcado = automática (preto no fundo claro, branco no fundo escuro).">Cor dos nomes e números <input type="color" id="labelCor" value="#000000"> <input type="checkbox" id="labelCorAuto" checked> automática</label>
       </div>
       <div class="row">
@@ -370,17 +371,17 @@
   </section>
 </main>
 
-<script src="js/acesso.js?v=39"></script>
-<script src="js/util.js?v=39"></script>
-<script src="js/tiff.js?v=39"></script>
-<script src="js/analyze.js?v=39"></script>
-<script src="js/corel.js?v=39"></script>
-<script src="js/grade.js?v=39"></script>
-<script src="js/pdfgrade.js?v=39"></script>
-<script src="js/moldes.js?v=39"></script>
-<script src="js/regras.js?v=39"></script>
-<script src="js/app.js?v=39"></script>
-<script src="js/montar.js?v=39"></script>
-<script src="js/provador.js?v=39"></script>
+<script src="js/acesso.js?v=41"></script>
+<script src="js/util.js?v=41"></script>
+<script src="js/tiff.js?v=41"></script>
+<script src="js/analyze.js?v=41"></script>
+<script src="js/corel.js?v=41"></script>
+<script src="js/grade.js?v=41"></script>
+<script src="js/pdfgrade.js?v=41"></script>
+<script src="js/moldes.js?v=41"></script>
+<script src="js/regras.js?v=41"></script>
+<script src="js/app.js?v=41"></script>
+<script src="js/montar.js?v=41"></script>
+<script src="js/provador.js?v=41"></script>
 </body>
 </html>

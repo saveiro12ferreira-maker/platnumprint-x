@@ -13,6 +13,7 @@ const App = (() => {
     '1': [52, 80], '2': [54, 92], '3': [56, 98], '4': [58, 104], '5': [60, 110], '6': [62, 116], '7': [64, 122], '8': [66, 128],
     '9': [68, 134], '10': [70, 140], '11': [73, 146], '12': [76, 152], '13': [78, 155], '14': [80, 158], '16': [84, 164],
     PP: [80, 97], P: [84, 98.5], M: [88, 100], G: [94, 101.5], GG: [100, 103], XG: [106, 104.5], XGG: [112, 106], EG: [106, 104.5], EGG: [112, 106],
+    G1: [112, 106], G2: [118, 107], G3: [124, 108], G4: [130, 109], G5: [136, 110],   // v41: plus size (blusa nova pedia G1, G2, G3)
     '34': [76, 97], '36': [80, 98.5], '38': [84, 99.2], '40': [88, 100], '42': [92, 100.8], '44': [96, 101.5], '46': [100, 102.3], '48': [104, 103], '50': [110, 103.8], '52': [116, 104.5], '54': [122, 105.3], '56': [128, 106],
   };
   const chaveTam = s => { const t = String(s).toUpperCase().replace(/\s+/g, ''); const m = t.match(/^(\d+)(A|ANO|ANOS)?$/); return m ? m[1] : t; };
@@ -808,6 +809,8 @@ const App = (() => {
   function mercadoValue(g, dim, size) {
     const a = st.mercado[chaveTam(size)], b = st.mercado[chaveTam(st.base)];
     if (!a || !b) return null;
+    // v41: tamanho sem medida na tabela (célula vazia) não vale 0 — passa para o próximo jeito de calcular
+    if (!(Number(a[0]) > 0 && Number(a[1]) > 0 && Number(b[0]) > 0 && Number(b[1]) > 0)) return null;
     const base = dim === 'w' ? cmW(g) : cmH(g);
     if (dim === 'h' && g.type === 'vies') return base;               // viés: só o comprimento acompanha
     const k = dim === 'w' || g.type === 'circ' ? 0 : 1;               // largura pelo busto, altura pela estatura (círculo cresce por igual)
@@ -825,6 +828,8 @@ const App = (() => {
     return base * med[size] / med[st.base];
   }
 
+  // v41: uma medida só vale se for um número maior que zero (0, vazio ou NaN cai para o próximo jeito de calcular)
+  const valido = v => (Number.isFinite(v) && v > 0 ? v : null);
   function computeTargets() {
     st.targets = {};
     for (const g of st.groups) {
@@ -837,30 +842,30 @@ const App = (() => {
           if (ov > 0) { cell[dim] = ov; cell.src[dim] = 'manual'; continue; }
           if (st.mode === 'pdf') {
             const m = (st.mapping[g.id] || {})[dim];
-            const v = pdfValue(g, dim, size);
+            const v = valido(pdfValue(g, dim, size));
             if (v != null) { cell[dim] = v; cell.src[dim] = 'pdf'; continue; }
             cell.src[dim] = m && m.kind !== 'auto' ? 'falta' : 'auto';
           } else if (st.mode === 'calib') {
-            const v = calibValue(g, dim, size);
+            const v = valido(calibValue(g, dim, size));
             if (v != null) { cell[dim] = v; cell.src[dim] = 'modelista'; continue; }
-            const m = mercadoValue(g, dim, size);
+            const m = valido(mercadoValue(g, dim, size));
             if (m != null) { cell[dim] = m; cell.src[dim] = 'mercado'; continue; }
             cell.src[dim] = 'auto';
           } else if (st.mode === 'moldes' || st.mode === 'salva' || st.mode === 'tabela' || st.mode === 'casa') {
-            const v = st.mode === 'moldes' ? moldeValue(g, dim, size) : st.mode === 'tabela' ? tabelaValue(g, dim, size) : st.mode === 'salva' ? salvaValue(g, dim, size) : null;
+            const v = valido(st.mode === 'moldes' ? moldeValue(g, dim, size) : st.mode === 'tabela' ? tabelaValue(g, dim, size) : st.mode === 'salva' ? salvaValue(g, dim, size) : null);
             if (v != null) { cell[dim] = v; cell.src[dim] = st.mode === 'moldes' ? 'modelista' : st.mode === 'tabela' ? 'tabela' : 'salva'; continue; }
             // sem PDF / tabela dessa peça: a graduação aprendida da modelista (automático da casa)
-            const c = casaValue(g, dim, size);
+            const c = valido(casaValue(g, dim, size));
             if (c != null) { cell[dim] = c; cell.src[dim] = 'casa'; continue; }
-            const m = mercadoValue(g, dim, size);
+            const m = valido(mercadoValue(g, dim, size));
             if (m != null) { cell[dim] = m; cell.src[dim] = 'mercado'; continue; }
             cell.src[dim] = 'auto';
           } else if (st.mode === 'padrao') {
-            const v = mercadoValue(g, dim, size);
+            const v = valido(mercadoValue(g, dim, size));
             if (v != null) { cell[dim] = v; cell.src[dim] = 'mercado'; continue; }
             cell.src[dim] = 'auto';
           } else cell.src[dim] = 'auto';
-          cell[dim] = autoValue(g, dim, size);
+          cell[dim] = valido(autoValue(g, dim, size)) ?? (dim === 'w' ? cmW(g) : cmH(g));
         }
         t[size] = cell;
       }
@@ -1401,7 +1406,7 @@ const App = (() => {
     readOut();
     await prepararFormas(st.sizes, t => { $('#status5').textContent = t; });
     const bad = st.groups.flatMap(g => st.sizes.filter(s => !(st.targets[g.id][s].w > 0 && st.targets[g.id][s].h > 0)).map(s => `${st.groupName(g)} ${s}`));
-    if (bad.length) { $('#status5').textContent = `Faltam medidas válidas: ${bad.join(', ')}.`; return; }
+    if (bad.length) { $('#status5').textContent = `Faltam medidas válidas: ${bad.join(', ')}. Abra a aba 4 · Grade e digite a largura e a altura desses tamanhos (ou tire esses tamanhos da grade).`; return; }
     if (st.bleedMm * 2 > st.gapMm) { $('#status5').textContent = 'O espaço entre peças precisa ser pelo menos o dobro da sangria, senão as sangrias se encostam.'; return; }
     let sizes = st.sizes.filter(s => s !== st.base || $('#incBase').checked);
     // uniforme com lista de jogadores: só os tamanhos que têm jogador (o base também, se tiver)
@@ -1539,6 +1544,20 @@ const App = (() => {
     // Qualquer opção do Gerar mudou: refaz sozinho (obedece o que está marcado).
     ['#roll', '#margin', '#gap', '#bleed', '#allowRot', '#girosExtra', '#compactar', '#manterEncaixe', '#splitLong', '#incBase', '#marcarTam', '#marcarNome', '#labelMm', '#labelCor', '#labelCorAuto'].forEach(id => $(id).addEventListener('change', agendar));
     ['#marcarTam', '#marcarNome', '#labelMm'].forEach(id => $(id).addEventListener('change', () => { readOut(); desenharEtiquetas(); }));
+    // v40 (vídeo 13/11): escolheu a cor dos nomes → vale a cor escolhida (desmarca "automática", que mandava no lugar dela)
+    ['input', 'change'].forEach(ev => $('#labelCor').addEventListener(ev, () => { if ($('#labelCorAuto').checked) { $('#labelCorAuto').checked = false; agendar(); } }));
+    // v40: o tamanho da letra do Gerar vale para TODAS as peças (antes uma peça podia ficar com letra própria, ex.: a manga
+    // saía com a letra bem maior que as outras)
+    $('#etqIgualar').addEventListener('click', () => {
+      let n = 0; for (const p of st.pieces) for (const c of ['labelMm', 'numMm']) if (p[c]) { delete p[c]; n++; }
+      renderPieces(); desenharEtiquetas(); agendar();
+      $('#etqIgualar').textContent = n ? `✔ ${n} peça(s) igualada(s) — clique em 💾 Salvar para guardar` : '✔ Todas já estavam com a mesma letra';
+      setTimeout(() => { $('#etqIgualar').textContent = '🔠 Mesma letra em todas'; }, 5000);
+    });
+    $('#labelMm').addEventListener('change', () => {
+      let n = 0; for (const p of st.pieces) for (const c of ['labelMm', 'numMm']) if (p[c]) { delete p[c]; n++; }
+      if (n) { renderPieces(); desenharEtiquetas(); agendar(); }
+    });
     $('#semNomeTodas').addEventListener('click', () => { st.pieces.forEach(p => { p.semEtiqueta = true; }); renderPieces(); desenharEtiquetas(); agendar(); });
     $('#comNomeTodas').addEventListener('click', () => { st.pieces.forEach(p => { p.semEtiqueta = false; }); renderPieces(); desenharEtiquetas(); agendar(); });
     $('#nomeAutoTodas').addEventListener('click', () => { st.pieces.forEach(p => { delete p.labelPos; }); desenharEtiquetas(); agendar(); });

@@ -184,3 +184,16 @@ Gerado aqui com os arquivos reais da equipe. Três coisas estavam erradas e fora
 - **Lista de jogadores**: uma linha por jogador — NOME; NÚMERO; TAMANHO (cola do Excel/WhatsApp). Mostra quantos por tamanho e avisa tamanho que não está na grade.
 - Ao gerar, cada tamanho que tem jogador sai num arquivo só, com o jogo completo de peças de cada jogador (nome e número dele) encaixado. Sem lista, sai um jogo de exemplo.
 - A caixa "Montar a arte nos moldes" (v37) continua lá, fechada, como opção avançada.
+
+## v41 (13/11) — "Faltam medidas válidas: Peito G1, G2, G3" (blusa nova)
+- Os tamanhos plus size G1, G2, G3, G4 e G5 não estavam na tabela de medidas de mercado. A tela criava a linha deles vazia
+  e o vazio era lido como medida 0, então a grade travava dizendo que faltava medida (só a modelagem nova da blusa tinha G1 a G3).
+- Agora G1 a G5 têm busto e estatura de mercado, e qualquer medida vazia, zero ou inválida passa para o próximo jeito de
+  calcular (casa da modelista → mercado → automático), em vez de travar.
+- Se mesmo assim faltar, a mensagem diz o que fazer: digitar a medida na aba 4 · Grade ou tirar o tamanho da grade.
+- Nada da v40 (cores e tamanho dos nomes) nem das anteriores foi mexido.
+
+## v40 (13/11) — cor e tamanho dos nomes (vídeo)
+- Escolheu a cor dos nomes e números no Gerar → vale a cor escolhida: a caixinha "automática" desmarca sozinha (antes ela continuava marcada e mandava no lugar da cor escolhida).
+- Corel com a cor automática agora sai igual ao TIFF: branco no fundo escuro, preto no claro (antes o Corel saía sempre preto).
+- "Altura do número" do Gerar vale para todas as peças, e o botão **🔠 Mesma letra em todas** tira a letra própria que alguma peça tenha guardado (a manga estava saindo com a letra bem maior). Depois clique em 💾 Salvar para guardar.
