@@ -221,3 +221,9 @@ Gerado aqui com os arquivos reais da equipe. Três coisas estavam erradas e fora
 - Causa: o motor casava as peças do arquivo com os moldes do PDF **uma a uma, só pela medida**. Peças de medida parecida (acabamento × alça, manga × frente) pegavam o molde uma da outra.
 - Agora ele compara também o **formato** de cada peça (inclusive virada e espelhada, como manga esquerda × direita) e escolhe o **melhor conjunto** para todas as peças juntas. Nenhuma peça fica sem molde por causa de outra, e não entra peça a mais.
 - Conferido: o Vestido Antonella casa exatamente igual à versão anterior; um teste com alça × acabamento e manga × frente, que antes trocavam, agora casa certo.
+
+## v45 (14/11) — bordado do short não entorta perto do gancho
+- Designer: no short da Milena, o bordado (faixa em onda) saía "bugado" perto do gancho (fundo) e em cima: a faixa dobrava acompanhando a curva do gancho.
+- Causa: a faixa larga segue a borda da peça coluna por coluna; perto do gancho a borda vira de repente e a faixa ia junto.
+- Agora a faixa só pode mudar de altura aos poucos (a partir do meio dela): segue a barra normal, inclusive barra curva, mas perto do gancho continua reta e é cortada pelo molde, como no arquivo original.
+- Conferido no Vestido Antonella: a grade sai igual (diferença só de alguns pixels na beira da faixa, invisível).

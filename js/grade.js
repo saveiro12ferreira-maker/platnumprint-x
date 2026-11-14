@@ -306,6 +306,29 @@ const Grade = (() => {
         // faixa larga (linha, renda, barrado corrido): segue a curva da barra coluna por coluna
         const embaixo = e.cy > H * 0.5, curva = e.largo;
         const y0c = curva ? 0 : ya, y1c = curva ? Ht - 1 : yb;
+        // v45 (vídeo 14/11, short da Milena): a faixa seguia a curva da borda coluna por coluna e, perto do gancho/cava
+        // (onde a borda vira de repente), o bordado entortava ("bugado nos fundos e em cima"). Agora o deslocamento de
+        // cada coluna só pode mudar aos poucos (até 0,6 px por px, a partir do meio da faixa): a faixa segue a barra
+        // curva normal, mas perto do gancho continua reta e é cortada pelo molde, como no arquivo original.
+        let desl = null;
+        if (curva) {
+          desl = new Float32Array(Wt).fill(NaN);
+          for (let x = xa; x <= xb; x++) {
+            const X = Math.round(e.cx + (x - X0n) / ex); if (X < 0 || X >= W) continue;
+            if (embaixo) { const sb = p.bot[X], nbb = nb[x]; if (sb >= 0 && nbb >= 0) desl[x] = sb - nbb / ey; }
+            else { const st0 = p.top[X], ntt = nt[x]; if (st0 >= 0 && ntt >= 0) desl[x] = st0 - ntt / ey; }
+          }
+          const xm = Math.max(xa, Math.min(xb, Math.round(X0n))), LIM = 0.6;
+          let m0 = xm; for (let d = 0; d <= xb - xa && isNaN(desl[m0]); d++) { if (!isNaN(desl[xm + d])) { m0 = xm + d; break; } if (!isNaN(desl[xm - d])) { m0 = xm - d; break; } }
+          if (!isNaN(desl[m0])) for (const passo of [1, -1]) {
+            let ant = desl[m0];
+            for (let x = m0 + passo; x >= xa && x <= xb; x += passo) {
+              const v = desl[x];
+              ant = isNaN(v) ? ant : Math.max(ant - LIM, Math.min(ant + LIM, v));
+              desl[x] = ant;
+            }
+          }
+        }
         for (let y = y0c; y <= y1c; y++) {
           const Yr = Math.round(e.cy + (y - Y0n) / ey);
           if (!curva && (Yr < 0 || Yr >= H)) continue;
@@ -314,8 +337,8 @@ const Grade = (() => {
             const X = Math.round(e.cx + (x - X0n) / ex); if (X < 0 || X >= W) continue;
             let Y = Yr;
             if (curva) {
-              if (embaixo) { const sb = p.bot[X], nbb = nb[x]; if (sb < 0 || nbb < 0) continue; Y = Math.round(sb - (nbb - y) / ey); }
-              else { const st0 = p.top[X], ntt = nt[x]; if (st0 < 0 || ntt < 0) continue; Y = Math.round(st0 + (y - ntt) / ey); }
+              const c = desl[x]; if (isNaN(c)) continue;
+              Y = Math.round(y / ey + c);
               if (Y < e.y0 || Y > e.y1) continue;
             }
             const k = Y * W + X;
