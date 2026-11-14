@@ -500,7 +500,7 @@ const App = (() => {
         ' ', el('label', { title: 'Número do tamanho e nome separados, cada um no seu lugar' }, el('input', { type: 'checkbox', checked: !!p.separado, onchange: e => { if (e.target.checked) separar(p); else juntar(p); renderPieces(); desenharEtiquetas(); agendar(); } }), ' separar nº e nome')),
       el('td', { text: `${U.fmt(U.cm(p.w, st.dpi))} × ${U.fmt(U.cm(p.h, st.dpi))}` }),
       el('td', { text: p.artFrac > 0.005 ? `${U.fmt(p.artFrac * 100, 0)}% da peça` : 'sem estampa' }),
-      el('td', {}, el('select', { onchange: e => { p.rule = e.target.value; p.regraManual = true; runCheck(); agendar(); } }, opts(RULES, p.rule))),
+      el('td', {}, el('select', { onchange: e => { iaLicaoRegra(p, e.target.value); p.rule = e.target.value; p.regraManual = true; runCheck(); agendar(); } }, opts(RULES, p.rule))),
       el('td', { text: p.rule === 'barra' || p.type === 'saia' ? `barra ${ANCH[p.edge]}` : (p.artFrac > 0.005 ? `${ANCH[p.anchorX]}, ${ANCH[p.anchorY]}` : '—') }),
     ));
     $('#tblPecas').replaceChildren(el('thead', {}, head), el('tbody', {}, rows));
@@ -1255,6 +1255,7 @@ const App = (() => {
       }
       if (trocou) { casarMoldes(); computeTargets(); renderGrade(); }
       renderPieces(); desenharEtiquetas(); renderMoldes(); agendar();
+      if ($('#iaAuto') && $('#iaAuto').checked) iaConferirPecas().catch(e => console.error(e));
       info.textContent = txt0 + (n ? ` ✔ Nomes dos moldes copiados para ${n} peça(s).` : ' (Não consegui ler os nomes escritos nos moldes; escreva na peça com dois cliques.)');
     } catch (e) { console.error(e); info.textContent = txt0 + ' (Não consegui ler os nomes dos moldes: ' + e.message + ')'; }
     // depois de saber o nome de cada peça: o automático da casa aprende com este modelo (uma vez por modelo)
@@ -1273,7 +1274,7 @@ const App = (() => {
     const head = el('tr', {}, el('th', { text: 'Peça do arquivo' }), el('th', { text: `Molde (PDF ${m.ref})` }), el('th', { text: 'Nome no molde' }), tams.map(t => el('th', { text: `PDF ${t}` })));
     const rows = st.groups.map(g => {
       const c = m.casa[g.id][m.ref];
-      const sel = el('select', { onchange: e => { m.manual[g.id] = +e.target.value; casarMoldes(); computeTargets(); renderGrade(); renderMoldes(); agendar(); } },
+      const sel = el('select', { onchange: e => { iaLicaoMolde(g, +e.target.value); m.manual[g.id] = +e.target.value; casarMoldes(); computeTargets(); renderGrade(); renderMoldes(); agendar(); } },
         el('option', { value: -1, selected: !c, text: '— nenhum (segue mercado) —' }),
         pr.map((p, j) => el('option', { value: j, selected: c && c.j === j, text: `Molde ${j + 1}: ${p.rotulo ? p.rotulo.nome + ' · ' : ''}${U.fmt(p.w)} × ${U.fmt(p.h)} cm` })));
       const rot = c && pr[c.j].rotulo;
@@ -1282,6 +1283,157 @@ const App = (() => {
         tams.map(t => { const d = dimsMolde(g, t); return el('td', { text: d ? `${U.fmt(d.w)} × ${U.fmt(d.h)}` : '—' }); }));
     });
     box.replaceChildren(el('thead', {}, head), el('tbody', {}, rows));
+  }
+
+  // ======================== 🧠 IA DO MOTOR (v47, pedido do dono 14/11: "a IA pensa dentro do motor") ========================
+  // O motor manda para a IA (Claude, pelo servidor do ConfexConect) as miniaturas do arquivo com as peças numeradas, os
+  // moldes do PDF e a grade gerada. A IA decide o molde de cada peça, a regra da estampa e o nome do pedaço, e confere a
+  // grade gerada. Cada correção do designer vira uma "lição" que vai junto nos próximos pedidos: a IA aprende com a casa.
+  const IA_URL = 'https://confexconect-erp.vercel.app/api/px/ia';
+  const IA_LICOES = 'px_ia_licoes';
+  const iaLicoes = () => { try { return JSON.parse(localStorage.getItem(IA_LICOES) || '[]'); } catch (e) { return []; } };
+  function iaGuardarLicao(t) {
+    if (!t) return; const l = iaLicoes().filter(x => x !== t); l.push(t);
+    try { localStorage.setItem(IA_LICOES, JSON.stringify(l.slice(-60))); } catch (e) { /* sem armazenamento */ }
+    const n = $('#iaLicoesN'); if (n) n.textContent = String(Math.min(60, l.length));
+  }
+  const descGrupo = g => `${nomeGrupo(g)} (${g.items.length} peça(s), ${U.fmt(cmW(g))} × ${U.fmt(cmH(g))} cm)`;
+  function iaLicaoMolde(g, j) {
+    const m = st.moldes; if (!m || !m.ref || !g._ia) return;
+    const p = j >= 0 && m.tams[m.ref].pecas[j];
+    iaGuardarLicao(p ? `${descGrupo(g)} vai no molde de ${U.fmt(p.w)} × ${U.fmt(p.h)} cm${p.rotulo ? ` ("${p.rotulo.nome}")` : ''}, não no que a IA escolheu.`
+      : `${descGrupo(g)} não tem molde no PDF (segue a medida de mercado).`);
+  }
+  function iaLicaoRegra(p, regra) {
+    if (!p._ia || p._ia === regra) return;
+    const g = st.groups.find(x => x.items.includes(p));
+    iaGuardarLicao(`Peça ${p.nome || (g ? nomeGrupo(g) : 'sem nome')} (${U.fmt(U.cm(p.w, st.dpi))} × ${U.fmt(U.cm(p.h, st.dpi))} cm): regra "${regra}", não "${p._ia}".`);
+  }
+  // canvas → JPEG base64 (sem o "data:"), largura máxima L
+  function iaImg(cv, L = 1400, q = 0.82) {
+    const f = Math.min(1, L / cv.width), o = el('canvas'); o.width = Math.max(1, Math.round(cv.width * f)); o.height = Math.max(1, Math.round(cv.height * f));
+    const c = o.getContext('2d'); c.fillStyle = '#fff'; c.fillRect(0, 0, o.width, o.height); c.drawImage(cv, 0, 0, o.width, o.height);
+    return { mime: 'image/jpeg', base64: o.toDataURL('image/jpeg', q).split(',')[1], f };
+  }
+  // arquivo da estampa com o id do grupo escrito em cada peça
+  function iaArte() {
+    const pv = st.an.preview, o = el('canvas'); o.width = pv.width; o.height = pv.height;
+    const c = o.getContext('2d'); c.drawImage(pv, 0, 0);
+    const fs = Math.max(14, Math.round(pv.width / 45));
+    st.groups.forEach(g => g.items.forEach(p => {
+      const [x, y] = noArquivo(p, p.w / 2, p.h / 2).map(v => v * st.an.pf), t = g.id;
+      c.font = `bold ${fs}px sans-serif`; const w = c.measureText(t).width;
+      c.fillStyle = 'rgba(255,230,0,.92)'; c.fillRect(x - w / 2 - 6, y - fs, w + 12, fs * 1.4);
+      c.fillStyle = '#000'; c.fillText(t, x - w / 2, y + fs * 0.2);
+    }));
+    return o;
+  }
+  // moldes do PDF de referência lado a lado, com M1, M2…
+  async function iaMoldes() {
+    const m = st.moldes, pz = m.tams[m.ref].pecas, k = 4;   // 4 px por cm
+    const fs = [];
+    for (let j = 0; j < pz.length; j++) {
+      let f = pz[j].mini;
+      if (!f && pz.doc) { try { f = await Moldes.forma(pz.doc, pz[j], 40); } catch (e) { f = null; } }
+      fs.push(f);
+    }
+    const larg = pz.map(p => Math.round(p.w * k) + 20), alt = Math.max(...pz.map(p => Math.round(p.h * k))) + 50;
+    const o = el('canvas'); o.width = Math.min(4000, larg.reduce((a, b) => a + b, 0) + 20); o.height = alt;
+    const c = o.getContext('2d'); c.fillStyle = '#fff'; c.fillRect(0, 0, o.width, o.height);
+    let x = 10;
+    pz.forEach((p, j) => {
+      const w = Math.round(p.w * k), h = Math.round(p.h * k), f = fs[j];
+      if (f && f.m) { const id = c.createImageData(w, h); for (let yy = 0; yy < h; yy++) for (let xx = 0; xx < w; xx++) { const sx = Math.floor(xx * f.w / w), sy = Math.floor(yy * f.h / h), on = f.m[sy * f.w + sx], q = (yy * w + xx) * 4; id.data[q] = on ? 120 : 255; id.data[q + 1] = on ? 160 : 255; id.data[q + 2] = on ? 220 : 255; id.data[q + 3] = 255; } c.putImageData(id, x, 40); }
+      else { c.strokeStyle = '#36c'; c.strokeRect(x, 40, w, h); }
+      c.fillStyle = '#000'; c.font = 'bold 22px sans-serif'; c.fillText(`M${j + 1}`, x, 28);
+      x += larg[j];
+    });
+    return o;
+  }
+  async function iaPedir(acao, imagens, texto) {
+    const r = await fetch(IA_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ acao, imagens, texto, licoes: iaLicoes() }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.ok) throw new Error(j.erro || `erro ${r.status}`);
+    return j.resposta;
+  }
+  let iaOcupado = false;
+  async function iaConferirPecas() {
+    const info = $('#iaPecasInfo'), res = $('#iaPecasRes');
+    if (iaOcupado || !st.an || !st.groups.length) return;
+    const m = st.moldes;
+    if (!m || !m.ref) { info.textContent = 'A IA confere as peças quando os PDFs da modelista estão lidos.'; return; }
+    iaOcupado = true; $('#iaPecas').disabled = true; info.textContent = '🧠 A IA está olhando o arquivo e os moldes…'; res.replaceChildren();
+    try {
+      const pz = m.tams[m.ref].pecas;
+      const arte = iaImg(iaArte(), 1500), mol = iaImg(await iaMoldes(), 1500);
+      const texto = [`Arquivo da estampa no tamanho ${st.base}, ${st.dpi} dpi. PDF da modelista usado como referência: tamanho ${m.ref}.`,
+        'GRUPOS DO ARQUIVO (o id está escrito em amarelo em cada peça da imagem 1):',
+        ...st.groups.map(g => { const c = m.casa[g.id] && m.casa[g.id][m.ref]; return `- ${g.id}: ${g.items.length} peça(s), ${U.fmt(cmW(g))} × ${U.fmt(cmH(g))} cm, nome "${nomeGrupo(g)}", regra atual "${g.items[0].rule}", hoje no molde ${c ? 'M' + (c.j + 1) : 'nenhum'}`; }),
+        'MOLDES DO PDF (imagem 2, M1, M2…):',
+        ...pz.map((p, j) => `- M${j + 1}: ${U.fmt(p.w)} × ${U.fmt(p.h)} cm${p.rotulo ? `, escrito "${p.rotulo.texto}"` : ''}`),
+        'Decida o molde de cada grupo (pelo FORMATO e pela medida; o PDF pode estar em outro tamanho, então a medida muda um pouco; peça pode estar deitada ou espelhada), a regra da estampa e o nome do pedaço.'].join('\n');
+      const r = await iaPedir('pecas', [{ rotulo: 'Imagem 1 — arquivo da estampa com os grupos', ...arte }, { rotulo: 'Imagem 2 — moldes do PDF da modelista', ...mol }], texto);
+      const feitos = [];
+      for (const d of r.grupos || []) {
+        const g = st.groups.find(x => x.id === d.grupo); if (!g) continue;
+        g._ia = true;
+        const c = m.casa[g.id] && m.casa[g.id][m.ref], j = (d.molde | 0) - 1;
+        if (d.certeza >= 0.6 && j >= 0 && j < pz.length && (!c || c.j !== j) && (m.manual || {})[g.id] == null) {
+          (m.manual = m.manual || {})[g.id] = j; feitos.push(`${g.id} (${nomeGrupo(g)}): molde ${c ? 'M' + (c.j + 1) : 'nenhum'} → M${j + 1}${d.motivo ? ' — ' + d.motivo : ''}`);
+        }
+        for (const p of g.items) {
+          if (d.certeza >= 0.75 && d.regra && !p.regraManual && p.rule !== d.regra && (d.regra !== 'fundo' || p.artFrac < 0.005)) { feitos.push(`${g.id}: regra "${p.rule}" → "${d.regra}"`); p.rule = d.regra; }
+          p._ia = d.regra;
+          if (d.nome && !p.nomeManual && !p.nomePdf && p.nome !== d.nome) { p.nome = String(d.nome).toUpperCase().slice(0, 20); }
+        }
+      }
+      if (feitos.length) { casarMoldes(); computeTargets(); renderGrade(); renderMoldes(); renderPieces(); desenharEtiquetas(); agendar(); }
+      info.textContent = feitos.length ? `🧠 A IA conferiu e mudou ${feitos.length} coisa(s):` : '🧠 A IA conferiu: as peças e os moldes estão certos.';
+      res.replaceChildren(...feitos.map(t => el('div', { class: 'ia-item ok', text: '✔ ' + t })), ...(r.avisos || []).map(t => el('div', { class: 'ia-item av', text: '⚠ ' + t })));
+      st.iaPecasOk = true;
+    } catch (e) { info.textContent = '🧠 Não consegui falar com a IA: ' + e.message + ' (o motor continua funcionando sozinho).'; }
+    finally { iaOcupado = false; $('#iaPecas').disabled = false; }
+  }
+  async function iaConferirGrade(sizes) {
+    const info = $('#iaGradeInfo'), res = $('#iaGradeRes');
+    if (iaOcupado) return;
+    const prontos = (sizes || Object.keys(st.iaPrev || {})).filter(t => st.iaPrev && st.iaPrev[t]);
+    if (!prontos.length) { info.textContent = 'Gere a grade primeiro.'; return; }
+    // olha o tamanho mais longe do base (onde aparece mais erro) e o mais perto
+    const ib = idxTam(st.base), ord = [...prontos].sort((a, b) => Math.abs(idxTam(b) - ib) - Math.abs(idxTam(a) - ib));
+    const olhar = [...new Set([ord[0], ord[ord.length - 1]])].slice(0, 2);
+    iaOcupado = true; $('#iaGrade').disabled = true; info.textContent = `🧠 A IA está conferindo a grade (${olhar.join(' e ')})…`; res.replaceChildren();
+    try {
+      const imgs = [{ rotulo: `Arquivo original (tamanho ${st.base}), com o id dos grupos`, ...iaImg(iaArte(), 1400) }];
+      for (const t of olhar) imgs.push({ rotulo: `Grade gerada — tamanho ${t}`, ...iaImg(st.iaPrev[t], 1400) });
+      if (st.moldes && st.moldes.ref) imgs.push({ rotulo: 'Moldes do PDF da modelista (M1, M2…)', ...iaImg(await iaMoldes(), 1200) });
+      const m = st.moldes, texto = [`Compare a grade gerada com o arquivo original. Tamanho base ${st.base}; grade ${st.sizes.join(', ')}.`,
+        'Confira: todas as peças do original estão na grade (nenhuma sumiu, nenhuma a mais, nenhuma sem estampa)? Cada peça tem o formato do molde certo? A estampa está inteira, sem cortar logo/texto, sem esticar o que não pode, sem faixa branca, sem desenho torto? A barra/bordado segue a barra?',
+        'GRUPOS:', ...st.groups.map(g => { const c = m && m.casa[g.id] && m.casa[g.id][m.ref]; return `- ${g.id}: ${nomeGrupo(g)}, ${g.items.length} peça(s), regra "${g.items[0].rule}", molde ${c ? 'M' + (c.j + 1) : 'nenhum'}`; })].join('\n');
+      const r = await iaPedir('grade', imgs, texto);
+      if (r.licao) iaGuardarLicao(r.licao);
+      const probs = r.problemas || [];
+      info.textContent = r.ok && !probs.length ? `🧠 A IA conferiu ${olhar.join(' e ')}: a grade está boa para produzir.` : `🧠 A IA achou ${probs.length} ponto(s) para olhar em ${olhar.join(' e ')}:`;
+      res.replaceChildren(...probs.map(pb => {
+        const g = st.groups.find(x => x.id === pb.grupo);
+        const pode = g && !(pb.acao === 'trocar_regra' && pb.regra === 'fundo' && g.items.some(p => p.artFrac >= 0.005)) && ((pb.acao === 'trocar_molde' && pb.molde >= 1 && m && m.ref && pb.molde <= m.tams[m.ref].pecas.length) || (pb.acao === 'trocar_regra' && pb.regra));
+        const bt = pode ? el('button', { type: 'button', class: 'mini', text: pb.acao === 'trocar_molde' ? `Aplicar: molde M${pb.molde}` : `Aplicar: regra "${pb.regra}"`, onclick: e => {
+          if (pb.acao === 'trocar_molde') { (m.manual = m.manual || {})[g.id] = pb.molde - 1; casarMoldes(); computeTargets(); renderGrade(); renderMoldes(); }
+          else for (const p of g.items) { p.rule = pb.regra; p.regraManual = true; }
+          iaGuardarLicao(`${descGrupo(g)}: ${pb.problema} → ${pb.acao === 'trocar_molde' ? 'molde de ' + U.fmt(m.tams[m.ref].pecas[pb.molde - 1].w) + ' × ' + U.fmt(m.tams[m.ref].pecas[pb.molde - 1].h) + ' cm' : 'regra "' + pb.regra + '"'}.`);
+          renderPieces(); e.target.disabled = true; e.target.textContent = '✔ aplicado — gere a grade de novo'; agendar(); } }) : null;
+        return el('div', { class: 'ia-item ' + (pb.gravidade === 'alta' ? 'ruim' : 'av') }, `${pb.gravidade === 'alta' ? '❌' : '⚠'} ${g ? nomeGrupo(g) + ': ' : ''}${pb.problema} `, bt);
+      }));
+    } catch (e) { info.textContent = '🧠 Não consegui falar com a IA: ' + e.message; }
+    finally { iaOcupado = false; $('#iaGrade').disabled = false; }
+  }
+  function ligarIA() {
+    $('#iaPecas').addEventListener('click', () => iaConferirPecas());
+    $('#iaGrade').addEventListener('click', () => iaConferirGrade());
+    const a = $('#iaAuto'); try { a.checked = localStorage.getItem('px_ia_auto') !== '0'; } catch (e) { /* padrão: ligada */ }
+    a.addEventListener('change', () => { try { localStorage.setItem('px_ia_auto', a.checked ? '1' : '0'); } catch (e) { /* nada */ } });
+    $('#iaLicoesN').textContent = String(iaLicoes().length);
+    $('#iaEsquecer').addEventListener('click', () => { if (!confirm('Apagar tudo o que a IA aprendeu neste computador?')) return; try { localStorage.removeItem(IA_LICOES); } catch (e) { /* nada */ } $('#iaLicoesN').textContent = '0'; });
   }
 
   const nomeGrupo = g => (g.items[0] && g.items[0].nome) || st.groupName(g);
@@ -1545,6 +1697,7 @@ const App = (() => {
         const pv = U.preview(r.rgb, r.w, r.h, 3, 700);
         r.rgb = null;
         st.results[size] = { w: r.w, h: r.h, ms: r.ms, pos: r.pos, assin: r.assin };
+        (st.iaPrev = st.iaPrev || {})[size] = pv.canvas;
         // Sem avisos de grade: o motor já resolve sozinho. Só aparece o que precisa de outra largura de rolo.
         const fisicos = r.warns.filter(w => w.lvl === 'alerta');
         const warns = fisicos.length ? el('ul', {}, fisicos.map(w => el('li', { class: w.lvl, text: w.txt })))
@@ -1559,6 +1712,7 @@ const App = (() => {
         await U.tick();
       }
       $('#status5').textContent = `Grade completa: ${sizes.length} tamanhos em ${U.secs(U.now() - t0)}.`;
+      if ($('#iaAuto') && $('#iaAuto').checked) iaConferirGrade(sizes).catch(e => console.error(e));
       $('#btnTodos').disabled = false; $('#btnCorelTodos').disabled = false; $('#btnEncaixe').disabled = false;
       renderQtd();
     } catch (e) {
@@ -1614,7 +1768,7 @@ const App = (() => {
     $('#sizes').addEventListener('change', () => { readSizes(); if (st.an) { computeTargets(); renderGrade(); renderMercado(); } renderQtd(); });
     $('#baseSize').addEventListener('change', () => { st.base = $('#baseSize').value; if (st.an) { computeTargets(); renderGrade(); renderMercado(); runCheck(); } });
     $('#btnLer').addEventListener('click', ler);
-    ligarCores(); uniCarregar();
+    ligarCores(); uniCarregar(); ligarIA();
     $('#etqSalvar').addEventListener('click', salvarEtiquetas);
     $('#etqColar').addEventListener('click', () => colarEtiquetas(false));
     $('#bgColor').addEventListener('input', e => { st.bg = U.rgb(e.target.value); $('#bgHex').textContent = U.hex(st.bg); agendar(); });

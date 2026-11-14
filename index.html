@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400&family=Orbitron:wght@600;700&display=swap">
-<link rel="stylesheet" href="css/app.css?v=46">
+<link rel="stylesheet" href="css/app.css?v=47">
 <script src="https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
@@ -24,7 +24,7 @@
 </div>
 <header class="top">
   <div class="top-in">
-    <div class="brand"><b>PLATNUMPRINT-X</b><span>motor de grade</span><span class="versao" title="Versão do motor carregada neste navegador">v46</span><span class="user"><span id="quem"></span><button type="button" id="btnSair" class="ghost">Sair</button></span></div>
+    <div class="brand"><b>PLATNUMPRINT-X</b><span>motor de grade</span><span class="versao" title="Versão do motor carregada neste navegador">v47</span><span class="user"><span id="quem"></span><button type="button" id="btnSair" class="ghost">Sair</button></span></div>
     <nav class="tabs" id="tabs" role="tablist">
       <button class="tab on" data-tab="arquivo" role="tab"><span class="n">1</span>Arquivo</button>
       <button class="tab locked" data-tab="pecas" role="tab"><span class="n">2</span>Peças</button>
@@ -105,6 +105,16 @@
       <h2>Peças reconhecidas</h2>
       <p class="hint">Confira se cada peça foi reconhecida certo. Se o tipo ou a regra estiverem errados, corrija aqui antes de gerar.</p>
       <div id="check" class="check"></div>
+      <div class="ia-box">
+        <div class="row" style="margin:0;align-items:center">
+          <b>🧠 IA do motor</b>
+          <label title="Depois de ler o arquivo e os PDFs, a IA confere sozinha o molde de cada peça, a regra da estampa e o nome do pedaço; depois de gerar, confere a grade."><input type="checkbox" id="iaAuto" checked> A IA confere sozinha</label>
+          <button type="button" id="iaPecas">🧠 IA conferir as peças</button>
+          <span class="muted">Lições aprendidas neste computador: <b id="iaLicoesN">0</b> <button type="button" id="iaEsquecer" class="mini">esquecer</button></span>
+        </div>
+        <p class="muted" id="iaPecasInfo"></p>
+        <div id="iaPecasRes"></div>
+      </div>
       <p class="hint"><b>Nome e tamanho em cada peça:</b> arraste o texto amarelo para onde quiser (ex.: no finalzinho do vestido). <b>Dois cliques no texto</b> para escrever o nome do pedaço (ex.: MANGA). O lugar vale para todos os tamanhos. Para não escrever nada numa peça, desmarque "Escrever na peça" na tabela abaixo.</p>
       <div class="row" style="margin-top:0">
         <button type="button" id="nomeAutoTodas">↺ Todos no lugar automático</button>
@@ -301,6 +311,10 @@
         <button id="btnCorelTodos" disabled title="Um SVG por tamanho: abre no CorelDRAW (Arquivo → Importar) com cada pedaço separado e editável">✏️ Baixar todos para o Corel (editável)</button>
         <span id="status5" class="muted"></span>
       </div>
+      <div class="ia-box">
+        <div class="row" style="margin:0;align-items:center"><b>🧠 IA do motor</b><button type="button" id="iaGrade">🧠 IA conferir a grade</button><span class="muted" id="iaGradeInfo">Depois de gerar, a IA compara a grade com o arquivo original e aponta o que saiu errado.</span></div>
+        <div id="iaGradeRes"></div>
+      </div>
       <div id="results" class="results"></div>
     </div>
     <div class="card">
@@ -392,17 +406,17 @@
   </section>
 </main>
 
-<script src="js/acesso.js?v=46"></script>
-<script src="js/util.js?v=46"></script>
-<script src="js/tiff.js?v=46"></script>
-<script src="js/analyze.js?v=46"></script>
-<script src="js/corel.js?v=46"></script>
-<script src="js/grade.js?v=46"></script>
-<script src="js/pdfgrade.js?v=46"></script>
-<script src="js/moldes.js?v=46"></script>
-<script src="js/regras.js?v=46"></script>
-<script src="js/app.js?v=46"></script>
-<script src="js/montar.js?v=46"></script>
-<script src="js/provador.js?v=46"></script>
+<script src="js/acesso.js?v=47"></script>
+<script src="js/util.js?v=47"></script>
+<script src="js/tiff.js?v=47"></script>
+<script src="js/analyze.js?v=47"></script>
+<script src="js/corel.js?v=47"></script>
+<script src="js/grade.js?v=47"></script>
+<script src="js/pdfgrade.js?v=47"></script>
+<script src="js/moldes.js?v=47"></script>
+<script src="js/regras.js?v=47"></script>
+<script src="js/app.js?v=47"></script>
+<script src="js/montar.js?v=47"></script>
+<script src="js/provador.js?v=47"></script>
 </body>
 </html>

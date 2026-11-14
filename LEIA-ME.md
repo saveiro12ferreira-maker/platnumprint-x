@@ -234,3 +234,20 @@ Testado com os arquivos do designer (GG.tif + PDFs PP a G3):
 - **Manga deitada:** a conta de "molde deitado no PDF" somava em vez de comparar e deitava a manga que está de pé, cortando o UNINTER. Corrigida.
 - **Faixa branca no ombro da frente:** o desenho azul que vai do ombro até a barra só mudava de tamanho e, no tamanho menor, não chegava mais no ombro. Desenho que ocupa a peça de cima a baixo agora estica com a altura da peça.
 - Vestido Antonella conferido: sai idêntico ao da v45.
+
+## v47 (14/11) — 🧠 IA dentro do motor
+Pedido do dono: "em vez do motor pensar sozinho, a IA pensa dentro dele e aprende por ele".
+- **Peças (aba 2):** quadro roxo "🧠 IA do motor". Depois de ler o arquivo e os PDFs, a IA (Claude, pelo servidor do
+  ConfexConect) olha a estampa com as peças numeradas e os moldes do PDF e decide o **molde de cada peça**, a **regra da
+  estampa** e o **nome do pedaço**. O que ela mudou aparece em verde; o que o designer precisa conferir, em amarelo.
+- **Gerar (aba 5):** depois de gerar, a IA compara a grade com o arquivo original (o tamanho mais longe do base e o mais
+  perto) e aponta o que saiu errado — peça sumida, peça a mais, molde trocado, estampa cortada ou torta — com botão
+  **Aplicar** para trocar o molde ou a regra.
+- **Aprende:** cada vez que o designer corrige a IA (troca o molde ou a regra que ela escolheu, ou aplica uma correção),
+  isso vira uma "lição" que vai junto nos próximos pedidos. As lições ficam neste computador (contador no quadro; botão
+  "esquecer" apaga).
+- "A IA confere sozinha" vem ligado; desligado, só confere quando clicar no botão. Sem internet ou com a IA fora do ar,
+  o motor continua funcionando sozinho como antes.
+- Segurança: a IA nunca troca uma peça colorida para "fundo" (que apagaria a estampa) e não mexe no que o designer já
+  escolheu à mão.
+- A chave da IA é a mesma do ConfexConect (CRM → Configurações → IA); a rota só aceita pedidos do site do motor.
