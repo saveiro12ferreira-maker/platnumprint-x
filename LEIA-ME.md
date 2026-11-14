@@ -257,3 +257,25 @@ Pedido do dono: "em vez do motor pensar sozinho, a IA pensa dentro dele e aprend
   qualquer computador. No quadro "🧠 IA do motor": "Lições da equipe (na nuvem)" com **ver / tirar** (✍️ = designer
   corrigiu, 🧠 = a IA aprendeu conferindo a grade). Tirar uma lição vale para todos.
 - Sem internet, a lição fica guardada no computador (⏳) e sobe sozinha para a nuvem quando a internet volta.
+
+## v49 (14/11) — 🛡 vigia do motor
+- Dono: "coloca um vigia no motor; o que estiver sendo desfeito ou dando erro, você mesmo já conserta sozinho".
+- O motor manda para a nuvem (tabela px_ocorrencias do ConfexConect) todo erro da tela (ler arquivo, ler PDF, gerar) e
+  todo problema grave que a IA acha na grade, com o contexto (etapa, tamanhos, peças, PDFs, versão). A mesma mensagem não
+  repete: soma "vezes".
+- Teste com trabalhos reais que já deram certo (Vestido Antonella e CPEF RUN): `testes/px/vigia-motor.mjs` no
+  ConfexConect abre o motor num navegador e confere que cada peça continua no molde certo, nenhuma some, a grade gera
+  sem erro. Trabalho novo que der problema e for consertado entra nesse teste.
+- Todo dia o vigia agendado lê as ocorrências, roda o teste, conserta o que quebrou e deixa a versão nova nesta pasta.
+
+## v50 (14/11) — continua gerando em outra janela; fio branco na beira da manga
+- **Gerar com o motor atrás do Photoshop/Corel** (vídeo do designer): ao trocar de janela o motor parava. Causa: os moldes
+  do PDF eram desenhados com requestAnimationFrame, que o navegador desliga quando a janela não está na frente. Agora o
+  PDF é desenhado sem ele (intent 'print', mesmo resultado) e, enquanto lê, gera ou monta o encaixe, o motor segura uma
+  trava do navegador (Web Locks) — o Chrome não congela aba assim. O título da aba mostra o andamento (⏳ …) e
+  "✅ Pronto" quando termina com a janela atrás.
+- **Fio branco entre a borda preta e o desenho** (CPEF RUN, manga azul): a estampa recolocada não chegava até a borda de
+  corte nova e sobrava um fiozinho da cor do fundo. Agora esse fio (até ~4 px) pega a cor do desenho de dentro — só em
+  peça cuja beira no arquivo original é quase toda desenhada (manga azul). Peça com fundo na beira (flores soltas no
+  fundo, como o Vestido Antonella) fica exatamente como era (conferido pixel a pixel: idêntico).
+- Vigia: 14 de 14 testes ok.

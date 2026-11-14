@@ -161,6 +161,7 @@ const App = (() => {
     } catch (e) {
       console.error(e);
       $('#log1').append(el('li', { class: 'err', text: 'Não consegui ler o arquivo: ' + e.message }));
+      vigia('erro', 'Não consegui ler o arquivo: ' + e.message, { pilha: String(e.stack || '').slice(0, 1500) });
     } finally { busy = false; $('#btnLer').disabled = !st.file; }
   }
 
@@ -1048,7 +1049,7 @@ const App = (() => {
       ['#autoBox', '#pdfBox', '#padraoBox'].forEach(s2 => { $(s2).hidden = true; }); $('#calibBox').hidden = false;
       computeTargets(); renderGrade(); renderCalib(); agendar();
       info.textContent = `Arquivo da modelista no ${size}: ${an.pieces.length} peças lidas. A grade agora segue a diferença real entre o ${st.base} e o ${size} de cada peça.` + (falta.length ? ` Sem par no arquivo: ${falta.join(', ')} (seguem o padrão de mercado).` : '');
-    } catch (e) { console.error(e); info.textContent = 'Não consegui ler esse arquivo: ' + e.message; }
+    } catch (e) { console.error(e); info.textContent = 'Não consegui ler esse arquivo: ' + e.message; vigia('erro', 'PDF/arquivo: ' + e.message, { pilha: String(e.stack || '').slice(0, 1500) }); }
   }
 
   const MODOS = { padrao: '#padraoBox', auto: '#autoBox', pdf: '#pdfBox', calib: '#calibBox', moldes: '#moldesBox', salva: '#salvaBox', tabela: '#tabelaBox', casa: '#casaBox' };
@@ -1257,7 +1258,7 @@ const App = (() => {
       renderPieces(); desenharEtiquetas(); renderMoldes(); agendar();
       if ($('#iaAuto') && $('#iaAuto').checked) iaConferirPecas().catch(e => console.error(e));
       info.textContent = txt0 + (n ? ` ✔ Nomes dos moldes copiados para ${n} peça(s).` : ' (Não consegui ler os nomes escritos nos moldes; escreva na peça com dois cliques.)');
-    } catch (e) { console.error(e); info.textContent = txt0 + ' (Não consegui ler os nomes dos moldes: ' + e.message + ')'; }
+    } catch (e) { console.error(e); info.textContent = txt0 + ' (Não consegui ler os nomes dos moldes: ' + e.message + ')'; vigia('erro', 'Nomes dos moldes: ' + e.message); }
     // depois de saber o nome de cada peça: o automático da casa aprende com este modelo (uma vez por modelo)
     if (st.aprenderPendente) {
       st.aprenderPendente = false;
@@ -1384,6 +1385,22 @@ const App = (() => {
     if (!r.ok || !j.ok) throw new Error(j.erro || `erro ${r.status}`);
     return j.resposta;
   }
+  // 🛡 VIGIA (v49, dono 14/11): todo erro da tela e todo problema grave que a IA acha na grade vai para a nuvem; o vigia
+  // agendado lê, conserta e devolve a versão nova. Cada mensagem vai uma vez só por sessão (sem inundar o servidor).
+  const vigiaVistas = new Set();
+  function vigia(tipo, mensagem, detalhe = {}) {
+    try {
+      mensagem = String(mensagem || '').slice(0, 900); if (!mensagem || vigiaVistas.has(tipo + mensagem) || vigiaVistas.size > 25) return;
+      vigiaVistas.add(tipo + mensagem);
+      const versao = (document.querySelector('.versao') || {}).textContent || '';
+      const ctx = { ...detalhe, etapa: (document.querySelector('[data-panel].on') || {}).dataset?.panel, base: st.base, tamanhos: st.sizes, pecas: st.pieces.length,
+        grupos: st.groups.map(g => `${g.id}×${g.items.length}`), pdfs: st.moldes ? Object.keys(st.moldes.tams) : [], arquivo: st.file && st.file.name };
+      fetch(IA_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ acao: 'ocorrencia', tipo, mensagem, detalhe: ctx, versao }) }).catch(() => {});
+    } catch (e) { /* o vigia nunca atrapalha o motor */ }
+  }
+  window.addEventListener('error', e => vigia('erro', `${e.message} (${(e.filename || '').split('/').pop()}:${e.lineno})`, { pilha: e.error && String(e.error.stack || '').slice(0, 1500) }));
+  window.addEventListener('unhandledrejection', e => vigia('erro', 'Promessa: ' + String(e.reason && (e.reason.message || e.reason)), { pilha: e.reason && String(e.reason.stack || '').slice(0, 1500) }));
+  window.__pxVigia = vigia;
   let iaOcupado = false;
   async function iaConferirPecas() {
     const info = $('#iaPecasInfo'), res = $('#iaPecasRes');
@@ -1441,6 +1458,7 @@ const App = (() => {
       const r = await iaPedir('grade', imgs, texto);
       if (r.licao) iaGuardarLicao(r.licao, 'ia');
       const probs = r.problemas || [];
+      probs.filter(pb => pb.gravidade === 'alta').forEach(pb => vigia('ia', `${pb.grupo || ''}: ${pb.problema}`, { acao: pb.acao, molde: pb.molde, regra: pb.regra, olhou: olhar }));
       info.textContent = r.ok && !probs.length ? `🧠 A IA conferiu ${olhar.join(' e ')}: a grade está boa para produzir.` : `🧠 A IA achou ${probs.length} ponto(s) para olhar em ${olhar.join(' e ')}:`;
       res.replaceChildren(...probs.map(pb => {
         const g = st.groups.find(x => x.id === pb.grupo);
@@ -1699,11 +1717,20 @@ const App = (() => {
     tAgenda = setTimeout(() => { if (gerando) deNovo = true; else gerar(); }, 700);
   }
 
+  // v50 (designer 14/11: "passo para o Photoshop ou o Corel e ele para de gerar"): enquanto o motor trabalha ele segura
+  // uma "trava" do navegador (Web Locks) e fica com a aba marcada como ocupada — o Chrome não congela aba nessas condições —
+  // e os PDFs são desenhados sem requestAnimationFrame (que o navegador desliga quando a janela não está na frente).
+  // O título da aba mostra o andamento, para o designer ver de longe.
+  async function trabalhando(fn) {
+    const t0 = document.title, marca = setInterval(() => { const s = ($('#status5') && $('#status5').textContent) || ''; document.title = (s ? '⏳ ' + s.slice(0, 40) + ' — ' : '⏳ ') + 'PLATNUMPRINT-X'; }, 1500);
+    try { return navigator.locks && navigator.locks.request ? await navigator.locks.request('platnumprint-x-trabalhando', () => fn()) : await fn(); }
+    finally { clearInterval(marca); document.title = document.hidden ? '✅ Pronto — PLATNUMPRINT-X' : t0; if (document.hidden) { const volta = () => { document.title = t0; document.removeEventListener('visibilitychange', volta); }; document.addEventListener('visibilitychange', volta); } }
+  }
   async function gerar() {
     if (gerando) { deNovo = true; return; }
     $('#status5').classList.remove('pendente');
     gerando = true;
-    try { await gerar_(); } finally { gerando = false; if (deNovo) { deNovo = false; gerar(); } }
+    try { await trabalhando(gerar_); } finally { gerando = false; if (deNovo) { deNovo = false; gerar(); } }
   }
 
   async function gerar_() {
@@ -1747,6 +1774,7 @@ const App = (() => {
     } catch (e) {
       console.error(e);
       $('#status5').textContent = 'Erro ao gerar: ' + e.message;
+      vigia('erro', 'Erro ao gerar: ' + e.message, { pilha: String(e.stack || '').slice(0, 1500) });
     } finally { $('#btnGerar').disabled = false; }
   }
 
@@ -1796,7 +1824,7 @@ const App = (() => {
     $('#novaCorVoltar').addEventListener('click', voltarArteBase);
     $('#sizes').addEventListener('change', () => { readSizes(); if (st.an) { computeTargets(); renderGrade(); renderMercado(); } renderQtd(); });
     $('#baseSize').addEventListener('change', () => { st.base = $('#baseSize').value; if (st.an) { computeTargets(); renderGrade(); renderMercado(); runCheck(); } });
-    $('#btnLer').addEventListener('click', ler);
+    $('#btnLer').addEventListener('click', () => trabalhando(ler));
     ligarCores(); uniCarregar(); ligarIA();
     $('#etqSalvar').addEventListener('click', salvarEtiquetas);
     $('#etqColar').addEventListener('click', () => colarEtiquetas(false));
@@ -1848,7 +1876,7 @@ const App = (() => {
     $('#btnGerar').addEventListener('click', gerar);
     $('#btnTodos').addEventListener('click', baixarTodos);
     $('#btnCorelTodos').addEventListener('click', corelTodos);
-    $('#btnEncaixe').addEventListener('click', montarEncaixe);
+    $('#btnEncaixe').addEventListener('click', () => trabalhando(montarEncaixe));
     // Qualquer opção do Gerar mudou: refaz sozinho (obedece o que está marcado).
     ['#roll', '#margin', '#gap', '#bleed', '#allowRot', '#girosExtra', '#compactar', '#manterEncaixe', '#splitLong', '#incBase', '#marcarTam', '#marcarNome', '#labelMm', '#labelCor', '#labelCorAuto'].forEach(id => $(id).addEventListener('change', agendar));
     ['#marcarTam', '#marcarNome', '#labelMm'].forEach(id => $(id).addEventListener('change', () => { readOut(); desenharEtiquetas(); }));

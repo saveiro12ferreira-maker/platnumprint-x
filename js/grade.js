@@ -387,6 +387,49 @@ const Grade = (() => {
       }
     }
 
+    // v50 (designer 14/11, "bugando" na beira): a estampa recolocada às vezes não chegava até a borda de corte nova e
+    // ficava um fiozinho branco (cor do fundo) entre a borda preta e o desenho. Fecha só esse fio: pixel com a cor do
+    // fundo, logo depois da borda, que tem desenho mais para DENTRO da peça a até ~4 px, pega a cor desse desenho.
+    if (o.thick > 0) {
+      const F = Math.max(3, Math.min(12, Math.round(o.thick * 0.15) + 2));
+      const e1 = U.box(nm, Wt, Ht, o.thick, 'min'), e2 = U.box(nm, Wt, Ht, o.thick + F, 'min');
+      const ehFundo = q => Math.abs(out[q] - br) + Math.abs(out[q + 1] - bgG) + Math.abs(out[q + 2] - bb) < 24;
+      // só onde no ARQUIVO ORIGINAL o desenho encostava na borda (ex.: manga azul inteira): onde o original tinha fundo
+      // junto da borda (flores soltas no fundo), o fundo fica — senão a cor das flores escorreria pela beira
+      const bg0c = o.bg0 || o.bg, Fo = Math.max(2, Math.round(F / Math.max(0.2, Math.sqrt(sx * sy))));
+      if (!p._anel || p._anel.Fo !== Fo) {
+        const A0 = new Uint8Array(W * H), dentro = new Uint8Array(W * H);
+        for (let i = 0; i < W * H; i++) dentro[i] = p.mask[i] && !(p.band && p.band[i]) ? 1 : 0;
+        const fundo0 = i => Math.abs(S[i * 4] - bg0c[0]) + Math.abs(S[i * 4 + 1] - bg0c[1]) + Math.abs(S[i * 4 + 2] - bg0c[2]) < 24;
+        const perto = U.box(dentro, W, H, Fo, 'min');
+        let na = 0, nf = 0;
+        for (let i = 0; i < W * H; i++) if (dentro[i] && !perto[i]) { A0[i] = fundo0(i) ? 1 : 2; if (A0[i] === 2) na++; else nf++; }
+        // só peça com a beira TODA desenhada (ex.: manga azul): peça com fundo na beira (flores soltas) fica como era
+        p._anel = { Fo, A0, cheia: na > 0 && na >= 0.6 * (na + nf) };
+      }
+      const A0 = p._anel.A0, Rj = Fo * 2, cheia = p._anel.cheia;
+      const anelArte = (x, y) => {
+        const X = mapX[x], Y = mapY[y]; let arte = 0, fundo = 0;
+        for (let yy = Math.max(0, Y - Rj); yy <= Math.min(H - 1, Y + Rj); yy += 2) for (let xx = Math.max(0, X - Rj); xx <= Math.min(W - 1, X + Rj); xx += 2) {
+          const v = A0[yy * W + xx]; if (v === 2) arte++; else if (v === 1) fundo++;
+        }
+        return arte > 0 && arte >= 3 * fundo;
+      };
+      const mud = [];
+      if (cheia) for (let y = 0; y < Ht; y++) for (let x = 0; x < Wt; x++) {
+        const i = y * Wt + x; if (!e1[i] || e2[i]) continue;
+        const q = ((y + b) * OW + x + b) * 4; if (!ehFundo(q)) continue;
+        let achou = -1, dmin = 1e9;
+        for (let dy = -F; dy <= F; dy++) for (let dx = -F; dx <= F; dx++) {
+          const xx = x + dx, yy = y + dy, d = dx * dx + dy * dy; if (d > F * F || d >= dmin || xx < 0 || yy < 0 || xx >= Wt || yy >= Ht) continue;
+          const j = yy * Wt + xx; if (!e1[j]) continue;           // só desenho de dentro da peça (fora da borda)
+          const qq = ((yy + b) * OW + xx + b) * 4; if (ehFundo(qq)) continue;
+          achou = qq; dmin = d;
+        }
+        if (achou >= 0 && anelArte(x, y)) mud.push(q, achou);
+      }
+      for (let k = 0; k < mud.length; k += 2) { const q = mud[k], a = mud[k + 1]; out[q] = out[a]; out[q + 1] = out[a + 1]; out[q + 2] = out[a + 2]; }
+    }
     // nome e número do uniforme (por baixo da risca)
     for (const E of (o.persona || [])) pintaPersona(out, OW, b, nm, Wt, Ht, E);
     if (o.thick > 0) {

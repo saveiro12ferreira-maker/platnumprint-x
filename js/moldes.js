@@ -27,7 +27,7 @@ const Moldes = (() => {
       const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
       const ctx = cv.getContext('2d', { willReadFrequently: true });
       ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
-      await page.render({ canvasContext: ctx, viewport: vp }).promise;
+      await page.render({ canvasContext: ctx, viewport: vp, intent: 'print' }).promise;   // v50: 'print' não usa requestAnimationFrame (que para quando o designer vai para outra janela)
       const px = ctx.getImageData(0, 0, W, H).data;
       let m = new Uint8Array(W * H);
       for (let i = 0; i < W * H; i++) { const o = i * 4; if (px[o] * 0.3 + px[o + 1] * 0.59 + px[o + 2] * 0.11 < 160) m[i] = 1; }
@@ -80,7 +80,7 @@ const Moldes = (() => {
     const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
     const ctx = cv.getContext('2d', { willReadFrequently: true });
     ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
-    await page.render({ canvasContext: ctx, viewport: vp, transform: [1, 0, 0, 1, -x0, -y0] }).promise;
+    await page.render({ canvasContext: ctx, viewport: vp, transform: [1, 0, 0, 1, -x0, -y0], intent: 'print' }).promise;
     const px = ctx.getImageData(0, 0, W, H).data; cv.width = cv.height = 1;
     let m = new Uint8Array(W * H);
     for (let i = 0; i < W * H; i++) { const o = i * 4; if (px[o] * 0.3 + px[o + 1] * 0.59 + px[o + 2] * 0.11 < 160) m[i] = 1; }
