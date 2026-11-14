@@ -210,3 +210,8 @@ Gerado aqui com os arquivos reais da equipe. Três coisas estavam erradas e fora
 - Escolheu a cor dos nomes e números no Gerar → vale a cor escolhida: a caixinha "automática" desmarca sozinha (antes ela continuava marcada e mandava no lugar da cor escolhida).
 - Corel com a cor automática agora sai igual ao TIFF: branco no fundo escuro, preto no claro (antes o Corel saía sempre preto).
 - "Altura do número" do Gerar vale para todas as peças, e o botão **🔠 Mesma letra em todas** tira a letra própria que alguma peça tenha guardado (a manga estava saindo com a letra bem maior). Depois clique em 💾 Salvar para guardar.
+
+## v43 (14/11) — digitar o código da cor sem o seletor fechar
+- Designer: em **Estampa → Cores da estampa**, ao digitar o código no seletor de cor (ex.: #04244C) ele fechava a cada tecla e a cor ia para preto.
+- Agora o seletor não fecha enquanto escolhe ou digita; a lista de cores só se redesenha quando o seletor fecha.
+- Ao lado de cada cor nova tem uma **caixinha com o código**: digite (ex.: `#04244C`) e aperte **Enter**. Vale para "Cores da estampa", "trocar com os tons" e "só esta parte". Nada do que existia mudou.

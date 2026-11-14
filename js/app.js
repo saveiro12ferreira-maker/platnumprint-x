@@ -518,14 +518,31 @@ const App = (() => {
   }
 
   // ---------- Cores da estampa: trocar qualquer cor, em todas as peças ou só numa parte (pedido 12/11) ----------
+  // Campo de cor (pedido do designer 14/11): ao digitar o código no seletor do Windows/Chrome ele fechava sozinho, porque
+  // cada tecla redesenhava a lista inteira. Agora enquanto escolhe/digita só guarda a cor; a lista é redesenhada quando
+  // fecha o seletor. E ao lado tem a caixinha para digitar o código direto (ex.: #04244C) e apertar Enter.
+  function campoCor(hex, aplicar) {
+    hex = U.hex(hex);
+    const cor = el('input', { type: 'color', value: hex.toLowerCase(), title: 'Escolher a cor nova' });
+    const txt = el('input', { type: 'text', value: hex.toUpperCase(), maxlength: '7', spellcheck: 'false', title: 'Digite o código da cor (ex.: #04244C) e aperte Enter',
+      style: 'width:76px;font-family:JetBrains Mono,monospace;font-size:12px;padding:2px 4px;text-transform:uppercase' });
+    const valido = v => /^#?[0-9a-f]{6}$/i.test(v.trim()), norm = v => '#' + v.trim().replace(/^#/, '').toLowerCase();
+    const usar = (h, redesenhar) => { aplicar(U.rgb(h)); if (redesenhar) renderCores(); agendar(); };
+    cor.addEventListener('input', e => { txt.value = e.target.value.toUpperCase(); aplicar(U.rgb(e.target.value)); });
+    cor.addEventListener('change', e => usar(e.target.value, true));
+    txt.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); if (valido(txt.value)) usar(norm(txt.value), true); else txt.style.borderColor = '#e33'; } });
+    txt.addEventListener('input', () => { txt.style.borderColor = ''; if (valido(txt.value)) cor.value = norm(txt.value); });
+    txt.addEventListener('blur', () => { if (valido(txt.value)) { if (norm(txt.value) !== hex.toLowerCase()) usar(norm(txt.value), true); } else txt.value = hex.toUpperCase(); });
+    return el('span', { style: 'display:inline-flex;align-items:center;gap:4px' }, cor, txt);
+  }
+
   function renderCores() {
     if (!st.an) return;
     if (!st.cores || st.cores.an !== st.an) st.cores = { an: st.an, key: 'c' + Date.now(), pal: Grade.paleta(st.pieces), novas: [], regioes: [] };
     const C = st.cores;
     const caixa = (orig, nova) => el('span', { style: `display:inline-block;width:22px;height:22px;border-radius:4px;border:1px solid #888;background:${U.hex(nova || orig)}` });
     $('#coresLista').replaceChildren(...C.pal.map((x, i) => {
-      const inp = el('input', { type: 'color', value: U.hex(C.novas[i] || x.c).toLowerCase(), title: 'Escolher a cor nova',
-        oninput: e => { C.novas[i] = U.rgb(e.target.value); renderCores(); agendar(); } });
+      const inp = campoCor(C.novas[i] || x.c, c => { C.novas[i] = c; });
       return el('div', { style: 'display:flex;align-items:center;gap:4px;padding:4px 6px;border:1px solid #ddd;border-radius:8px;background:' + (C.novas[i] ? '#fff7e0' : '#fff') },
         el('span', { title: 'Cor original ' + U.hex(x.c), style: `display:inline-block;width:22px;height:22px;border-radius:4px;border:1px solid #888;background:${U.hex(x.c)}` }),
         el('span', { text: '→' }), inp,
@@ -542,7 +559,7 @@ const App = (() => {
     C.tons = C.tons || [];
     $('#coresTons').replaceChildren(...C.tons.map((t, j) => el('div', { style: 'display:flex;align-items:center;gap:6px;margin:3px 0' },
       el('b', { text: `T${j + 1}.` }), el('span', { text: t.n == null ? 'Todas as peças — a cor com os tons:' : `Peça ${t.n} — esta parte, com os tons:` }), caixa(t.c), el('span', { text: '→' }),
-      el('input', { type: 'color', value: U.hex(t.cor).toLowerCase(), oninput: e => { t.cor = U.rgb(e.target.value); renderCores(); agendar(); } }),
+      campoCor(t.cor, c => { t.cor = c; }),
       el('label', { title: 'Quanto dos tons parecidos entra (mais = pega sombras e luzes mais diferentes)' }, ' tons ', el('input', { type: 'range', min: '10', max: '100', value: t.tol, style: 'vertical-align:middle;width:90px', onchange: e => { t.tol = +e.target.value; renderCores(); agendar(); } })),
       el('button', { type: 'button', class: 'mini', text: '✕ tirar', onclick: () => { C.tons.splice(j, 1); renderCores(); agendar(); } }))));
     C.tons.forEach((t, j) => { if (t.n == null) return; const p = st.pieces.find(q => q.n === t.n); if (!p) return; const [x, y] = noArquivo(p, t.x, t.y).map(v => v * st.an.pf);
@@ -550,7 +567,7 @@ const App = (() => {
       ctx.fillStyle = '#000'; ctx.font = 'bold 12px sans-serif'; ctx.fillText('T' + (j + 1), x + 9, y + 4); });
     $('#coresPartes').replaceChildren(...C.regioes.map((r, j) => el('div', { style: 'display:flex;align-items:center;gap:6px;margin:3px 0' },
       el('b', { text: `${j + 1}.` }), el('span', { text: `Peça ${r.n} — só esta parte:` }), caixa(r.orig), el('span', { text: '→' }),
-      el('input', { type: 'color', value: U.hex(r.cor).toLowerCase(), oninput: e => { r.cor = U.rgb(e.target.value); renderCores(); agendar(); } }),
+      campoCor(r.cor, c => { r.cor = c; }),
       el('button', { type: 'button', class: 'mini', text: '✕ tirar', onclick: () => { C.regioes.splice(j, 1); renderCores(); agendar(); } }))));
   }
   function ligarCores() {
