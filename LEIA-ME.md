@@ -215,3 +215,9 @@ Gerado aqui com os arquivos reais da equipe. Três coisas estavam erradas e fora
 - Designer: em **Estampa → Cores da estampa**, ao digitar o código no seletor de cor (ex.: #04244C) ele fechava a cada tecla e a cor ia para preto.
 - Agora o seletor não fecha enquanto escolhe ou digita; a lista de cores só se redesenha quando o seletor fecha.
 - Ao lado de cada cor nova tem uma **caixinha com o código**: digite (ex.: `#04244C`) e aperte **Enter**. Vale para "Cores da estampa", "trocar com os tons" e "só esta parte". Nada do que existia mudou.
+
+## v44 (14/11) — cada peça do arquivo casa com o molde certo do PDF
+- Designers: na camiseta CPEF RUN o motor tirava as mangas e punha a estampa da manga nas blusas; no conjunto da Milena trocava um acabamento por uma alça sem estampa.
+- Causa: o motor casava as peças do arquivo com os moldes do PDF **uma a uma, só pela medida**. Peças de medida parecida (acabamento × alça, manga × frente) pegavam o molde uma da outra.
+- Agora ele compara também o **formato** de cada peça (inclusive virada e espelhada, como manga esquerda × direita) e escolhe o **melhor conjunto** para todas as peças juntas. Nenhuma peça fica sem molde por causa de outra, e não entra peça a mais.
+- Conferido: o Vestido Antonella casa exatamente igual à versão anterior; um teste com alça × acabamento e manga × frente, que antes trocavam, agora casa certo.

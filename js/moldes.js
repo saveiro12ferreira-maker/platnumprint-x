@@ -238,6 +238,28 @@ const Moldes = (() => {
   }
 
 
+  // Atribuição de menor custo total (algoritmo húngaro), matriz quadrada n×n. Devolve [[linha, coluna]].
+  function hungaro(C) {
+    const n = C.length, u = new Array(n + 1).fill(0), v = new Array(n + 1).fill(0), p = new Array(n + 1).fill(0), way = new Array(n + 1).fill(0);
+    for (let i = 1; i <= n; i++) {
+      p[0] = i; let j0 = 0; const minv = new Array(n + 1).fill(Infinity), used = new Array(n + 1).fill(false);
+      do {
+        used[j0] = true; const i0 = p[j0]; let delta = Infinity, j1 = 0;
+        for (let j = 1; j <= n; j++) if (!used[j]) {
+          const cur = C[i0 - 1][j - 1] - u[i0] - v[j];
+          if (cur < minv[j]) { minv[j] = cur; way[j] = j0; }
+          if (minv[j] < delta) { delta = minv[j]; j1 = j; }
+        }
+        for (let j = 0; j <= n; j++) if (used[j]) { u[p[j]] += delta; v[j] -= delta; } else minv[j] -= delta;
+        j0 = j1;
+      } while (p[j0] !== 0);
+      do { const j1 = way[j0]; p[j0] = p[j1]; j0 = j1; } while (j0);
+    }
+    const r = []; for (let j = 1; j <= n; j++) if (p[j]) r.push([p[j] - 1, j - 1]);
+    return r;
+  }
+  const assinatura = (m, w, h) => miniatura(m, w, h, 32);
+
   // Casa duas listas de peças (A = referência, B = outro tamanho). A peça pode estar deitada no PDF (largura e altura trocadas).
   // Devolve para cada índice de A: { j, girada } ou null.
   // repetir: a peça do arquivo que sobrou pode usar um molde que já foi usado (ex.: o PDF tem um molde só
@@ -252,11 +274,12 @@ const Moldes = (() => {
     const pares = [], comForma = !!(A[0] && A[0].sig && B[0] && B[0].sig);
     // formato: quando as duas listas têm o formato pequeno (PDF com PDF), compara o desenho também — a frente e a
     // costas têm medida quase igual, mas a costas tem a abertura (12/11: as duas trocavam de molde entre os tamanhos)
+    // v44 (14/11): também virada 180° e espelhada (manga esquerda × direita, peça de cabeça para baixo no arquivo)
     const forma = (ma, mb, gira) => {
       if (!ma || !mb) return 0;
-      const G = 32, b2 = gira ? transformar({ w: G, h: G, m: mb }, 1).m : mb;
+      const G = 32, ts = gira ? [1, 3, 5, 7] : [0, 2, 4, 6];
       let best = 1;
-      for (const bb of gira ? [b2, transformar({ w: G, h: G, m: mb }, 3).m] : [b2]) {
+      for (const bb of ts.map(t => t ? transformar({ w: G, h: G, m: mb }, t).m : mb)) {
         let i2 = 0, u = 0; for (let k = 0; k < ma.length; k++) { if (ma[k] && bb[k]) i2++; if (ma[k] || bb[k]) u++; }
         best = Math.min(best, u ? 1 - i2 / u : 1);
       }
@@ -268,10 +291,17 @@ const Moldes = (() => {
       pares.push({ i, j, c: Math.min(reto, deit), girada: deit < reto });
     }));
     pares.sort((x, y) => x.c - y.c);
-    const res = A.map(() => null), usadoB = new Set();
-    for (const p of pares) {
-      if (res[p.i] || usadoB.has(p.j) || p.c > (comForma ? 1.8 : 0.9)) continue;
-      res[p.i] = { j: p.j, girada: p.girada, custo: p.c }; usadoB.add(p.j);
+    const res = A.map(() => null), usadoB = new Set(), lim = comForma ? 1.8 : 0.9;
+    // v44 (14/11): casamento pelo MELHOR CONJUNTO (soma dos custos), não peça a peça. Peça a peça, uma peça casava
+    // com o molde de outra parecida (acabamento × alça, manga × frente) e a outra ficava sem molde: o motor tirava a
+    // manga ou punha uma alça sem estampa no lugar do acabamento (vídeos dos designers 14/11).
+    const custo = A.map(() => B.map(() => null));
+    for (const p of pares) custo[p.i][p.j] = p;
+    const n = Math.max(A.length, B.length), GR = 1e3;
+    const M = Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) => { const p = custo[i] && custo[i][j]; return p && p.c <= lim ? p.c : GR; }));
+    for (const [i, j] of hungaro(M)) {
+      const p = custo[i] && custo[i][j];
+      if (p && p.c <= lim) { res[i] = { j, girada: p.girada, custo: p.c }; usadoB.add(j); }
     }
     // só repete quando é o MESMO pedaço repetido no arquivo da estampa (mesma medida da peça que já casou com
     // aquele molde, de pé ou deitada, até ~6% de diferença): aí faz nele exatamente o que fez no outro (pedido 12/11)
@@ -310,5 +340,5 @@ const Moldes = (() => {
     gravar(l); return n;
   }
 
-  return { ler, forma, lerNome, nomeDoRotulo, orientar, casar, interpolar, tamDoNome, modeloDoNome, lista, salvar, excluir, importar };
+  return { ler, forma, lerNome, nomeDoRotulo, orientar, casar, assinatura, interpolar, tamDoNome, modeloDoNome, lista, salvar, excluir, importar };
 })();

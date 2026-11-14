@@ -25,6 +25,7 @@ const App = (() => {
     rollCm: 150, marginMm: 10, gapMm: 10, bleedMm: 0, results: {},
     groupName: g => TYPES[g.type] + (g.letter ? ' ' + g.letter : ''),
   };
+  try { window.__pxEstado = () => st; } catch (e) { /* conferência automática do motor */ }
 
   const el = (tag, attrs = {}, ...kids) => {
     const e = document.createElement(tag);
@@ -705,7 +706,10 @@ const App = (() => {
 
   // ---------- Moldes da modelista (PDFs, um por tamanho) ----------
   const idxTam = size => st.sizes.indexOf(size);
-  const dimsGrupo = () => st.groups.map(g => ({ w: cmW(g), h: cmH(g) }));
+  // v44: com o formato da peça (não só a medida), para não casar acabamento com alça nem manga com frente
+  const dimsGrupo = () => st.groups.map(g => { const p = g.items[0]; let sig = null;
+    try { if (p && p.mask) { sig = g._sig || (g._sig = Moldes.assinatura(p.mask, p.w, p.h)); } } catch (e) { sig = null; }
+    return { w: cmW(g), h: cmH(g), sig }; });
   function refMolde() {
     const m = st.moldes; if (!m) return null;
     const tams = Object.keys(m.tams).filter(t => idxTam(t) >= 0);
