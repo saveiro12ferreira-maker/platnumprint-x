@@ -270,7 +270,18 @@ const Moldes = (() => {
     const a = [...A].sort((p, q) => ar(q) - ar(p)), b = [...B].sort((p, q) => ar(q) - ar(p));
     const k = []; for (let i = 0; i < Math.min(a.length, b.length); i++) k.push(Math.sqrt(ar(b[i]) / ar(a[i])));
     k.sort((x, y) => x - y);
-    const s = k.length ? k[k.length >> 1] : 1;
+    let s = k.length ? k[k.length >> 1] : 1;
+    // v46 (CPEF RUN 14/11): quando o arquivo tem menos grupos que o PDF tem peças (frente e costas no mesmo grupo,
+    // 2 mangas), parear pela ordem de tamanho dava escala 1,57 e a manga casava com a frente. Agora a escala é a que
+    // faz TODAS as peças do arquivo acharem um molde de medida parecida (testa as escalas de cada par possível).
+    if (A.length !== B.length && A.length && B.length) {
+      const custoEsc = sc => A.reduce((t, p) => t + Math.min(...B.map(q => Math.min(
+        Math.abs(Math.log(q.w / (sc * p.w))) + Math.abs(Math.log(q.h / (sc * p.h))),
+        Math.abs(Math.log(q.h / (sc * p.w))) + Math.abs(Math.log(q.w / (sc * p.h)))))), 0);
+      let melhor = { sc: s, c: custoEsc(s) };
+      for (const p of A) for (const q of B) { const sc = Math.sqrt(ar(q) / ar(p)); if (sc < 0.5 || sc > 2) continue; const c = custoEsc(sc); if (c < melhor.c - 1e-9) melhor = { sc, c }; }
+      s = melhor.sc;
+    }
     const pares = [], comForma = !!(A[0] && A[0].sig && B[0] && B[0].sig);
     // formato: quando as duas listas têm o formato pequeno (PDF com PDF), compara o desenho também — a frente e a
     // costas têm medida quase igual, mas a costas tem a abertura (12/11: as duas trocavam de molde entre os tamanhos)

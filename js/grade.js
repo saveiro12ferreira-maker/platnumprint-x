@@ -289,10 +289,15 @@ const Grade = (() => {
       const pint = new Uint8Array(Wt * Ht);
       const coluna = (prof, x) => { x = Math.max(0, Math.min(prof.length - 1, x)); if (prof[x] >= 0) return prof[x]; for (let d = 1; d < prof.length; d++) { if (x - d >= 0 && prof[x - d] >= 0) return prof[x - d]; if (x + d < prof.length && prof[x + d] >= 0) return prof[x + d]; } return -1; };
       for (const e of E.lista) {
-        const ex = e.largo ? sx : s, ey = s;
+        // v46 (CPEF RUN 14/11): desenho que vai de cima a baixo da peça (ex.: a faixa azul do ombro que desce pela lateral
+        // até a barra) não pode só mudar de tamanho: num tamanho menor ele não chegava mais no ombro e ficava uma faixa
+        // branca em cima. Esse acompanha a altura da peça (estica junto), como o fundo.
+        const alto = (e.y1 - e.y0) > H * 0.8;
+        const ex = e.largo || alto ? sx : s, ey = alto ? sy : s;
         const Xn = e.cx * sx;
         let Yn;
-        if (e.cy > H * 0.5) { const sb = coluna(p.bot, Math.round(e.cx)), nbb = coluna(nb, Math.round(Xn)); Yn = sb >= 0 && nbb >= 0 ? nbb - (sb - e.cy) * s : e.cy * sy; }
+        if (alto) Yn = e.cy * sy;
+        else if (e.cy > H * 0.5) { const sb = coluna(p.bot, Math.round(e.cx)), nbb = coluna(nb, Math.round(Xn)); Yn = sb >= 0 && nbb >= 0 ? nbb - (sb - e.cy) * s : e.cy * sy; }
         else { const st0 = coluna(p.top, Math.round(e.cx)), ntt = coluna(nt, Math.round(Xn)); Yn = st0 >= 0 && ntt >= 0 ? ntt + (e.cy - st0) * s : e.cy * sy; }
         // caixa nova do elemento, sem sair da peça
         let bx0 = Xn + (e.x0 - e.cx) * ex, bx1 = Xn + (e.x1 - e.cx) * ex, by0 = Yn + (e.y0 - e.cy) * ey, by1 = Yn + (e.y1 - e.cy) * ey;
@@ -304,7 +309,7 @@ const Grade = (() => {
         const ya = Math.max(0, Math.floor(by0 + dys)), yb = Math.min(Ht - 1, Math.ceil(by1 + dys));
         const xa = Math.max(0, Math.floor(bx0 + dxs)), xb = Math.min(Wt - 1, Math.ceil(bx1 + dxs));
         // faixa larga (linha, renda, barrado corrido): segue a curva da barra coluna por coluna
-        const embaixo = e.cy > H * 0.5, curva = e.largo;
+        const embaixo = e.cy > H * 0.5, curva = e.largo && !alto;
         const y0c = curva ? 0 : ya, y1c = curva ? Ht - 1 : yb;
         // v45 (vídeo 14/11, short da Milena): a faixa seguia a curva da borda coluna por coluna e, perto do gancho/cava
         // (onde a borda vira de repente), o bordado entortava ("bugado nos fundos e em cima"). Agora o deslocamento de

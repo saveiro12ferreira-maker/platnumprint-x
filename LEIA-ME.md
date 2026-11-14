@@ -227,3 +227,10 @@ Gerado aqui com os arquivos reais da equipe. Três coisas estavam erradas e fora
 - Causa: a faixa larga segue a borda da peça coluna por coluna; perto do gancho a borda vira de repente e a faixa ia junto.
 - Agora a faixa só pode mudar de altura aos poucos (a partir do meio dela): segue a barra normal, inclusive barra curva, mas perto do gancho continua reta e é cortada pelo molde, como no arquivo original.
 - Conferido no Vestido Antonella: a grade sai igual (diferença só de alguns pixels na beira da faixa, invisível).
+
+## v46 (14/11) — CPEF RUN: mangas no molde certo e ombro sem faixa branca
+Testado com os arquivos do designer (GG.tif + PDFs PP a G3):
+- **Manga casava com a frente:** o arquivo tem 3 grupos (frente+costas, 2 mangas, gola) e o PDF tem 5 peças; parear pela ordem de tamanho dava uma escala errada (1,57×). Agora a escala é a que faz todas as peças acharem um molde de medida parecida.
+- **Manga deitada:** a conta de "molde deitado no PDF" somava em vez de comparar e deitava a manga que está de pé, cortando o UNINTER. Corrigida.
+- **Faixa branca no ombro da frente:** o desenho azul que vai do ombro até a barra só mudava de tamanho e, no tamanho menor, não chegava mais no ombro. Desenho que ocupa a peça de cima a baixo agora estica com a altura da peça.
+- Vestido Antonella conferido: sai idêntico ao da v45.

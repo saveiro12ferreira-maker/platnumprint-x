@@ -717,6 +717,9 @@ const App = (() => {
     const ib = idxTam(st.base);
     return tams.sort((a, b) => Math.abs(idxTam(a) - ib) - Math.abs(idxTam(b) - ib))[0];
   }
+  // v46 (CPEF RUN 14/11): o molde está deitado no PDF quando a proporção dele GIRADA bate com a da peça do arquivo.
+  // A conta antiga somava em vez de comparar e deitava a manga de pé: a estampa da manga saía cortada.
+  const deitadaNoPdf = (p, d) => Math.abs(Math.log(p.h / p.w) - Math.log(d.w / d.h)) < Math.abs(Math.log(p.w / p.h) - Math.log(d.w / d.h));
   // Casa as peças do arquivo base com as do PDF mais perto do base; os outros PDFs casam com esse.
   function casarMoldes() {
     const m = st.moldes; if (!m) return;
@@ -728,9 +731,9 @@ const App = (() => {
       let c = auto[i];
       // escolhido pelo formato (frente ≠ costas), quando os nomes dos moldes foram lidos
       const pf = (m.porForma || {})[g.id];
-      if (pf != null && pr[pf] && (man == null)) { const p = pr[pf], d = dimsGrupo()[i]; c = { j: pf, girada: Math.abs(Math.log(p.h / p.w) + Math.log(d.w / d.h)) < Math.abs(Math.log(p.w / p.h) + Math.log(d.w / d.h)) }; }
+      if (pf != null && pr[pf] && (man == null)) { const p = pr[pf], d = dimsGrupo()[i]; c = { j: pf, girada: deitadaNoPdf(p, d) }; }
       if (man === -1) c = null;
-      else if (man != null && pr[man]) { const p = pr[man], d = dimsGrupo()[i]; c = { j: man, girada: Math.abs(Math.log(p.h / p.w) + Math.log(d.w / d.h)) < Math.abs(Math.log(p.w / p.h) + Math.log(d.w / d.h)) }; }
+      else if (man != null && pr[man]) { const p = pr[man], d = dimsGrupo()[i]; c = { j: man, girada: deitadaNoPdf(p, d) }; }
       m.casa[g.id] = {}; if (c) m.casa[g.id][ref] = { j: c.j, girada: c.girada };
     });
     for (const t of Object.keys(m.tams)) {
