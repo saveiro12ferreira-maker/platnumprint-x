@@ -1290,12 +1290,40 @@ const App = (() => {
   // moldes do PDF e a grade gerada. A IA decide o molde de cada peça, a regra da estampa e o nome do pedaço, e confere a
   // grade gerada. Cada correção do designer vira uma "lição" que vai junto nos próximos pedidos: a IA aprende com a casa.
   const IA_URL = 'https://confexconect-erp.vercel.app/api/px/ia';
-  const IA_LICOES = 'px_ia_licoes';
-  const iaLicoes = () => { try { return JSON.parse(localStorage.getItem(IA_LICOES) || '[]'); } catch (e) { return []; } };
-  function iaGuardarLicao(t) {
-    if (!t) return; const l = iaLicoes().filter(x => x !== t); l.push(t);
-    try { localStorage.setItem(IA_LICOES, JSON.stringify(l.slice(-60))); } catch (e) { /* sem armazenamento */ }
-    const n = $('#iaLicoesN'); if (n) n.textContent = String(Math.min(60, l.length));
+  // v48 (dono 14/11): as lições ficam NA NUVEM (servidor do ConfexConect), valem para todos os designers do login de
+  // equipe. A cópia do computador só serve enquanto a nuvem não responde (sem internet): depois sobe sozinha.
+  const IA_LICOES = 'px_ia_licoes';            // pendentes (ainda não subiram)
+  let iaNuvem = [];                             // [{id, texto, origem}] da nuvem
+  const iaPendentes = () => { try { return JSON.parse(localStorage.getItem(IA_LICOES) || '[]'); } catch (e) { return []; } };
+  const iaLicoes = () => [...iaNuvem.map(x => x.texto).reverse(), ...iaPendentes()];
+  async function iaLicoesAcao(corpo) {
+    const r = await fetch(IA_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(corpo) });
+    const j = await r.json().catch(() => ({})); if (!r.ok || !j.ok) throw new Error(j.erro || `erro ${r.status}`);
+    iaNuvem = j.licoes || []; iaMostrarLicoes(); return iaNuvem;
+  }
+  async function iaSubirPendentes() {
+    const pend = iaPendentes(); if (!pend.length) return;
+    const fica = [];
+    for (const t of pend) { try { await iaLicoesAcao({ acao: 'licao', texto: t }); } catch (e) { fica.push(t); } }
+    try { localStorage.setItem(IA_LICOES, JSON.stringify(fica)); } catch (e) { /* nada */ }
+  }
+  function iaGuardarLicao(t, origem = 'designer') {
+    if (!t) return;
+    iaLicoesAcao({ acao: 'licao', texto: t, origem }).catch(() => {
+      const l = iaPendentes().filter(x => x !== t); l.push(t);
+      try { localStorage.setItem(IA_LICOES, JSON.stringify(l.slice(-60))); } catch (e) { /* sem armazenamento */ }
+      iaMostrarLicoes();
+    });
+  }
+  function iaMostrarLicoes() {
+    const n = $('#iaLicoesN'); if (n) n.textContent = String(iaNuvem.length + iaPendentes().length);
+    const box = $('#iaLicoesLista'); if (!box) return;
+    box.replaceChildren(...iaNuvem.map(x => el('div', { class: 'ia-item ' + (x.origem === 'ia' ? 'av' : 'ok') },
+      `${x.origem === 'ia' ? '🧠' : '✍️'} ${x.texto} `,
+      el('button', { type: 'button', class: 'mini', text: '✕', title: 'Tirar esta lição (vale para todos)', onclick: async () => {
+        if (!confirm('Tirar esta lição? A IA deixa de seguir para todos os designers.')) return;
+        try { await iaLicoesAcao({ acao: 'apagar_licao', id: x.id }); } catch (e) { alert('Não consegui tirar: ' + e.message); } } }))),
+      ...iaPendentes().map(t => el('div', { class: 'ia-item av', text: '⏳ ' + t + ' (sobe para a nuvem quando a internet voltar)' })));
   }
   const descGrupo = g => `${nomeGrupo(g)} (${g.items.length} peça(s), ${U.fmt(cmW(g))} × ${U.fmt(cmH(g))} cm)`;
   function iaLicaoMolde(g, j) {
@@ -1351,7 +1379,7 @@ const App = (() => {
     return o;
   }
   async function iaPedir(acao, imagens, texto) {
-    const r = await fetch(IA_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ acao, imagens, texto, licoes: iaLicoes() }) });
+    const r = await fetch(IA_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ acao, imagens, texto, licoes: iaPendentes() }) });
     const j = await r.json().catch(() => ({}));
     if (!r.ok || !j.ok) throw new Error(j.erro || `erro ${r.status}`);
     return j.resposta;
@@ -1411,7 +1439,7 @@ const App = (() => {
         'Confira: todas as peças do original estão na grade (nenhuma sumiu, nenhuma a mais, nenhuma sem estampa)? Cada peça tem o formato do molde certo? A estampa está inteira, sem cortar logo/texto, sem esticar o que não pode, sem faixa branca, sem desenho torto? A barra/bordado segue a barra?',
         'GRUPOS:', ...st.groups.map(g => { const c = m && m.casa[g.id] && m.casa[g.id][m.ref]; return `- ${g.id}: ${nomeGrupo(g)}, ${g.items.length} peça(s), regra "${g.items[0].rule}", molde ${c ? 'M' + (c.j + 1) : 'nenhum'}`; })].join('\n');
       const r = await iaPedir('grade', imgs, texto);
-      if (r.licao) iaGuardarLicao(r.licao);
+      if (r.licao) iaGuardarLicao(r.licao, 'ia');
       const probs = r.problemas || [];
       info.textContent = r.ok && !probs.length ? `🧠 A IA conferiu ${olhar.join(' e ')}: a grade está boa para produzir.` : `🧠 A IA achou ${probs.length} ponto(s) para olhar em ${olhar.join(' e ')}:`;
       res.replaceChildren(...probs.map(pb => {
@@ -1432,8 +1460,9 @@ const App = (() => {
     $('#iaGrade').addEventListener('click', () => iaConferirGrade());
     const a = $('#iaAuto'); try { a.checked = localStorage.getItem('px_ia_auto') !== '0'; } catch (e) { /* padrão: ligada */ }
     a.addEventListener('change', () => { try { localStorage.setItem('px_ia_auto', a.checked ? '1' : '0'); } catch (e) { /* nada */ } });
-    $('#iaLicoesN').textContent = String(iaLicoes().length);
-    $('#iaEsquecer').addEventListener('click', () => { if (!confirm('Apagar tudo o que a IA aprendeu neste computador?')) return; try { localStorage.removeItem(IA_LICOES); } catch (e) { /* nada */ } $('#iaLicoesN').textContent = '0'; });
+    $('#iaVerLicoes').addEventListener('click', () => { const b = $('#iaLicoesLista'); b.hidden = !b.hidden; });
+    iaMostrarLicoes();
+    iaLicoesAcao({ acao: 'licoes' }).then(iaSubirPendentes).catch(() => { /* sem nuvem agora: usa o que tem */ });
   }
 
   const nomeGrupo = g => (g.items[0] && g.items[0].nome) || st.groupName(g);

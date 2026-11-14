@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400&family=Orbitron:wght@600;700&display=swap">
-<link rel="stylesheet" href="css/app.css?v=47">
+<link rel="stylesheet" href="css/app.css?v=48">
 <script src="https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
@@ -24,7 +24,7 @@
 </div>
 <header class="top">
   <div class="top-in">
-    <div class="brand"><b>PLATNUMPRINT-X</b><span>motor de grade</span><span class="versao" title="Versão do motor carregada neste navegador">v47</span><span class="user"><span id="quem"></span><button type="button" id="btnSair" class="ghost">Sair</button></span></div>
+    <div class="brand"><b>PLATNUMPRINT-X</b><span>motor de grade</span><span class="versao" title="Versão do motor carregada neste navegador">v48</span><span class="user"><span id="quem"></span><button type="button" id="btnSair" class="ghost">Sair</button></span></div>
     <nav class="tabs" id="tabs" role="tablist">
       <button class="tab on" data-tab="arquivo" role="tab"><span class="n">1</span>Arquivo</button>
       <button class="tab locked" data-tab="pecas" role="tab"><span class="n">2</span>Peças</button>
@@ -110,8 +110,9 @@
           <b>🧠 IA do motor</b>
           <label title="Depois de ler o arquivo e os PDFs, a IA confere sozinha o molde de cada peça, a regra da estampa e o nome do pedaço; depois de gerar, confere a grade."><input type="checkbox" id="iaAuto" checked> A IA confere sozinha</label>
           <button type="button" id="iaPecas">🧠 IA conferir as peças</button>
-          <span class="muted">Lições aprendidas neste computador: <b id="iaLicoesN">0</b> <button type="button" id="iaEsquecer" class="mini">esquecer</button></span>
+          <span class="muted">Lições da equipe (na nuvem, valem para todos): <b id="iaLicoesN">0</b> <button type="button" id="iaVerLicoes" class="mini">ver / tirar</button></span>
         </div>
+        <div id="iaLicoesLista" hidden style="max-height:260px;overflow:auto;margin-top:6px"></div>
         <p class="muted" id="iaPecasInfo"></p>
         <div id="iaPecasRes"></div>
       </div>
@@ -406,17 +407,17 @@
   </section>
 </main>
 
-<script src="js/acesso.js?v=47"></script>
-<script src="js/util.js?v=47"></script>
-<script src="js/tiff.js?v=47"></script>
-<script src="js/analyze.js?v=47"></script>
-<script src="js/corel.js?v=47"></script>
-<script src="js/grade.js?v=47"></script>
-<script src="js/pdfgrade.js?v=47"></script>
-<script src="js/moldes.js?v=47"></script>
-<script src="js/regras.js?v=47"></script>
-<script src="js/app.js?v=47"></script>
-<script src="js/montar.js?v=47"></script>
-<script src="js/provador.js?v=47"></script>
+<script src="js/acesso.js?v=48"></script>
+<script src="js/util.js?v=48"></script>
+<script src="js/tiff.js?v=48"></script>
+<script src="js/analyze.js?v=48"></script>
+<script src="js/corel.js?v=48"></script>
+<script src="js/grade.js?v=48"></script>
+<script src="js/pdfgrade.js?v=48"></script>
+<script src="js/moldes.js?v=48"></script>
+<script src="js/regras.js?v=48"></script>
+<script src="js/app.js?v=48"></script>
+<script src="js/montar.js?v=48"></script>
+<script src="js/provador.js?v=48"></script>
 </body>
 </html>

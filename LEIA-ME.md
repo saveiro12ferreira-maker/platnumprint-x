@@ -244,10 +244,16 @@ Pedido do dono: "em vez do motor pensar sozinho, a IA pensa dentro dele e aprend
   perto) e aponta o que saiu errado — peça sumida, peça a mais, molde trocado, estampa cortada ou torta — com botão
   **Aplicar** para trocar o molde ou a regra.
 - **Aprende:** cada vez que o designer corrige a IA (troca o molde ou a regra que ela escolheu, ou aplica uma correção),
-  isso vira uma "lição" que vai junto nos próximos pedidos. As lições ficam neste computador (contador no quadro; botão
-  "esquecer" apaga).
+  isso vira uma "lição" que vai junto nos próximos pedidos.
 - "A IA confere sozinha" vem ligado; desligado, só confere quando clicar no botão. Sem internet ou com a IA fora do ar,
   o motor continua funcionando sozinho como antes.
 - Segurança: a IA nunca troca uma peça colorida para "fundo" (que apagaria a estampa) e não mexe no que o designer já
   escolheu à mão.
 - A chave da IA é a mesma do ConfexConect (CRM → Configurações → IA); a rota só aceita pedidos do site do motor.
+
+## v48 (14/11) — lições da IA na nuvem, para a equipe toda
+- Dono: "o certo é ficar na nuvem, para valer no sistema e não para o designer" — todos usam o login de equipe.
+- As lições ficam no servidor do ConfexConect (tabela px_ia_licoes). A correção que um designer faz vale para todos, em
+  qualquer computador. No quadro "🧠 IA do motor": "Lições da equipe (na nuvem)" com **ver / tirar** (✍️ = designer
+  corrigiu, 🧠 = a IA aprendeu conferindo a grade). Tirar uma lição vale para todos.
+- Sem internet, a lição fica guardada no computador (⏳) e sobe sozinha para a nuvem quando a internet volta.
