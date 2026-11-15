@@ -302,3 +302,20 @@ Testado com os arquivos do designer (12A CONJUNTO MILENA BORDADO BRANCO.tif + PD
   vazio (qualquer coluna, nos giros liberados pelo designer). Só muda se o tecido ficar mais curto. Antonella: −1,8 cm no
   2 e −2,6 cm no 14. CPEF RUN PP com giro de 90° liberado: a gola sobe para o lado da frente e economiza 6 cm.
 - Conferido: as peças do Antonella saem idênticas (pixel a pixel, sem o encaixe); vigia 20 de 20 ok.
+
+## v53 (15/11) — estampa segue o contorno do molde (de verdade) e a IA confere peça a peça
+- **Achado importante:** os testes de antes geravam a grade SEM os moldes do PDF (chamavam a geração direto, sem preparar as
+  formas), então o "acompanha o contorno" da v52 foi testado na forma errada. O vigia e os testes agora preparam as formas
+  do PDF como a geração real.
+- **Contorno (CPEF RUN, ombros):** com o molde do PDF, a alça azul e a faixa laranja ficavam com faixa branca no ombro e no
+  decote. Agora o desenho que vai de cima a baixo da peça (> 80% da altura) ou que ENCOSTA num trecho grande da beira
+  (≥ 12% da volta, ex.: alça azul das costas) segue uma deformação suave (thin-plate spline) que leva cada ponto da beira
+  do molde novo no ponto correspondente da beira original: ombro no ombro, cava na cava, barra na barra. Faixa de barra e
+  bordado (faixa larga) continuam com a regra da barra (v45). Logos, textos e desenhos soltos não deformam.
+- Perto dos cantos, se a deformação cair um pouquinho fora do desenho, pega o desenho em volta (até ~10 px), só na beira.
+- **IA do motor:** a conferência da grade agora manda uma folha PEÇA A PEÇA (original × gerada, até 480 px cada, sem as
+  vizinhas) e o molde de cada peça; antes ela via só o rolo inteiro em 700 px (1 px ≈ 2 mm) e não enxergava ombro nem cava.
+  Problemas de gravidade média também vão para o vigia. Não deixa "aplicar molde" num grupo cujas peças usam moldes
+  diferentes (frente/costas).
+- Conferido: Antonella com os moldes do PDF — tamanho 2 idêntico à v51, 14 com 1.502 pixels diferentes (a marca "12A" do
+  canto); vigia 20 de 20 ok.

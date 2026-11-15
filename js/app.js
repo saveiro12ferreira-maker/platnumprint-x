@@ -805,7 +805,7 @@ const App = (() => {
             const sc = f.sc - (usados.has(j) && cands.length >= g.items.length ? 0.02 : 0);
             if (sc > best.sc) best = { f, sc, j };
           }
-          usados.add(best.j); fs[p.n] = best.f;
+          usados.add(best.j); fs[p.n] = best.f; if (best.f) best.f.j = best.j;   // v53: a IA sabe o molde de cada peça
         }
       }
       st.formas[size] = fs;
@@ -1381,6 +1381,39 @@ const App = (() => {
     });
     return o;
   }
+  // v53: cada peça gerada (a imagem da própria peça, sem as vizinhas), guardada por peça do arquivo
+  const iaCanvas = (rgba, W, H, branco) => {
+    const f = Math.min(1, 480 / Math.max(W, H)), w = Math.max(1, Math.round(W * f)), h = Math.max(1, Math.round(H * f));
+    const cv = el('canvas'); cv.width = w; cv.height = h; const c = cv.getContext('2d'), id = c.createImageData(w, h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const k = (Math.min(H - 1, Math.floor(y / f)) * W + Math.min(W - 1, Math.floor(x / f))) * 4, o = (y * w + x) * 4, a = rgba[k + 3] / 255;
+      id.data[o] = 255 + (rgba[k] - 255) * a; id.data[o + 1] = 255 + (rgba[k + 1] - 255) * a; id.data[o + 2] = 255 + (rgba[k + 2] - 255) * a; id.data[o + 3] = 255;
+    }
+    c.putImageData(id, 0, 0); return cv;
+  };
+  function iaRecortes(r) {
+    const out = new Map();
+    (r.parts || []).forEach(pt => { if (pt._p && pt.rgba && !out.has(pt._p)) out.set(pt._p, iaCanvas(pt.rgba, pt.w, pt.h)); });
+    return out;
+  }
+  // folha de comparação de um tamanho: cada peça do arquivo, ORIGINAL | GERADA lado a lado
+  function iaFolha(size) {
+    const ger = (st.iaPecasGer || {})[size]; if (!ger || !ger.size) return null;
+    const pares = [];
+    for (const g of st.groups) g.items.forEach((p, k) => { if (ger.has(p) && pares.length < 16) pares.push({ g, k, a: iaCanvas(p.rgba, p.w, p.h), b: ger.get(p) }); });
+    if (!pares.length) return null;
+    const lin = pares.map(x => Math.max(x.a.height, x.b.height) + 34), larg = Math.max(...pares.map(x => x.a.width + x.b.width + 30));
+    const cv = el('canvas'); cv.width = Math.min(1600, larg); cv.height = lin.reduce((a, b) => a + b, 0);
+    const c = cv.getContext('2d'); c.fillStyle = '#fff'; c.fillRect(0, 0, cv.width, cv.height);
+    let y = 0;
+    pares.forEach((x, i) => {
+      c.fillStyle = '#000'; c.font = 'bold 20px sans-serif'; c.fillText(`${x.g.id} peça ${x.k + 1} — ${nomeGrupo(x.g)}: ORIGINAL (base ${st.base})  |  GERADA (${size})`, 4, y + 22);
+      c.drawImage(x.a, 0, y + 30); c.drawImage(x.b, x.a.width + 30, y + 30);
+      c.strokeStyle = '#c00'; c.beginPath(); c.moveTo(x.a.width + 15, y + 30); c.lineTo(x.a.width + 15, y + lin[i]); c.stroke();
+      y += lin[i];
+    });
+    return cv;
+  }
   async function iaPedir(acao, imagens, texto) {
     const r = await fetch(IA_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ acao, imagens, texto, licoes: iaPendentes() }) });
     const j = await r.json().catch(() => ({}));
@@ -1403,6 +1436,7 @@ const App = (() => {
   window.addEventListener('error', e => vigia('erro', `${e.message} (${(e.filename || '').split('/').pop()}:${e.lineno})`, { pilha: e.error && String(e.error.stack || '').slice(0, 1500) }));
   window.addEventListener('unhandledrejection', e => vigia('erro', 'Promessa: ' + String(e.reason && (e.reason.message || e.reason)), { pilha: e.reason && String(e.reason.stack || '').slice(0, 1500) }));
   window.__pxVigia = vigia;
+  window.__pxTeste = { iaRecortes: r => iaRecortes(r) };   // conferência automática do motor
   let iaOcupado = false;
   async function iaConferirPecas() {
     const info = $('#iaPecasInfo'), res = $('#iaPecasRes');
@@ -1452,19 +1486,28 @@ const App = (() => {
     iaOcupado = true; $('#iaGrade').disabled = true; info.textContent = `🧠 A IA está conferindo a grade (${olhar.join(' e ')})…`; res.replaceChildren();
     try {
       const imgs = [{ rotulo: `Arquivo original (tamanho ${st.base}), com o id dos grupos`, ...iaImg(iaArte(), 1400) }];
-      for (const t of olhar) imgs.push({ rotulo: `Grade gerada — tamanho ${t}`, ...iaImg(st.iaPrev[t], 1400) });
+      for (const t of olhar) {
+        const fl = iaFolha(t);
+        imgs.push({ rotulo: `Grade gerada — tamanho ${t} (o rolo inteiro, para ver se falta ou sobra peça)`, ...iaImg(st.iaPrev[t], 1400) });
+        if (fl) imgs.push({ rotulo: `Tamanho ${t}: cada peça ORIGINAL (esquerda) × GERADA (direita), na mesma escala de tela (a gerada pode estar girada no rolo)`, ...iaImg(fl, 1600, 0.85) });
+      }
       if (st.moldes && st.moldes.ref) imgs.push({ rotulo: 'Moldes do PDF da modelista (M1, M2…)', ...iaImg(await iaMoldes(), 1200) });
       const m = st.moldes, texto = [`Compare a grade gerada com o arquivo original. Tamanho base ${st.base}; grade ${st.sizes.join(', ')}.`,
-        'Confira: todas as peças do original estão na grade (nenhuma sumiu, nenhuma a mais, nenhuma sem estampa)? Cada peça tem o formato do molde certo? A estampa está inteira, sem cortar logo/texto, sem esticar o que não pode, sem faixa branca, sem desenho torto? A barra/bordado segue a barra?',
-        'GRUPOS:', ...st.groups.map(g => { const c = m && m.casa[g.id] && m.casa[g.id][m.ref]; return `- ${g.id}: ${nomeGrupo(g)}, ${g.items.length} peça(s), regra "${g.items[0].rule}", molde ${c ? 'M' + (c.j + 1) : 'nenhum'}`; })].join('\n');
+        'Confira PEÇA A PEÇA (original à esquerda, gerada à direita): todas as peças estão na grade (nenhuma sumiu, nenhuma a mais, nenhuma sem estampa)? Cada peça tem o formato do molde certo? A estampa ACOMPANHA O CONTORNO do molde novo (faixa do ombro chega no ombro e na cava, desenho do decote acompanha o decote, barra/bordado segue a barra)? Ficou faixa ou fio branco entre a borda e o desenho? Logo/texto cortado, esticado ou torto? A borda de corte tem a mesma grossura do original? Seja exigente: o tamanho gerado tem de parecer o original, só mudando de medida.',
+        'Diga cada problema que vir, mesmo os de gravidade média: eles vão para o vigia, que conserta o motor.',
+        'GRUPOS (dentro do grupo, cada peça escolhe sozinha o molde de formato mais parecido — ex.: frente e costas do mesmo grupo vão em moldes diferentes; para essas use acao "conferir", não "trocar_molde"):',
+        ...st.groups.map(g => { const c = m && m.casa[g.id] && m.casa[g.id][m.ref], fr = (st.formas || {})[m && m.ref] || {};
+          const porPeca = g.items.map((p, k) => { const f = fr[p.n]; return `peça ${k + 1}: ${f && f.j != null ? 'M' + (f.j + 1) : c ? 'M' + (c.j + 1) : 'sem molde'}`; }).join(', ');
+          return `- ${g.id}: ${nomeGrupo(g)}, ${g.items.length} peça(s), regra "${g.items[0].rule}" — ${porPeca}`; })].join('\n');
       const r = await iaPedir('grade', imgs, texto);
       if (r.licao) iaGuardarLicao(r.licao, 'ia');
       const probs = r.problemas || [];
-      probs.filter(pb => pb.gravidade === 'alta').forEach(pb => vigia('ia', `${pb.grupo || ''}: ${pb.problema}`, { acao: pb.acao, molde: pb.molde, regra: pb.regra, olhou: olhar }));
+      probs.filter(pb => pb.gravidade !== 'baixa').forEach(pb => vigia('ia', `${pb.grupo || ''}: ${pb.problema}`, { gravidade: pb.gravidade, acao: pb.acao, molde: pb.molde, regra: pb.regra, olhou: olhar }));
       info.textContent = r.ok && !probs.length ? `🧠 A IA conferiu ${olhar.join(' e ')}: a grade está boa para produzir.` : `🧠 A IA achou ${probs.length} ponto(s) para olhar em ${olhar.join(' e ')}:`;
       res.replaceChildren(...probs.map(pb => {
         const g = st.groups.find(x => x.id === pb.grupo);
-        const pode = g && !(pb.acao === 'trocar_regra' && pb.regra === 'fundo' && g.items.some(p => p.artFrac >= 0.005)) && ((pb.acao === 'trocar_molde' && pb.molde >= 1 && m && m.ref && pb.molde <= m.tams[m.ref].pecas.length) || (pb.acao === 'trocar_regra' && pb.regra));
+        const fr0 = (st.formas || {})[m && m.ref] || {}, jsDif = new Set(g ? g.items.map(p => fr0[p.n] && fr0[p.n].j).filter(v => v != null) : []).size > 1;
+        const pode = g && !(pb.acao === 'trocar_molde' && jsDif) && !(pb.acao === 'trocar_regra' && pb.regra === 'fundo' && g.items.some(p => p.artFrac >= 0.005)) && ((pb.acao === 'trocar_molde' && pb.molde >= 1 && m && m.ref && pb.molde <= m.tams[m.ref].pecas.length) || (pb.acao === 'trocar_regra' && pb.regra));
         const bt = pode ? el('button', { type: 'button', class: 'mini', text: pb.acao === 'trocar_molde' ? `Aplicar: molde M${pb.molde}` : `Aplicar: regra "${pb.regra}"`, onclick: e => {
           if (pb.acao === 'trocar_molde') { (m.manual = m.manual || {})[g.id] = pb.molde - 1; casarMoldes(); computeTargets(); renderGrade(); renderMoldes(); }
           else for (const p of g.items) { p.rule = pb.regra; p.regraManual = true; }
@@ -1756,6 +1799,9 @@ const App = (() => {
         r.rgb = null;
         st.results[size] = { w: r.w, h: r.h, ms: r.ms, pos: r.pos, assin: r.assin };
         (st.iaPrev = st.iaPrev || {})[size] = pv.canvas;
+        // v53 (dono 15/11: "por que a IA não analisava?"): a miniatura do rolo inteiro é pequena demais (1 px ≈ 2 mm) para
+        // ver ombro, cava e borda. Guarda cada peça gerada em tamanho bom (até 480 px) para a IA comparar com a original.
+        try { (st.iaPecasGer = st.iaPecasGer || {})[size] = iaRecortes(r); } catch (e) { /* a IA olha só o rolo */ }
         // Sem avisos de grade: o motor já resolve sozinho. Só aparece o que precisa de outra largura de rolo.
         const fisicos = r.warns.filter(w => w.lvl === 'alerta');
         const warns = fisicos.length ? el('ul', {}, fisicos.map(w => el('li', { class: w.lvl, text: w.txt })))

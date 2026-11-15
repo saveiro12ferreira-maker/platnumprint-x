@@ -233,6 +233,76 @@ const Grade = (() => {
     return { i: idx[k], c: cores.pal[idx[k]].c };
   }
 
+  // ---------- v53: deformação que leva o CONTORNO do molde novo no contorno da peça original ----------
+  // Contorno externo da máscara (seguidor de Moore), em pontos de pixel, no sentido horário.
+  function contornoExterno(m, w, h) {
+    let s0 = -1; for (let i = 0; i < w * h; i++) if (m[i]) { s0 = i; break; }
+    if (s0 < 0) return [];
+    const on = (x, y) => x >= 0 && y >= 0 && x < w && y < h && m[y * w + x];
+    const dx = [1, 1, 0, -1, -1, -1, 0, 1], dy = [0, 1, 1, 1, 0, -1, -1, -1];
+    const pts = []; let x = s0 % w, y = (s0 / w) | 0, d = 7; const x0 = x, y0 = y;
+    for (let n = 0; n < 4 * (w + h) * 4; n++) {
+      pts.push([x, y]);
+      let k = 0, achou = false;
+      for (; k < 8; k++) { const dd = (d + 6 + k) % 8; if (on(x + dx[dd], y + dy[dd])) { x += dx[dd]; y += dy[dd]; d = dd; achou = true; break; } }
+      if (!achou || (x === x0 && y === y0 && pts.length > 2)) break;
+    }
+    return pts;
+  }
+  function reamostrar(pts, N) {
+    if (pts.length < 3) return null;
+    const L = [0]; for (let i = 1; i <= pts.length; i++) { const a = pts[i - 1], b = pts[i % pts.length]; L.push(L[i - 1] + Math.hypot(b[0] - a[0], b[1] - a[1])); }
+    const T = L[L.length - 1], out = []; let j = 0;
+    for (let k = 0; k < N; k++) {
+      const t = k * T / N; while (j < pts.length - 1 && L[j + 1] < t) j++;
+      const a = pts[j], b = pts[(j + 1) % pts.length], f = L[j + 1] > L[j] ? (t - L[j]) / (L[j + 1] - L[j]) : 0;
+      out.push([a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f]);
+    }
+    return out;
+  }
+  // Thin-plate spline de A (molde novo) para B (peça original): devolve f(x,y) → [X,Y]
+  function tps(A, B, lambda) {
+    const n = A.length, N = n + 3, U = r2 => r2 > 1e-12 ? r2 * Math.log(r2) : 0;
+    const M = Array.from({ length: N }, () => new Float64Array(N + 2));
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < n; j++) { const dx = A[i][0] - A[j][0], dy = A[i][1] - A[j][1]; M[i][j] = U(dx * dx + dy * dy) + (i === j ? lambda : 0); }
+      M[i][n] = 1; M[i][n + 1] = A[i][0]; M[i][n + 2] = A[i][1];
+      M[n][i] = 1; M[n + 1][i] = A[i][0]; M[n + 2][i] = A[i][1];
+      M[i][N] = B[i][0]; M[i][N + 1] = B[i][1];
+    }
+    for (let c = 0; c < N; c++) {   // Gauss com pivô
+      let pv = c; for (let r = c + 1; r < N; r++) if (Math.abs(M[r][c]) > Math.abs(M[pv][c])) pv = r;
+      [M[c], M[pv]] = [M[pv], M[c]]; const d = M[c][c]; if (Math.abs(d) < 1e-12) return null;
+      for (let r = 0; r < N; r++) if (r !== c) { const f = M[r][c] / d; if (f) for (let k = c; k < N + 2; k++) M[r][k] -= f * M[c][k]; }
+    }
+    const wx = new Float64Array(N), wy = new Float64Array(N);
+    for (let i = 0; i < N; i++) { wx[i] = M[i][N] / M[i][i]; wy[i] = M[i][N + 1] / M[i][i]; }
+    return (x, y) => {
+      let X = wx[n] + wx[n + 1] * x + wx[n + 2] * y, Y = wy[n] + wy[n + 1] * x + wy[n + 2] * y;
+      for (let i = 0; i < n; i++) { const dx = x - A[i][0], dy = y - A[i][1], u = U(dx * dx + dy * dy); X += wx[i] * u; Y += wy[i] * u; }
+      return [X, Y];
+    };
+  }
+  // mapa (de 6 em 6 px, interpolado) de cada pixel do molde novo para a peça original, alinhando os contornos
+  function mapaContorno(p, nm, Wt, Ht, sx, sy) {
+    const N = 72;
+    const a = reamostrar(contornoExterno(nm, Wt, Ht), N), b0 = (p._contV53 && p._contV53.length === N) ? p._contV53 : (p._contV53 = reamostrar(contornoExterno(p.mask, p.w, p.h), N));
+    if (!a || !b0) return null;
+    // alinha o começo dos dois contornos: o deslocamento que deixa os pontos mais perto (com a original na escala nova)
+    let melhor = 0, dmin = Infinity;
+    for (let sh = 0; sh < N; sh++) { let d = 0; for (let i = 0; i < N; i++) { const q = b0[(i + sh) % N]; d += (a[i][0] - q[0] * sx) ** 2 + (a[i][1] - q[1] * sy) ** 2; } if (d < dmin) { dmin = d; melhor = sh; } }
+    const b = a.map((_, i) => b0[(i + melhor) % N]);
+    const f = tps(a, b, 1e-3 * Wt * Ht); if (!f) return null;
+    const P = 6, gw = Math.ceil(Wt / P) + 1, gh = Math.ceil(Ht / P) + 1, GX = new Float32Array(gw * gh), GY = new Float32Array(gw * gh);
+    for (let j = 0; j < gh; j++) for (let i = 0; i < gw; i++) { const [X, Y] = f(i * P, j * P); GX[j * gw + i] = X; GY[j * gw + i] = Y; }
+    return (x, y) => {
+      const fx = x / P, fy = y / P, i = Math.min(gw - 2, fx | 0), j = Math.min(gh - 2, fy | 0), u = fx - i, v = fy - j, k = j * gw + i;
+      const X = (GX[k] * (1 - u) + GX[k + 1] * u) * (1 - v) + (GX[k + gw] * (1 - u) + GX[k + gw + 1] * u) * v;
+      const Y = (GY[k] * (1 - u) + GY[k + 1] * u) * (1 - v) + (GY[k + gw] * (1 - u) + GY[k + gw + 1] * u) * v;
+      return [X, Y];
+    };
+  }
+
   function renderPiece(p, Wt, Ht, o) {
     const W = p.w, H = p.h, sx = Wt / W, sy = Ht / H, b = o.bleed | 0, OW = Wt + 2 * b, OH = Ht + 2 * b;
     const mapX = new Int32Array(Wt), mapY = new Int32Array(Ht);
@@ -288,12 +358,49 @@ const Grade = (() => {
       }
       const pint = new Uint8Array(Wt * Ht);
       const coluna = (prof, x) => { x = Math.max(0, Math.min(prof.length - 1, x)); if (prof[x] >= 0) return prof[x]; for (let d = 1; d < prof.length; d++) { if (x - d >= 0 && prof[x - d] >= 0) return prof[x - d]; if (x + d < prof.length && prof[x + d] >= 0) return prof[x + d]; } return -1; };
-      let novosSegs = null;
+      // v53: desenhos que seguem o CONTORNO do molde novo: o que vai de cima a baixo da peça (> 80% da altura) e o que
+      // ENCOSTA num trecho grande da beira (≥ 12% da volta da peça), como as alças azuis. Uma passada só para todos.
+      if (!p._toca) {
+        const ring = U.box(p.band, W, H, 4, 'max'), cont = new Map(); let tot = 0;
+        for (let k = 0; k < W * H; k++) if (ring[k] && p.mask[k] && !p.band[k]) { tot++; const l = E.lab[k]; cont.set(l, (cont.get(l) || 0) + 1); }
+        p._toca = { tot, cont };
+      }
+      const altos = new Set(E.lista.filter(e => (e.y1 - e.y0) > H * 0.8 || (!e.largo && p._toca.tot > 0 && (p._toca.cont.get(e.id) || 0) >= 0.12 * p._toca.tot)).map(e => e.id));
+      if (altos.size) {
+        const mc = mapaContorno(p, nm, Wt, Ht, sx, sy);
+        const rb = Math.max(4, Math.round(0.03 * Math.min(Wt, Ht))), dentro = U.box(nm, Wt, Ht, rb, 'min'), perto = i => !dentro[i];
+        for (let y = 0; y < Ht; y++) for (let x = 0; x < Wt; x++) {
+          const i = y * Wt + x; if (!nm[i]) continue;
+          let X, Y;
+          if (mc) { const r = mc(x, y); X = Math.round(r[0]); Y = Math.round(r[1]); }
+          else { X = Math.round((x + 0.5) / sx - 0.5); Y = Math.round((y + 0.5) / sy - 0.5); }
+          X = Math.max(0, Math.min(W - 1, X)); Y = Math.max(0, Math.min(H - 1, Y));
+          let kk = Y * W + X;
+          // perto da beira a deformação pode cair um pouquinho fora do desenho (cantos): procura o desenho em volta
+          // (até ~10 px), senão sobrava canto branco onde o original é todo pintado
+          if (!altos.has(E.lab[kk]) || p.band[kk]) {
+            let ach = -1;
+            for (let r = 1; r <= 10 && ach < 0; r++) for (let dy = -r; dy <= r && ach < 0; dy++) for (let dx = -r; dx <= r; dx++) {
+              if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+              const xx = X + dx, yy = Y + dy; if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue;
+              const k2 = yy * W + xx; if (altos.has(E.lab[k2]) && !p.band[k2] && A[k2]) { ach = k2; break; }
+            }
+            if (ach < 0 || !perto(i)) continue;
+            kk = ach;
+          }
+          const art = A[kk];
+          if (!art && pint[i]) continue;
+          const q = ((y + b) * OW + x + b) * 4;
+          if (!art && trocou) { const s4 = kk * 4; out[q] = S[s4] + br - bg0[0]; out[q + 1] = S[s4 + 1] + bgG - bg0[1]; out[q + 2] = S[s4 + 2] + bb - bg0[2]; }
+          else pintaArte(out, q, S, kk, alfa, o.bg, bg0 || o.bg, tr);
+          if (art) { pint[i] = 1; copied++; }
+        }
+      }
       for (const e of E.lista) {
         // v46 (CPEF RUN 14/11): desenho que vai de cima a baixo da peça (ex.: a faixa azul do ombro que desce pela lateral
         // até a barra) não pode só mudar de tamanho: num tamanho menor ele não chegava mais no ombro e ficava uma faixa
         // branca em cima. Esse acompanha a altura da peça (estica junto), como o fundo.
-        const alto = (e.y1 - e.y0) > H * 0.8;
+        const alto = altos.has(e.id);
         const ex = e.largo || alto ? sx : s, ey = alto ? sy : s;
         const Xn = e.cx * sx;
         let Yn;
@@ -340,32 +447,6 @@ const Grade = (() => {
         // não só a caixa: cada coluna vai do ombro/decote até a barra do molde novo, e cada linha vai de uma beira à outra
         // de cada pedaço (alça esquerda, alça direita…). Assim a faixa do ombro chega no ombro e na cava do molde novo.
         if (alto) {
-          const segs = (m, w, h) => { const r = new Array(h); for (let y = 0; y < h; y++) { const l = []; let a = -1; for (let x = 0; x <= w; x++) { const on = x < w && m[y * w + x]; if (on && a < 0) a = x; else if (!on && a >= 0) { l.push(a, x - 1); a = -1; } } r[y] = l; } return r; };
-          if (!p._segs) p._segs = segs(p.mask, W, H);
-          const os = p._segs, ns = novosSegs || (novosSegs = segs(nm, Wt, Ht));
-          for (let y = 0; y < Ht; y++) {
-            const L = ns[y]; if (!L.length) continue;
-            for (let k = 0; k < L.length; k += 2) for (let x = L[k]; x <= L[k + 1]; x++) {
-              const i = y * Wt + x;
-              const X0 = Math.max(0, Math.min(W - 1, Math.round((x + 0.5) / sx - 0.5)));
-              const t0 = coluna(p.top, X0), b0 = coluna(p.bot, X0), t1 = nt[x], b1 = nb[x];
-              if (t0 < 0 || b0 < 0 || t1 < 0 || b1 < 0) continue;
-              const Y = Math.max(0, Math.min(H - 1, Math.round(t0 + (b1 > t1 ? (y - t1) / (b1 - t1) : 0) * (b0 - t0))));
-              const O = os[Y]; if (!O.length) continue;
-              let a0, a1, n0, n1;
-              if (O.length === L.length) { a0 = O[k]; a1 = O[k + 1]; n0 = L[k]; n1 = L[k + 1]; }
-              else { a0 = O[0]; a1 = O[O.length - 1]; n0 = L[0]; n1 = L[L.length - 1]; }
-              const X = Math.max(0, Math.min(W - 1, Math.round(a0 + (n1 > n0 ? (x - n0) / (n1 - n0) : 0) * (a1 - a0))));
-              const kk = Y * W + X;
-              if (E.lab[kk] !== e.id || p.band[kk]) continue;
-              const art = A[kk];
-              if (!art && pint[i]) continue;
-              const q = ((y + b) * OW + x + b) * 4;
-              if (!art && trocou) { const s4 = kk * 4; out[q] = S[s4] + br - bg0[0]; out[q + 1] = S[s4 + 1] + bgG - bg0[1]; out[q + 2] = S[s4 + 2] + bb - bg0[2]; }
-              else pintaArte(out, q, S, kk, alfa, o.bg, bg0 || o.bg, tr);
-              if (art) { pint[i] = 1; copied++; }
-            }
-          }
           continue;
         }
         for (let y = y0c; y <= y1c; y++) {
@@ -1391,7 +1472,7 @@ const Grade = (() => {
     const { specs, warns, rollPx, marginPx } = specsForSize(st, size);
     let ajustes = 0;
     for (const sp of specs) {
-      const r = drawSpec(sp); if (r.ajustada) ajustes++;
+      const r = drawSpec(sp); if (r.ajustada) ajustes++; r._p = sp.p;   // v53: a IA compara peça a peça
       res.push(r);
       if (onPiece) onPiece(res.length);
       await U.tick();
