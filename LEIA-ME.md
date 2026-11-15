@@ -291,3 +291,14 @@ Testado com os arquivos do designer (12A CONJUNTO MILENA BORDADO BRANCO.tif + PD
 - Resultado: tamanhos 2, 12 e 14 com as 15 peças, cada uma no molde do PDF. Conjunto Milena entrou no vigia (20 de 20 ok).
 - A borda de corte continua da risca da modelagem PARA FORA (regra do dono 12/11): por isso a peça gerada fica até
   ~3 mm maior de cada lado que o desenho do Corel, que tem a borda por dentro da risca.
+
+## v52 (15/11) — estampa acompanha o contorno nos ombros; encaixe sem buracos
+- **Ombros (CPEF RUN, PP/P/M/G):** o desenho que cobre a peça de cima a baixo (alças azuis + faixas laranja que descem
+  pela lateral até a barra) só mudava de tamanho pela caixa da peça; no molde novo a cava e o ombro ficam em outro lugar e
+  a faixa do ombro não chegava no ombro nem na cava. Agora esse desenho acompanha o CONTORNO do molde: cada coluna vai do
+  ombro/decote até a barra do molde novo e cada linha vai de uma beira à outra de cada pedaço (alça esquerda, alça
+  direita). Logos, textos e desenhos soltos continuam como antes (não deformam).
+- **Encaixe "manter o original":** depois de montar como o arquivo base, a peça mais de baixo tenta subir para um buraco
+  vazio (qualquer coluna, nos giros liberados pelo designer). Só muda se o tecido ficar mais curto. Antonella: −1,8 cm no
+  2 e −2,6 cm no 14. CPEF RUN PP com giro de 90° liberado: a gola sobe para o lado da frente e economiza 6 cm.
+- Conferido: as peças do Antonella saem idênticas (pixel a pixel, sem o encaixe); vigia 20 de 20 ok.

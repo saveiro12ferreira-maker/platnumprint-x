@@ -288,6 +288,7 @@ const Grade = (() => {
       }
       const pint = new Uint8Array(Wt * Ht);
       const coluna = (prof, x) => { x = Math.max(0, Math.min(prof.length - 1, x)); if (prof[x] >= 0) return prof[x]; for (let d = 1; d < prof.length; d++) { if (x - d >= 0 && prof[x - d] >= 0) return prof[x - d]; if (x + d < prof.length && prof[x + d] >= 0) return prof[x + d]; } return -1; };
+      let novosSegs = null;
       for (const e of E.lista) {
         // v46 (CPEF RUN 14/11): desenho que vai de cima a baixo da peça (ex.: a faixa azul do ombro que desce pela lateral
         // até a barra) não pode só mudar de tamanho: num tamanho menor ele não chegava mais no ombro e ficava uma faixa
@@ -333,6 +334,39 @@ const Grade = (() => {
               desl[x] = ant;
             }
           }
+        }
+        // v52 (CPEF RUN 15/11, "a estampa não acompanha o contorno da modelagem nos ombros"): o desenho que cobre a peça
+        // de cima a baixo (alças/ombros azuis + faixas laranja que descem pela lateral) acompanha o CONTORNO do molde novo,
+        // não só a caixa: cada coluna vai do ombro/decote até a barra do molde novo, e cada linha vai de uma beira à outra
+        // de cada pedaço (alça esquerda, alça direita…). Assim a faixa do ombro chega no ombro e na cava do molde novo.
+        if (alto) {
+          const segs = (m, w, h) => { const r = new Array(h); for (let y = 0; y < h; y++) { const l = []; let a = -1; for (let x = 0; x <= w; x++) { const on = x < w && m[y * w + x]; if (on && a < 0) a = x; else if (!on && a >= 0) { l.push(a, x - 1); a = -1; } } r[y] = l; } return r; };
+          if (!p._segs) p._segs = segs(p.mask, W, H);
+          const os = p._segs, ns = novosSegs || (novosSegs = segs(nm, Wt, Ht));
+          for (let y = 0; y < Ht; y++) {
+            const L = ns[y]; if (!L.length) continue;
+            for (let k = 0; k < L.length; k += 2) for (let x = L[k]; x <= L[k + 1]; x++) {
+              const i = y * Wt + x;
+              const X0 = Math.max(0, Math.min(W - 1, Math.round((x + 0.5) / sx - 0.5)));
+              const t0 = coluna(p.top, X0), b0 = coluna(p.bot, X0), t1 = nt[x], b1 = nb[x];
+              if (t0 < 0 || b0 < 0 || t1 < 0 || b1 < 0) continue;
+              const Y = Math.max(0, Math.min(H - 1, Math.round(t0 + (b1 > t1 ? (y - t1) / (b1 - t1) : 0) * (b0 - t0))));
+              const O = os[Y]; if (!O.length) continue;
+              let a0, a1, n0, n1;
+              if (O.length === L.length) { a0 = O[k]; a1 = O[k + 1]; n0 = L[k]; n1 = L[k + 1]; }
+              else { a0 = O[0]; a1 = O[O.length - 1]; n0 = L[0]; n1 = L[L.length - 1]; }
+              const X = Math.max(0, Math.min(W - 1, Math.round(a0 + (n1 > n0 ? (x - n0) / (n1 - n0) : 0) * (a1 - a0))));
+              const kk = Y * W + X;
+              if (E.lab[kk] !== e.id || p.band[kk]) continue;
+              const art = A[kk];
+              if (!art && pint[i]) continue;
+              const q = ((y + b) * OW + x + b) * 4;
+              if (!art && trocou) { const s4 = kk * 4; out[q] = S[s4] + br - bg0[0]; out[q + 1] = S[s4 + 1] + bgG - bg0[1]; out[q + 2] = S[s4 + 2] + bb - bg0[2]; }
+              else pintaArte(out, q, S, kk, alfa, o.bg, bg0 || o.bg, tr);
+              if (art) { pint[i] = 1; copied++; }
+            }
+          }
+          continue;
         }
         for (let y = y0c; y <= y1c; y++) {
           const Yr = Math.round(e.cy + (y - Y0n) / ey);
@@ -1107,14 +1141,14 @@ const Grade = (() => {
   // mesma coluna (centro da peça no mesmo lugar da largura) e na mesma ordem de cima para baixo.
   // A peça que cresceu empurra as de baixo; a que diminuiu sobe até encostar (com o espaço entre peças).
   // A largura do rolo não muda: só a altura do encaixe acompanha o tamanho.
-  function layoutOriginal(items, rollPx, marginPx, gapPx, c) {
+  function layoutOriginal(items, rollPx, marginPx, gapPx, c, angs) {
     // Três jeitos de acomodar as peças que não cabem mais na coluna delas, do mais fiel ao original ao mais solto.
     // Fica o mais fiel, a não ser que um mais solto gaste pelo menos 2% menos tecido.
-    const jeitos = [[0.12, 0.6], [1, 0.6], [1, 0.1]], res = jeitos.map(([d, p]) => layoutOriginal1(items, rollPx, marginPx, gapPx, c, d, p));
+    const jeitos = [[0.12, 0.6], [1, 0.6], [1, 0.1]], res = jeitos.map(([d, p]) => layoutOriginal1(items, rollPx, marginPx, gapPx, c, d, p, angs));
     const menor = Math.min(...res.map(r => r.height));
     return res.find(r => r.height <= menor * 1.02);
   }
-  function layoutOriginal1(items, rollPx, marginPx, gapPx, c, desvio, peso) {
+  function layoutOriginal1(items, rollPx, marginPx, gapPx, c, desvio, peso, angs) {
     const warn = [], g = Math.ceil(gapPx / c);
     const shapes = items.map(it => it.shapeOrig && it.shapeOrig.c === c && it.shapeOrig.g === g ? it.shapeOrig.s : (it.shapeOrig = { c, g, s: shapeFor(it, c, g, 0) }).s);
     let cols = Math.floor((rollPx - 2 * marginPx) / c);
@@ -1147,6 +1181,33 @@ const Grade = (() => {
       pos[i] = { x: marginPx + best.X * c, y: marginPx + best.Y * c, rot: false, ang: 0, w: s.pw, h: s.ph, w0: it.w, h0: it.h };
       bottomPx = Math.max(bottomPx, pos[i].y + s.ph);
     }
+    // v52 (dono 15/11: "melhore o encaixe para não deixar muito espaço sem preencher"): depois de montar como o
+    // original, a peça que está mais embaixo tenta ir para um buraco mais acima (em qualquer coluna, nos giros que o
+    // designer liberou). Só muda se o tecido ficar mais curto; as outras peças ficam onde estavam.
+    const ang = Array.isArray(angs) && angs.length ? angs : [0];
+    const fundoDe = i => pos[i].y + pos[i].h;
+    for (let volta = 0; volta < items.length * 2; volta++) {
+      const ordemFundo = pos.map((_, i) => i).sort((a, b) => fundoDe(b) - fundoDe(a));
+      const i = ordemFundo[0], atual = fundoDe(i);
+      const sAtual = shapes[i].ang === pos[i].ang ? shapes[i] : (pos[i]._s || shapes[i]);
+      rolo.marca(sAtual, Math.round((pos[i].x - marginPx) / c), Math.round((pos[i].y - marginPx) / c), 0);
+      let melhor = null;
+      for (const a of ang) {
+        const it = items[i], sh = a === 0 ? shapes[i] : (it['_shOrig' + a] && it['_shOrig' + a].c === c && it['_shOrig' + a].g === g ? it['_shOrig' + a].s : (it['_shOrig' + a] = { c, g, s: shapeFor(it, c, g, a) }).s);
+        if (sh.cw > cols) continue;
+        for (let X = 0; X + sh.cw <= cols; X++) for (let Y = 0; ; Y++) {
+          const fundo = marginPx + Y * c + sh.ph;
+          if (fundo >= atual - c || (melhor && fundo >= melhor.fundo)) break;
+          if (rolo.linhaOk(sh, Y) && rolo.fits(sh, X, Y) === -1) { melhor = { X, Y, sh, fundo }; break; }
+        }
+      }
+      if (!melhor) { rolo.marca(sAtual, Math.round((pos[i].x - marginPx) / c), Math.round((pos[i].y - marginPx) / c), 1); break; }
+      rolo.marca(melhor.sh, melhor.X, melhor.Y, 1);
+      const it = items[i];
+      pos[i] = { x: marginPx + melhor.X * c, y: marginPx + melhor.Y * c, rot: melhor.sh.ang === 180, ang: melhor.sh.ang || 0, w: melhor.sh.pw, h: melhor.sh.ph, w0: it.w, h0: it.h, _s: melhor.sh };
+    }
+    for (const q of pos) delete q._s;
+    bottomPx = Math.max(...pos.map((q, i) => fundoDe(i)));
     return { pos, width: Math.max(rollPx, cols * c + 2 * marginPx), height: bottomPx + marginPx, warn };
   }
 
@@ -1318,7 +1379,7 @@ const Grade = (() => {
     if (salvo && (!blit || !blit(salvo))) return salvo;
     let gap = Math.round(st.gapMm / 25.4 * st.dpi), lay = null;
     for (let k = 0; k < 4; k++) {
-      lay = st.manterEncaixe ? layoutOriginal(items, rollPx, marginPx, gap, cell) : layout(items, rollPx, marginPx, gap, cell, angulos(st), 2500, !!st.compactar);
+      lay = st.manterEncaixe ? layoutOriginal(items, rollPx, marginPx, gap, cell, angulos(st)) : layout(items, rollPx, marginPx, gap, cell, angulos(st), 2500, !!st.compactar);
       if (!blit || !blit(lay)) return lay;
       gap += Math.max(2, Math.round(2 / 25.4 * st.dpi));
     }
