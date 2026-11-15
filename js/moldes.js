@@ -316,15 +316,39 @@ const Moldes = (() => {
     }
     // só repete quando é o MESMO pedaço repetido no arquivo da estampa (mesma medida da peça que já casou com
     // aquele molde, de pé ou deitada, até ~6% de diferença): aí faz nele exatamente o que fez no outro (pedido 12/11)
+    // v51 (conjunto Milena 15/11): molde que a modelista marcou "2X" (cortar 2) aceita a segunda peça do arquivo mesmo
+    // com o formato menos parecido (ex.: o acabamento da frente desenhado inclinado no arquivo), desde que a medida seja a
+    // mesma da que já casou. Antes ela ficava sem molde, saía na medida de mercado e com a borda diferente.
+    const doisX = j => { const r = B[j] && B[j].rotulo; return !!(r && ((r.qtd | 0) >= 2 || /(^|[^0-9])2\s*X\b/i.test(r.texto || r.nome || ''))); };
     if (repetir) for (const p of pares) {
-      if (res[p.i] || p.c > 0.35) continue;
+      const dx = doisX(p.j);
+      if (res[p.i] || p.c > (dx ? 1.2 : 0.35)) continue;
       const dono = res.findIndex((r, i) => r && !r.repetido && r.j === p.j && i !== p.i);
       if (dono < 0) continue;
       const a = A[p.i], d = A[dono];
       const igual = Math.min(Math.abs(Math.log(a.w / d.w)) + Math.abs(Math.log(a.h / d.h)), Math.abs(Math.log(a.w / d.h)) + Math.abs(Math.log(a.h / d.w)));
-      if (igual > 0.12) continue;
+      if (igual > (dx ? 0.2 : 0.12)) continue;
       res[p.i] = { j: p.j, girada: p.girada, custo: p.c, repetido: true, igualA: dono };
     }
+    // v51: peça do arquivo desenhada INCLINADA (ex.: o 2º acabamento da frente da Milena, de lado para encaixar) não
+    // parece com o molde em pé pelo formato; se o molde é "2X" e a medida bate com a peça que já casou com ele, vale a medida
+    if (repetir) A.forEach((a, i) => {
+      if (res[i]) return;
+      let melhor = null;
+      B.forEach((q, j) => {
+        if (!doisX(j)) return;
+        const dono = res.findIndex((r, k) => r && !r.repetido && r.j === j && k !== i); if (dono < 0) return;
+        // "2X" = 2 peças no total: conta as peças que já estão nesse molde (um grupo pode ter 2 peças iguais)
+        const qtd = Math.max(2, (q.rotulo && q.rotulo.qtd) | 0), ja = res.reduce((t, r, k) => t + (r && r.j === j && k !== i ? (A[k].n || 1) : 0), 0);
+        if (ja + (a.n || 1) > qtd) return;
+        const d = A[dono];
+        const igual = Math.min(Math.abs(Math.log(a.w / d.w)) + Math.abs(Math.log(a.h / d.h)), Math.abs(Math.log(a.w / d.h)) + Math.abs(Math.log(a.h / d.w)));
+        const reto = Math.abs(Math.log(q.w / (s * a.w))) + Math.abs(Math.log(q.h / (s * a.h))), deit = Math.abs(Math.log(q.h / (s * a.w))) + Math.abs(Math.log(q.w / (s * a.h)));
+        const c = Math.min(reto, deit);
+        if (igual <= 0.2 && c <= 0.4 && (!melhor || c < melhor.custo)) melhor = { j, girada: deit < reto, custo: c, repetido: true, igualA: dono, soMedida: true };
+      });
+      if (melhor) res[i] = melhor;
+    });
     return res;
   }
 

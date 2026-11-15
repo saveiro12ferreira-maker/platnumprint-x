@@ -710,7 +710,7 @@ const App = (() => {
   // v44: com o formato da peça (não só a medida), para não casar acabamento com alça nem manga com frente
   const dimsGrupo = () => st.groups.map(g => { const p = g.items[0]; let sig = null;
     try { if (p && p.mask) { sig = g._sig || (g._sig = Moldes.assinatura(p.mask, p.w, p.h)); } } catch (e) { sig = null; }
-    return { w: cmW(g), h: cmH(g), sig }; });
+    return { w: cmW(g), h: cmH(g), sig, n: g.items.length }; });
   function refMolde() {
     const m = st.moldes; if (!m) return null;
     const tams = Object.keys(m.tams).filter(t => idxTam(t) >= 0);
@@ -1254,6 +1254,8 @@ const App = (() => {
         const jv = +Object.keys(votos).sort((a, b) => votos[b] - votos[a])[0];
         if (jv !== c.j) { (m.porForma = m.porForma || {})[g.id] = jv; trocou = true; }
       }
+      // v51: com os nomes lidos ("ACB FRENTE 2X"), a peça que ficou sem molde pode usar o molde "2X" da irmã
+      if (!trocou && st.groups.some(g => !(m.casa[g.id] && m.casa[g.id][m.ref]))) trocou = true;
       if (trocou) { casarMoldes(); computeTargets(); renderGrade(); }
       renderPieces(); desenharEtiquetas(); renderMoldes(); agendar();
       if ($('#iaAuto') && $('#iaAuto').checked) iaConferirPecas().catch(e => console.error(e));

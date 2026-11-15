@@ -279,3 +279,15 @@ Pedido do dono: "em vez do motor pensar sozinho, a IA pensa dentro dele e aprend
   peça cuja beira no arquivo original é quase toda desenhada (manga azul). Peça com fundo na beira (flores soltas no
   fundo, como o Vestido Antonella) fica exatamente como era (conferido pixel a pixel: idêntico).
 - Vigia: 14 de 14 testes ok.
+
+## v51 (15/11) — Conjunto Milena: acabamento inclinado sem molde
+Testado com os arquivos do designer (12A CONJUNTO MILENA BORDADO BRANCO.tif + PDFs 2 a 14):
+- **Acabamento da frente sem molde:** o arquivo tem os 2 acabamentos da frente, um deitado e o outro desenhado
+  INCLINADO (de lado, para encaixar). O inclinado não parecia com o molde em pé e ficava sem molde: saía na medida de
+  mercado, com outro tamanho e outra borda. Agora, quando a modelista marca o molde como "2X" (ACB FRENTE 2X) e a medida
+  da peça bate com a irmã que já casou, a segunda peça usa o mesmo molde — contando as peças: "2X" aceita 2 no total
+  (não põe uma terceira peça na ALÇA 2X, que já tem as duas).
+- O casamento é refeito depois de ler os nomes dos moldes no PDF (é ali que o motor descobre o "2X").
+- Resultado: tamanhos 2, 12 e 14 com as 15 peças, cada uma no molde do PDF. Conjunto Milena entrou no vigia (20 de 20 ok).
+- A borda de corte continua da risca da modelagem PARA FORA (regra do dono 12/11): por isso a peça gerada fica até
+  ~3 mm maior de cada lado que o desenho do Corel, que tem a borda por dentro da risca.
