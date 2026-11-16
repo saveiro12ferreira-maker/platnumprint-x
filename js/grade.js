@@ -284,15 +284,14 @@ const Grade = (() => {
     };
   }
   // mapa (de 6 em 6 px, interpolado) de cada pixel do molde novo para a peça original, alinhando os contornos
-  function mapaContorno(p, nm, Wt, Ht, sx, sy) {
-    const N = 72;
+  function mapaContorno(p, nm, Wt, Ht, sx, sy, N = 72, lam = 1e-3) {
     const a = reamostrar(contornoExterno(nm, Wt, Ht), N), b0 = (p._contV53 && p._contV53.length === N) ? p._contV53 : (p._contV53 = reamostrar(contornoExterno(p.mask, p.w, p.h), N));
     if (!a || !b0) return null;
     // alinha o começo dos dois contornos: o deslocamento que deixa os pontos mais perto (com a original na escala nova)
     let melhor = 0, dmin = Infinity;
     for (let sh = 0; sh < N; sh++) { let d = 0; for (let i = 0; i < N; i++) { const q = b0[(i + sh) % N]; d += (a[i][0] - q[0] * sx) ** 2 + (a[i][1] - q[1] * sy) ** 2; } if (d < dmin) { dmin = d; melhor = sh; } }
     const b = a.map((_, i) => b0[(i + melhor) % N]);
-    const f = tps(a, b, 1e-3 * Wt * Ht); if (!f) return null;
+    const f = tps(a, b, lam * Wt * Ht); if (!f) return null;
     const P = 6, gw = Math.ceil(Wt / P) + 1, gh = Math.ceil(Ht / P) + 1, GX = new Float32Array(gw * gh), GY = new Float32Array(gw * gh);
     for (let j = 0; j < gh; j++) for (let i = 0; i < gw; i++) { const [X, Y] = f(i * P, j * P); GX[j * gw + i] = X; GY[j * gw + i] = Y; }
     return (x, y) => {
@@ -366,7 +365,91 @@ const Grade = (() => {
         p._toca = { tot, cont };
       }
       const altos = new Set(E.lista.filter(e => (e.y1 - e.y0) > H * 0.8 || (!e.largo && p._toca.tot > 0 && (p._toca.cont.get(e.id) || 0) >= 0.12 * p._toca.tot)).map(e => e.id));
-      if (altos.size) {
+      // v54 (dono 15/11, CPEF RUN PP/P/M/G, "continua o mesmo problema nos ombros"): quando o molde novo tem um FORMATO
+      // diferente do original (não só maior/menor: ombro mais largo, cava mais rasa), a peça inteira segue o contorno
+      // novo de uma vez só (faixas, ombros, fundo), e só os desenhos soltos do meio (logos, letreiros, bonecos) mudam de
+      // tamanho sem deformar, no lugar correspondente. Antes, parte ia pelo contorno e parte pela caixa, e no encontro
+      // dos dois apareciam riscos brancos no ombro e chamas laranja na lateral.
+      let modoContorno = null;
+      if (o.forma) {
+        let ii = 0, uu = 0;
+        for (let y = 0; y < Ht; y += 2) { const sr = mapY[y] * W, r = y * Wt; for (let x = 0; x < Wt; x += 2) { const a1 = nm[r + x], b1 = p.mask[sr + mapX[x]]; if (a1 && b1) ii++; if (a1 || b1) uu++; } }
+        p._iou = uu ? ii / uu : 1; p._ringArt = 1 - (p._toca.cont.get(0) || 0) / (p._toca.tot || 1); p._altos = altos.size;
+        // só peça com a beira quase toda desenhada (≥ 70%: ombros, faixas e barras chegando na beira, ou estampa corrida);
+        // peça com fundo na beira (flores soltas, como o Vestido Antonella) continua como era
+        if (p._ringArt >= 0.7) modoContorno = mapaContorno(p, nm, Wt, Ht, sx, sy, 96, 2e-4);
+      }
+      if (modoContorno) {
+        const mc = modoContorno, okO = k => p.mask[k] && !(p.band && p.band[k]);
+        const tot = p._toca.tot || 1;
+        const soltos = new Map();
+        for (const e of E.lista) {
+          const toca = (p._toca.cont.get(e.id) || 0) / tot;
+          if (e.largo || toca > 0.01 || (e.y1 - e.y0) > H * 0.6 || (e.x1 - e.x0) > W * 0.6) continue;
+          // o que fica atrás do desenho solto (fundo branco ou o azul da manga): a cor logo ao lado, linha por linha
+          const lado = new Int32Array((e.y1 - e.y0 + 1) * 2).fill(-1);
+          for (let y = e.y0; y <= e.y1; y++) {
+            let xa = -1, xb = -1;
+            for (let x = e.x0; x <= e.x1; x++) if (E.lab[y * W + x] === e.id) { if (xa < 0) xa = x; xb = x; }
+            if (xa < 0) continue;
+            for (let x = xa - 1; x >= 0; x--) { const k = y * W + x; if (!okO(k)) break; if (E.lab[k] !== e.id) { lado[(y - e.y0) * 2] = k; break; } }
+            for (let x = xb + 1; x < W; x++) { const k = y * W + x; if (!okO(k)) break; if (E.lab[k] !== e.id) { lado[(y - e.y0) * 2 + 1] = k; break; } }
+          }
+          soltos.set(e.id, { e, lado });
+        }
+        const Rb = 40;
+        for (let y = 0; y < Ht; y++) for (let x = 0; x < Wt; x++) {
+          const i = y * Wt + x; if (!nm[i]) continue;
+          const r = mc(x, y); let X = Math.max(0, Math.min(W - 1, Math.round(r[0]))), Y = Math.max(0, Math.min(H - 1, Math.round(r[1])));
+          let kk = Y * W + X;
+          if (!okO(kk)) {
+            let ach = -1;
+            for (let rr = 1; rr <= Rb && ach < 0; rr++) for (let dy = -rr; dy <= rr && ach < 0; dy++) for (let dx = -rr; dx <= rr; dx++) {
+              if (Math.max(Math.abs(dx), Math.abs(dy)) !== rr) continue;
+              const xx = X + dx, yy = Y + dy; if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue;
+              const k2 = yy * W + xx; if (okO(k2)) { ach = k2; break; }
+            }
+            if (ach < 0) continue; kk = ach; X = kk % W; Y = (kk / W) | 0;
+          }
+          const so = soltos.get(E.lab[kk]);
+          if (so) {   // no lugar do desenho solto vai o que estava atrás dele (o desenho entra depois, sem deformar)
+            const e = so.e, L = so.lado[(Y - e.y0) * 2], R = so.lado[(Y - e.y0) * 2 + 1];
+            const kL = L >= 0 ? L : R, kR = R >= 0 ? R : L; if (kL < 0) continue;
+            kk = (L >= 0 && R >= 0) ? (X - (L % W) <= (R % W) - X ? L : R) : kL;
+            if (!A[kk]) continue;
+          }
+          const q = ((y + b) * OW + x + b) * 4, art = A[kk];
+          if (!art && trocou) { const s4 = kk * 4; out[q] = S[s4] + br - bg0[0]; out[q + 1] = S[s4 + 1] + bgG - bg0[1]; out[q + 2] = S[s4 + 2] + bb - bg0[2]; }
+          else if (art) pintaArte(out, q, S, kk, alfa, o.bg, bg0 || o.bg, tr);
+          if (art && !so) { pint[i] = 1; copied++; }
+        }
+        // os desenhos soltos: mesmo tamanho proporcional (graduação), no ponto que corresponde ao centro deles
+        for (const { e } of soltos.values()) {
+          let xc = e.cx * sx, yc = e.cy * sy;
+          for (let it = 0; it < 12; it++) { const r = mc(Math.max(0, Math.min(Wt - 1, xc)), Math.max(0, Math.min(Ht - 1, yc))); xc += (e.cx - r[0]) * sx * 0.8; yc += (e.cy - r[1]) * sy * 0.8; }
+          let bx0 = xc + (e.x0 - e.cx) * s, bx1 = xc + (e.x1 - e.cx) * s, by0 = yc + (e.y0 - e.cy) * s, by1 = yc + (e.y1 - e.cy) * s;
+          let dxs = 0, dys = 0;
+          if (bx0 < 0) dxs = -bx0; else if (bx1 > Wt - 1) dxs = Wt - 1 - bx1;
+          if (by0 < 0) dys = -by0; else if (by1 > Ht - 1) dys = Ht - 1 - by1;
+          xc += dxs; yc += dys; esperado += e.n * s * s;
+          for (let y = Math.max(0, Math.floor(by0 + dys)); y <= Math.min(Ht - 1, Math.ceil(by1 + dys)); y++) {
+            const Yr = Math.round(e.cy + (y - yc) / s); if (Yr < 0 || Yr >= H) continue;
+            for (let x = Math.max(0, Math.floor(bx0 + dxs)); x <= Math.min(Wt - 1, Math.ceil(bx1 + dxs)); x++) {
+              const i = y * Wt + x; if (!nm[i]) continue;
+              const X = Math.round(e.cx + (x - xc) / s); if (X < 0 || X >= W) continue;
+              const k = Yr * W + X; if (E.lab[k] !== e.id || p.band[k]) continue;
+              const art = A[k]; if (!art && pint[i]) continue;
+              const q = ((y + b) * OW + x + b) * 4;
+              if (!art && trocou) { const s4 = k * 4; out[q] = S[s4] + br - bg0[0]; out[q + 1] = S[s4 + 1] + bgG - bg0[1]; out[q + 2] = S[s4 + 2] + bb - bg0[2]; }
+              else pintaArte(out, q, S, k, alfa, o.bg, bg0 || o.bg, tr);
+              if (art) { pint[i] = 1; copied++; }
+            }
+          }
+        }
+        // o que veio pelo contorno conta como "coube" (a peça inteira foi recolocada)
+        for (const e of E.lista) if (!soltos.has(e.id)) esperado += e.n * sx * sy;
+      }
+      if (!modoContorno && altos.size) {
         const mc = mapaContorno(p, nm, Wt, Ht, sx, sy);
         const rb = Math.max(4, Math.round(0.03 * Math.min(Wt, Ht))), dentro = U.box(nm, Wt, Ht, rb, 'min'), perto = i => !dentro[i];
         for (let y = 0; y < Ht; y++) for (let x = 0; x < Wt; x++) {
@@ -379,6 +462,9 @@ const Grade = (() => {
           // perto da beira a deformação pode cair um pouquinho fora do desenho (cantos): procura o desenho em volta
           // (até ~10 px), senão sobrava canto branco onde o original é todo pintado
           if (!altos.has(E.lab[kk]) || p.band[kk]) {
+            // v54 (dono 15/11: "motor muito pesado"): a procura em volta só vale perto da beira; antes ela rodava em
+            // todo pixel do miolo (até 440 testes por pixel) e deixava o tamanho 3 a 7 vezes mais lento
+            if (!perto(i)) continue;
             let ach = -1;
             for (let r = 1; r <= 10 && ach < 0; r++) for (let dy = -r; dy <= r && ach < 0; dy++) for (let dx = -r; dx <= r; dx++) {
               if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
@@ -396,7 +482,7 @@ const Grade = (() => {
           if (art) { pint[i] = 1; copied++; }
         }
       }
-      for (const e of E.lista) {
+      for (const e of (modoContorno ? [] : E.lista)) {
         // v46 (CPEF RUN 14/11): desenho que vai de cima a baixo da peça (ex.: a faixa azul do ombro que desce pela lateral
         // até a barra) não pode só mudar de tamanho: num tamanho menor ele não chegava mais no ombro e ficava uma faixa
         // branca em cima. Esse acompanha a altura da peça (estica junto), como o fundo.
@@ -471,6 +557,37 @@ const Grade = (() => {
             else pintaArte(out, q, S, k, alfa, o.bg, bg0 || o.bg, tr);
             if (art) { pint[i] = 1; copied++; }
           }
+        }
+      }
+      // v54 (dono 15/11, CPEF RUN PP/P/M/G: "a estampa não acompanha o contorno nos ombros"): na faixa junto da beira
+      // do molde novo, o que ficou só com a cor do fundo pega a cor que a peça ORIGINAL tem no ponto correspondente da
+      // beira dela (contorno novo → contorno original). Onde o original é azul até a beira (ombro, cava, decote), o azul
+      // chega até a beira nova; onde o original tem fundo na beira, o fundo fica. O miolo (logos, desenhos) não muda.
+      if (W * H > 0) {
+        const Bw = Math.max(6, Math.round(0.025 * Math.min(Wt, Ht))), miolo = U.box(nm, Wt, Ht, Bw, 'min');
+        const ehFundoO = q => Math.abs(out[q] - br) + Math.abs(out[q + 1] - bgG) + Math.abs(out[q + 2] - bb) < 24;
+        const mc = mapaContorno(p, nm, Wt, Ht, sx, sy);
+        const Rb = Math.max(3, Math.min(14, Math.round(Bw / Math.max(0.2, Math.sqrt(sx * sy)) * 0.5)));
+        const okO = k => p.mask[k] && !(p.band && p.band[k]);
+        for (let y = 0; y < Ht; y++) for (let x = 0; x < Wt; x++) {
+          const i = y * Wt + x; if (!nm[i] || miolo[i] || pint[i]) continue;
+          const q = ((y + b) * OW + x + b) * 4; if (!ehFundoO(q)) continue;
+          let X, Y;
+          if (mc) { const r = mc(x, y); X = Math.round(r[0]); Y = Math.round(r[1]); }
+          else { X = mapX[x]; Y = mapY[y]; }
+          X = Math.max(0, Math.min(W - 1, X)); Y = Math.max(0, Math.min(H - 1, Y));
+          let kk = Y * W + X;
+          if (!okO(kk)) {   // caiu na risca ou fora: o ponto da peça mais perto (até poucos px)
+            let ach = -1;
+            for (let r = 1; r <= Rb && ach < 0; r++) for (let dy = -r; dy <= r && ach < 0; dy++) for (let dx = -r; dx <= r; dx++) {
+              if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+              const xx = X + dx, yy = Y + dy; if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue;
+              const k2 = yy * W + xx; if (okO(k2)) { ach = k2; break; }
+            }
+            if (ach < 0) continue; kk = ach;
+          }
+          if (!A[kk]) continue;   // no original é fundo ali: fica o fundo
+          pintaArte(out, q, S, kk, alfa, o.bg, bg0 || o.bg, tr); pint[i] = 1;
         }
       }
     } else

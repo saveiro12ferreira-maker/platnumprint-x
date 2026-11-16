@@ -27,15 +27,17 @@ const U = {
         if (rem >= 0) s -= m[o + rem];
       }
     }
-    for (let x = 0; x < W; x++) {
-      let s = 0;
-      for (let y = 0; y <= Math.min(r, H - 1); y++) s += tmp[y * W + x];
-      for (let y = 0; y < H; y++) {
-        res[y * W + x] = isMin ? (s === need ? 1 : 0) : (s > 0 ? 1 : 0);
-        const add = y + r + 1, rem = y - r;
-        if (add < H) s += tmp[add * W + x];
-        if (rem >= 0) s -= tmp[rem * W + x];
-      }
+    // v54 (motor pesado): a passada vertical anda linha a linha com uma soma por coluna (mesmo resultado, sem pular
+    // de linha em linha na memória a cada pixel, o que deixava as peças grandes lentas)
+    const s = new Int32Array(W);
+    for (let y = 0; y <= Math.min(r, H - 1); y++) { const o = y * W; for (let x = 0; x < W; x++) s[x] += tmp[o + x]; }
+    for (let y = 0; y < H; y++) {
+      const o = y * W;
+      if (isMin) { for (let x = 0; x < W; x++) res[o + x] = s[x] === need ? 1 : 0; }
+      else { for (let x = 0; x < W; x++) res[o + x] = s[x] > 0 ? 1 : 0; }
+      const add = y + r + 1, rem = y - r;
+      if (add < H) { const oa = add * W; for (let x = 0; x < W; x++) s[x] += tmp[oa + x]; }
+      if (rem >= 0) { const or = rem * W; for (let x = 0; x < W; x++) s[x] -= tmp[or + x]; }
     }
     return res;
   },

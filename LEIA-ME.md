@@ -319,3 +319,14 @@ Testado com os arquivos do designer (12A CONJUNTO MILENA BORDADO BRANCO.tif + PD
   diferentes (frente/costas).
 - Conferido: Antonella com os moldes do PDF — tamanho 2 idêntico à v51, 14 com 1.502 pixels diferentes (a marca "12A" do
   canto); vigia 20 de 20 ok.
+
+## v54 (15/11) — motor mais leve e ombro do CPEF RUN (PP, P, M, G) seguindo o contorno
+- **Mais leve:** a procura de desenho "em volta" (para não sobrar canto branco) rodava em todo pixel do miolo da peça (até
+  440 testes por pixel); agora só perto da beira. A erosão/dilatação de máscara (usada em todo o motor) anda linha a linha
+  na memória (mesmo resultado, ~2× mais rápida). CPEF RUN PP: de 168 s para cerca de 60 s no teste.
+- **Ombro/cava/decote (CPEF RUN):** peça com a beira quase toda desenhada (≥ 70%: ombros, faixas, barras chegando na beira)
+  e molde do PDF agora segue o contorno novo inteira de uma vez (faixas, ombros e fundo pelo mesmo mapa contorno novo →
+  contorno original); os desenhos soltos do meio (logos, letreiros, bonecos) só mudam de tamanho, sem deformar, no lugar
+  correspondente. Acabaram os riscos brancos no ombro das costas e as "chamas" laranja na lateral.
+- Peça com fundo na beira (flores soltas, como o Vestido Antonella) continua como era. Junto da beira, o que ficou só com a
+  cor do fundo pega a cor que o original tem no ponto correspondente da beira dele (onde o original é fundo, fica fundo).
