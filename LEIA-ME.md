@@ -330,3 +330,6 @@ Testado com os arquivos do designer (12A CONJUNTO MILENA BORDADO BRANCO.tif + PD
   correspondente. Acabaram os riscos brancos no ombro das costas e as "chamas" laranja na lateral.
 - Peça com fundo na beira (flores soltas, como o Vestido Antonella) continua como era. Junto da beira, o que ficou só com a
   cor do fundo pega a cor que o original tem no ponto correspondente da beira dele (onde o original é fundo, fica fundo).
+- **v55 — Pontinhos na ponta da cava (PP do CPEF RUN):** no modo contorno, a passada extra da beira (que usa outro mapa) não roda
+  mais, o ponto da peça original mais perto é o mais perto de verdade (não o primeiro do quadrado), e mancha de cor pequena
+  e solta junto da beira vira a cor de volta dela (com a beira macia).
