@@ -391,7 +391,8 @@ const Grade = (() => {
         p._iou = uu ? ii / uu : 1; p._ringArt = 1 - (p._toca.cont.get(0) || 0) / (p._toca.tot || 1); p._altos = altos.size;
         // só peça com a beira quase toda desenhada (≥ 70%: ombros, faixas e barras chegando na beira, ou estampa corrida);
         // peça com fundo na beira (flores soltas, como o Vestido Antonella) continua como era
-        if (p._ringArt >= 0.7) modoContorno = mapaContorno(p, nm, Wt, Ht, sx, sy, 96, 2e-4, true);
+        // v58: ou quando a IA mandou ("Corrigir com a IA" → a estampa segue o contorno) nessa peça
+        if (p._ringArt >= 0.7 || p.seguirContorno) modoContorno = mapaContorno(p, nm, Wt, Ht, sx, sy, 96, 2e-4, true);
       }
       if (modoContorno) {
         const mc = modoContorno, okO = k => p.mask[k] && !(p.band && p.band[k]);

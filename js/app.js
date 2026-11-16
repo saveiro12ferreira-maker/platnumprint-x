@@ -1483,6 +1483,45 @@ const App = (() => {
     } catch (e) { info.textContent = '🧠 Não consegui falar com a IA: ' + e.message + ' (o motor continua funcionando sozinho).'; }
     finally { iaOcupado = false; $('#iaPecas').disabled = false; }
   }
+  // ---- correções que a IA pode mandar o motor fazer (v58) ----
+  function iaPodeAplicar(pb) {
+    const m = st.moldes, g = st.groups.find(x => x.id === pb.grupo); if (!g) return false;
+    if (pb.acao === 'seguir_contorno') return g.items.some(p => !p.seguirContorno);
+    const fr0 = (st.formas || {})[m && m.ref] || {}, jsDif = new Set(g.items.map(p => fr0[p.n] && fr0[p.n].j).filter(v => v != null)).size > 1;
+    if (pb.acao === 'trocar_molde') return !jsDif && pb.molde >= 1 && !!(m && m.ref) && pb.molde <= m.tams[m.ref].pecas.length;
+    if (pb.acao === 'trocar_regra') return !!pb.regra && !(pb.regra === 'fundo' && g.items.some(p => p.artFrac >= 0.005)) && g.items.some(p => p.rule !== pb.regra);
+    return false;
+  }
+  const iaTextoAcao = pb => pb.acao === 'trocar_molde' ? `Aplicar: molde M${pb.molde}` : pb.acao === 'seguir_contorno' ? 'Aplicar: estampa segue o contorno' : `Aplicar: regra "${pb.regra}"`;
+  function iaAplicar(pb) {
+    const m = st.moldes, g = st.groups.find(x => x.id === pb.grupo); if (!g) return;
+    if (pb.acao === 'trocar_molde') { (m.manual = m.manual || {})[g.id] = pb.molde - 1; casarMoldes(); computeTargets(); renderGrade(); renderMoldes(); }
+    else if (pb.acao === 'seguir_contorno') for (const p of g.items) p.seguirContorno = true;
+    else for (const p of g.items) { p.rule = pb.regra; p.regraManual = true; }
+    iaGuardarLicao(`${descGrupo(g)}: ${pb.problema} → ${pb.acao === 'trocar_molde' ? 'molde de ' + U.fmt(m.tams[m.ref].pecas[pb.molde - 1].w) + ' × ' + U.fmt(m.tams[m.ref].pecas[pb.molde - 1].h) + ' cm' : pb.acao === 'seguir_contorno' ? 'a estampa inteira segue o contorno do molde novo' : 'regra "' + pb.regra + '"'}.`);
+    renderPieces();
+  }
+  // fotografia do que a correção pode mudar, para o botão "Desfazer"
+  function iaFoto() {
+    return { manual: JSON.parse(JSON.stringify((st.moldes && st.moldes.manual) || {})),
+      pecas: st.pieces.map(p => ({ p, rule: p.rule, regraManual: p.regraManual, seguirContorno: p.seguirContorno })) };
+  }
+  function iaVoltarFoto(f) {
+    for (const x of f.pecas) { x.p.rule = x.rule; x.p.regraManual = x.regraManual; x.p.seguirContorno = !!x.seguirContorno; }
+    if (st.moldes) { st.moldes.manual = f.manual; casarMoldes(); computeTargets(); renderGrade(); renderMoldes(); }
+    renderPieces();
+  }
+  async function iaCorrigirTudo(lista, olhar, antes) {
+    const info = $('#iaGradeInfo'), foto = iaFoto();
+    for (const pb of lista) if (iaPodeAplicar(pb)) iaAplicar(pb);
+    info.textContent = `🛠 Aplicando ${lista.length} correção(ões) e gerando a grade de novo…`; $('#iaGradeRes').replaceChildren();
+    await gerar();
+    await iaConferirGrade(olhar);
+    const depois = (st.iaUltima && st.iaUltima.probs.length) || 0;
+    info.textContent = `🛠 Corrigido: antes ${antes} ponto(s), agora ${depois}. ` + info.textContent.replace(/^🧠 /, '');
+    $('#iaGradeRes').prepend(el('button', { type: 'button', class: 'mini', text: '↩ Desfazer a correção da IA', onclick: async e => {
+      e.target.disabled = true; iaVoltarFoto(foto); info.textContent = '↩ Voltando como estava e gerando de novo…'; await gerar(); info.textContent = '↩ Voltou como estava antes da correção da IA.'; } }));
+  }
   async function iaConferirGrade(sizes) {
     const info = $('#iaGradeInfo'), res = $('#iaGradeRes');
     if (iaOcupado) return;
@@ -1503,6 +1542,7 @@ const App = (() => {
       const m = st.moldes, texto = [`Compare a grade gerada com o arquivo original. Tamanho base ${st.base}; grade ${st.sizes.join(', ')}.`,
         'Confira PEÇA A PEÇA (original à esquerda, gerada à direita): todas as peças estão na grade (nenhuma sumiu, nenhuma a mais, nenhuma sem estampa)? Cada peça tem o formato do molde certo? A estampa ACOMPANHA O CONTORNO do molde novo (faixa do ombro chega no ombro e na cava, desenho do decote acompanha o decote, barra/bordado segue a barra)? Ficou faixa ou fio branco entre a borda e o desenho? Logo/texto cortado, esticado ou torto? A borda de corte tem a mesma grossura do original? Seja exigente: o tamanho gerado tem de parecer o original, só mudando de medida.',
         'Diga cada problema que vir, mesmo os de gravidade média: eles vão para o vigia, que conserta o motor.',
+        'Para cada problema escolha a ação que o motor consegue fazer sozinho quando o designer apertar "Corrigir com a IA": estampa que não chega na beira do molde novo (fresta/fio branco na borda, ombro, cava, decote ou barra que não acompanha) = "seguir_contorno"; molde errado = "trocar_molde"; regra errada = "trocar_regra"; o resto = "conferir".',
         'GRUPOS (dentro do grupo, cada peça escolhe sozinha o molde de formato mais parecido — ex.: frente e costas do mesmo grupo vão em moldes diferentes; para essas use acao "conferir", não "trocar_molde"):',
         ...st.groups.map(g => { const c = m && m.casa[g.id] && m.casa[g.id][m.ref], fr = (st.formas || {})[m && m.ref] || {};
           const porPeca = g.items.map((p, k) => { const f = fr[p.n]; return `peça ${k + 1}: ${f && f.j != null ? 'M' + (f.j + 1) : c ? 'M' + (c.j + 1) : 'sem molde'}`; }).join(', ');
@@ -1512,17 +1552,20 @@ const App = (() => {
       const probs = r.problemas || [];
       probs.filter(pb => pb.gravidade !== 'baixa').forEach(pb => vigia('ia', `${pb.grupo || ''}: ${pb.problema}`, { gravidade: pb.gravidade, acao: pb.acao, molde: pb.molde, regra: pb.regra, olhou: olhar }));
       info.textContent = r.ok && !probs.length ? `🧠 A IA conferiu ${olhar.join(' e ')}: a grade está boa para produzir.` : `🧠 A IA achou ${probs.length} ponto(s) para olhar em ${olhar.join(' e ')}:`;
-      res.replaceChildren(...probs.map(pb => {
-        const g = st.groups.find(x => x.id === pb.grupo);
-        const fr0 = (st.formas || {})[m && m.ref] || {}, jsDif = new Set(g ? g.items.map(p => fr0[p.n] && fr0[p.n].j).filter(v => v != null) : []).size > 1;
-        const pode = g && !(pb.acao === 'trocar_molde' && jsDif) && !(pb.acao === 'trocar_regra' && pb.regra === 'fundo' && g.items.some(p => p.artFrac >= 0.005)) && ((pb.acao === 'trocar_molde' && pb.molde >= 1 && m && m.ref && pb.molde <= m.tams[m.ref].pecas.length) || (pb.acao === 'trocar_regra' && pb.regra));
-        const bt = pode ? el('button', { type: 'button', class: 'mini', text: pb.acao === 'trocar_molde' ? `Aplicar: molde M${pb.molde}` : `Aplicar: regra "${pb.regra}"`, onclick: e => {
-          if (pb.acao === 'trocar_molde') { (m.manual = m.manual || {})[g.id] = pb.molde - 1; casarMoldes(); computeTargets(); renderGrade(); renderMoldes(); }
-          else for (const p of g.items) { p.rule = pb.regra; p.regraManual = true; }
-          iaGuardarLicao(`${descGrupo(g)}: ${pb.problema} → ${pb.acao === 'trocar_molde' ? 'molde de ' + U.fmt(m.tams[m.ref].pecas[pb.molde - 1].w) + ' × ' + U.fmt(m.tams[m.ref].pecas[pb.molde - 1].h) + ' cm' : 'regra "' + pb.regra + '"'}.`);
-          renderPieces(); e.target.disabled = true; e.target.textContent = '✔ aplicado — gere a grade de novo'; agendar(); } }) : null;
-        return el('div', { class: 'ia-item ' + (pb.gravidade === 'alta' ? 'ruim' : 'av') }, `${pb.gravidade === 'alta' ? '❌' : '⚠'} ${g ? nomeGrupo(g) + ': ' : ''}${pb.problema} `, bt);
-      }));
+      st.iaUltima = { probs, olhar };
+      const aplicaveis = probs.filter(pb => iaPodeAplicar(pb));
+      const itens = probs.map(pb => {
+        const g = st.groups.find(x => x.id === pb.grupo), pode = iaPodeAplicar(pb);
+        const bt = pode ? el('button', { type: 'button', class: 'mini', text: iaTextoAcao(pb), onclick: e => {
+          iaAplicar(pb); e.target.disabled = true; e.target.textContent = '✔ aplicado — gere a grade de novo'; agendar(); } }) : null;
+        const nota = !pode && pb.gravidade !== 'baixa' ? el('span', { class: 'muted', text: ' (foi para o vigia consertar no motor)' }) : null;
+        return el('div', { class: 'ia-item ' + (pb.gravidade === 'alta' ? 'ruim' : 'av') }, `${pb.gravidade === 'alta' ? '❌' : '⚠'} ${g ? nomeGrupo(g) + ': ' : ''}${pb.problema} `, bt, nota);
+      });
+      // v58 (dono 16/11: "a IA identificou os defeitos mas não aparece uma opção para eu apertar e ela corrigir"):
+      // um botão aplica TODAS as correções que o motor sabe fazer, gera de novo e a IA confere outra vez
+      const btTudo = aplicaveis.length ? el('button', { type: 'button', class: 'primary', style: 'font-size:15px;padding:8px 16px;margin:6px 0',
+        text: `🛠 Corrigir com a IA (${aplicaveis.length} correç${aplicaveis.length > 1 ? 'ões' : 'ão'})`, onclick: () => iaCorrigirTudo(aplicaveis, olhar, probs.length) }) : null;
+      res.replaceChildren(...(btTudo ? [btTudo] : []), ...itens);
     } catch (e) { info.textContent = '🧠 Não consegui falar com a IA: ' + e.message; }
     finally { iaOcupado = false; $('#iaGrade').disabled = false; }
   }

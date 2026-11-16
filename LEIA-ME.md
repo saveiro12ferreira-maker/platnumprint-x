@@ -353,3 +353,11 @@ Testado com os arquivos do designer (12A CONJUNTO MILENA BORDADO BRANCO.tif + PD
   deita/levanta no encaixe: só 0° e 180°, mesmo com 90°/270° liberados para as outras peças.
 - **IA:** a folha que ela compara mostra original e gerada na MESMA escala (mm por mm); antes a peça pequena parecia ter a
   borda de corte mais grossa.
+
+## v58 (16/11) — botão "🛠 Corrigir com a IA"
+- Depois que a IA confere a grade, aparece o botão **🛠 Corrigir com a IA (N correções)**: aplica de uma vez tudo o que o
+  motor sabe corrigir sozinho (molde errado, regra errada e, novo, **estampa que não chega no contorno** — fresta branca na
+  borda, ombro/cava/decote/barra — que passa a levar a estampa inteira até o contorno novo), gera a grade de novo e a IA
+  confere outra vez ("antes N pontos, agora M"). Tem **↩ Desfazer a correção da IA**, que volta exatamente como estava.
+- O que o motor não consegue corrigir sozinho aparece com "(foi para o vigia consertar no motor)" e entra na lista do
+  vigia na nuvem.
