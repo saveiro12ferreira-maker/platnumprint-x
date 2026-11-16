@@ -1389,26 +1389,34 @@ const App = (() => {
       const k = (Math.min(H - 1, Math.floor(y / f)) * W + Math.min(W - 1, Math.floor(x / f))) * 4, o = (y * w + x) * 4, a = rgba[k + 3] / 255;
       id.data[o] = 255 + (rgba[k] - 255) * a; id.data[o + 1] = 255 + (rgba[k + 1] - 255) * a; id.data[o + 2] = 255 + (rgba[k + 2] - 255) * a; id.data[o + 3] = 255;
     }
-    c.putImageData(id, 0, 0); return cv;
+    c.putImageData(id, 0, 0); cv._f = f; return cv;
   };
   function iaRecortes(r) {
     const out = new Map();
-    (r.parts || []).forEach(pt => { if (pt._p && pt.rgba && !out.has(pt._p)) out.set(pt._p, iaCanvas(pt.rgba, pt.w, pt.h)); });
+    (r.parts || []).forEach(pt => { if (pt._p && pt.rgba && !out.has(pt._p)) { const cv = iaCanvas(pt.rgba, pt.w, pt.h); cv._dpi = st.dpi; out.set(pt._p._orig || pt._p, cv); } });
     return out;
   }
   // folha de comparação de um tamanho: cada peça do arquivo, ORIGINAL | GERADA lado a lado
   function iaFolha(size) {
     const ger = (st.iaPecasGer || {})[size]; if (!ger || !ger.size) return null;
     const pares = [];
-    for (const g of st.groups) g.items.forEach((p, k) => { if (ger.has(p) && pares.length < 16) pares.push({ g, k, a: iaCanvas(p.rgba, p.w, p.h), b: ger.get(p) }); });
+    for (const g of st.groups) g.items.forEach((p, k) => {
+      if (!ger.has(p) || pares.length >= 16) return;
+      // v57: original e gerada na MESMA escala (mm por mm): a gerada da prévia rápida tem menos dpi, e cada uma esticada
+      // na sua caixa fazia a borda de corte da peça pequena parecer mais grossa para a IA
+      const a = iaCanvas(p.rgba, p.w, p.h), b = ger.get(p);
+      const k2 = (a._f * st.dpi) / ((b._f || 1) * (b._dpi || st.dpi));
+      b._w = Math.max(1, Math.round(b.width * k2)); b._h = Math.max(1, Math.round(b.height * k2));
+      pares.push({ g, k, a, b });
+    });
     if (!pares.length) return null;
-    const lin = pares.map(x => Math.max(x.a.height, x.b.height) + 34), larg = Math.max(...pares.map(x => x.a.width + x.b.width + 30));
+    const lin = pares.map(x => Math.max(x.a.height, x.b._h) + 34), larg = Math.max(...pares.map(x => x.a.width + x.b._w + 30));
     const cv = el('canvas'); cv.width = Math.min(1600, larg); cv.height = lin.reduce((a, b) => a + b, 0);
     const c = cv.getContext('2d'); c.fillStyle = '#fff'; c.fillRect(0, 0, cv.width, cv.height);
     let y = 0;
     pares.forEach((x, i) => {
       c.fillStyle = '#000'; c.font = 'bold 20px sans-serif'; c.fillText(`${x.g.id} peça ${x.k + 1} — ${nomeGrupo(x.g)}: ORIGINAL (base ${st.base})  |  GERADA (${size})`, 4, y + 22);
-      c.drawImage(x.a, 0, y + 30); c.drawImage(x.b, x.a.width + 30, y + 30);
+      c.drawImage(x.a, 0, y + 30); c.drawImage(x.b, x.a.width + 30, y + 30, x.b._w, x.b._h);
       c.strokeStyle = '#c00'; c.beginPath(); c.moveTo(x.a.width + 15, y + 30); c.lineTo(x.a.width + 15, y + lin[i]); c.stroke();
       y += lin[i];
     });
@@ -1778,9 +1786,83 @@ const App = (() => {
     try { await trabalhando(gerar_); } finally { gerando = false; if (deNovo) { deNovo = false; gerar(); } }
   }
 
+  // v57 (dono 16/11: "horrível de trabalhar, pesado; o motor tem que ser leve e ultra rápido"): o "Gerar grade" montava
+  // cada tamanho no dpi cheio do arquivo (ex.: 200 dpi, rolo de 1,6 m) só para mostrar uma miniatura de 700 px — e o
+  // TIFF era montado DE NOVO ao baixar. Agora a grade da tela é montada numa cópia leve das peças (72 dpi: 7 a 8 vezes
+  // menos pixels, mesmo molde, mesma regra, mesmo encaixe em cm) e o TIFF continua saindo no dpi cheio ao baixar.
+  // Com troca de cor marcada na peça (pontos da aba Cores) a grade da tela continua no dpi cheio.
+  const DPI_LEVE = 72;
+  let leve = null;
+  const ESCALA_PX = ['w', 'h', 'x', 'y', 'thick'], ESCALA_AREA = ['area', 'artCount'];
+  function reduzirPeca(p, f) {
+    const W = Math.max(2, Math.round(p.w * f)), H = Math.max(2, Math.round(p.h * f)), n = p.w * p.h, q = {};
+    const mapX = new Int32Array(W), mapY = new Int32Array(H);
+    for (let x = 0; x < W; x++) mapX[x] = Math.min(p.w - 1, Math.floor((x + 0.5) * p.w / W));
+    for (let y = 0; y < H; y++) mapY[y] = Math.min(p.h - 1, Math.floor((y + 0.5) * p.h / H));
+    const perto = a => { const o = new a.constructor(W * H); for (let y = 0; y < H; y++) { const sr = mapY[y] * p.w, r = y * W; for (let x = 0; x < W; x++) o[r + x] = a[sr + mapX[x]]; } return o; };
+    for (const k of Object.keys(p)) {
+      if (k[0] === '_') continue;
+      const v = p[k];
+      if (ArrayBuffer.isView(v) && v.length === n) q[k] = perto(v);
+      else if (ArrayBuffer.isView(v) && v.length === n * 4 && k === 'rgba') {
+        // cor: média do quadradinho (a miniatura fica limpa, sem serrilhado)
+        const o = new Uint8ClampedArray(W * H * 4), x0 = new Int32Array(W + 1), y0 = new Int32Array(H + 1);
+        for (let x = 0; x <= W; x++) x0[x] = Math.min(p.w, Math.round(x * p.w / W));
+        for (let y = 0; y <= H; y++) y0[y] = Math.min(p.h, Math.round(y * p.h / H));
+        for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+          let r = 0, g = 0, b = 0, a = 0, c = 0;
+          const ya = y0[y], yb = Math.max(ya + 1, y0[y + 1]), xa = x0[x], xb = Math.max(xa + 1, x0[x + 1]);
+          for (let yy = ya; yy < yb && yy < p.h; yy++) for (let xx = xa; xx < xb && xx < p.w; xx++) { const i = (yy * p.w + xx) * 4; r += v[i]; g += v[i + 1]; b += v[i + 2]; a += v[i + 3]; c++; }
+          const i = (y * W + x) * 4;
+          // pixel de dentro da peça fica com a cor do ponto central (borda dura entre peça e fundo, como no original)
+          const cI = (mapY[y] * p.w + mapX[x]) * 4;
+          if (p.mask && !p.mask[mapY[y] * p.w + mapX[x]]) { o[i] = v[cI]; o[i + 1] = v[cI + 1]; o[i + 2] = v[cI + 2]; o[i + 3] = v[cI + 3]; }
+          else { o[i] = r / c; o[i + 1] = g / c; o[i + 2] = b / c; o[i + 3] = a / c; }
+        }
+        q[k] = o;
+      }
+      else if (ArrayBuffer.isView(v) || Array.isArray(v) && v.length === p.h) continue;   // perfis: refeitos abaixo
+      else q[k] = v;
+    }
+    for (const k of ESCALA_PX) if (typeof p[k] === 'number') q[k] = k === 'thick' ? Math.max(1, Math.round(p[k] * f)) : Math.round(p[k] * f);
+    q.w = W; q.h = H;
+    for (const k of ESCALA_AREA) if (typeof p[k] === 'number') q[k] = Math.round(p[k] * (W * H) / n);
+    if (q.mask) { const pr = U.profiles(q.mask, W, H); q.top = pr.top; q.bot = pr.bot; }
+    return q;
+  }
+  function estadoLeve() {
+    if (!st.dpi || st.dpi <= DPI_LEVE * 1.25 || !st.pieces || !st.pieces.length) return null;
+    const C = st.cores; if (C && ((C.novas || []).length || (C.regioes || []).length || (C.tons || []).length)) return null;
+    const f = DPI_LEVE / st.dpi;
+    if (!leve || leve.base !== st.pieces || leve.f !== f) leve = { base: st.pieces, f, mapa: new Map(st.pieces.map(p => { const q = reduzirPeca(p, f); q._orig = p; return [p, q]; })), formas: {}, formasChave: null };
+    // o que a pessoa muda na peça depois de ler (regra, nome, etiqueta, giro…) vale também na cópia leve
+    for (const [p, q] of leve.mapa) for (const k of Object.keys(p)) {
+      if (k[0] === '_' || ESCALA_PX.includes(k) || ESCALA_AREA.includes(k) || k === 'top' || k === 'bot') continue;
+      const v = p[k]; if (ArrayBuffer.isView(v)) continue; q[k] = v;
+    }
+    return leve;
+  }
+  async function comLeve(fn) {
+    const L = estadoLeve(); if (!L) return fn(false);
+    const salvo = { dpi: st.dpi, pieces: st.pieces, groups: st.groups, formas: st.formas, formasChave: st.formasChave, thickOverride: st.thickOverride };
+    st.dpi = DPI_LEVE; st.pieces = st.pieces.map(p => L.mapa.get(p)); st.groups = salvo.groups.map(g => ({ ...g, w: Math.round(g.w * L.f), h: Math.round(g.h * L.f), items: g.items.map(p => L.mapa.get(p) || p) }));
+    st.formas = L.formas; st.formasChave = L.formasChave;
+    if (salvo.thickOverride != null) st.thickOverride = Math.max(1, Math.round(salvo.thickOverride * L.f));
+    try { return await fn(true); }
+    finally { L.formas = st.formas; L.formasChave = st.formasChave; Object.assign(st, salvo); }
+  }
+
   async function gerar_() {
     readOut();
-    await prepararFormas(st.sizes, t => { $('#status5').textContent = t; });
+    const dpiCheio = st.dpi;
+    // os resultados da tela (miniatura, encaixe em cm) ficam guardados; o TIFF é montado no dpi cheio ao baixar
+    return comLeve(async leveAtivo => {
+      await prepararFormas(st.sizes, t => { $('#status5').textContent = t; });
+      return gerarGrade_(leveAtivo, dpiCheio);
+    });
+  }
+
+  async function gerarGrade_(leveAtivo, dpiCheio) {
     const bad = st.groups.flatMap(g => st.sizes.filter(s => !(st.targets[g.id][s].w > 0 && st.targets[g.id][s].h > 0)).map(s => `${st.groupName(g)} ${s}`));
     if (bad.length) { $('#status5').textContent = `Faltam medidas válidas: ${bad.join(', ')}. Abra a aba 4 · Grade e digite a largura e a altura desses tamanhos (ou tire esses tamanhos da grade).`; return; }
     if (st.bleedMm * 2 > st.gapMm) { $('#status5').textContent = 'O espaço entre peças precisa ser pelo menos o dobro da sangria, senão as sangrias se encostam.'; return; }
@@ -1815,7 +1897,7 @@ const App = (() => {
             el('button', { text: `✏️ Corel editável ${size}`, title: 'Cada pedaço separado: estampa, linha de corte e número do tamanho', onclick: () => exportCorel(size) }))));
         await U.tick();
       }
-      $('#status5').textContent = `Grade completa: ${sizes.length} tamanhos em ${U.secs(U.now() - t0)}.`;
+      $('#status5').textContent = `Grade completa: ${sizes.length} tamanhos em ${U.secs(U.now() - t0)}.` + (leveAtivo ? ` (Na tela é a prévia rápida; o TIFF sai em ${dpiCheio} dpi ao baixar.)` : '');
       if ($('#iaAuto') && $('#iaAuto').checked) iaConferirGrade(sizes).catch(e => console.error(e));
       $('#btnTodos').disabled = false; $('#btnCorelTodos').disabled = false; $('#btnEncaixe').disabled = false;
       renderQtd();

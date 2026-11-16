@@ -1277,12 +1277,18 @@ const Grade = (() => {
   // Encaixe pelo formato real das peças: cada peça vai para a posição mais baixa possível no rolo
   // (mais alta na tela) e mais à esquerda, sem encostar nas outras, testando os giros autorizados.
   // compacto: depois tira as peças de cima uma a uma e recoloca nos vãos que sobraram, até não dar mais para descer.
+  // v57 (dono 16/11: "a gola, que é o viés, mudou de posição e ficou em pé: o fio fica contrário ao do tecido e ela não
+  // estica"): tira comprida (viés, gola, alça, acabamento: uma medida 4× a outra ou tipo viés) NUNCA deita/levanta no
+  // encaixe — só os giros que mantêm o fio (0° e 180°), mesmo que o designer libere 90°/270° para as outras peças.
+  function ehTira(it) { const p = it && (it._p || it.p); if (p && p.type === 'vies') return true; const w = it.w || 1, h = it.h || 1; return Math.max(w, h) >= 4 * Math.min(w, h); }
+  function angsDe(it, A) { if (!ehTira(it)) return A; const f = A.filter(a => (((a % 180) + 180) % 180) === 0); return f.length ? f : [0]; }
   function layout(items, rollPx, marginPx, gapPx, c, giros, tempoMs = 2500, compacto = false) {
     const warn = [];
     const g = Math.ceil(gapPx / c), A = angulos(giros);
     const shapes = items.map(it => {
-      if (it.shapes) { const f = it.shapes.filter(s => A.includes(s.ang || 0)); return f.length ? f : [it.shapes[0]]; }
-      return A.map(a => shapeFor(it, c, g, a));
+      const Ai = angsDe(it, A);
+      if (it.shapes) { const f = it.shapes.filter(s => Ai.includes(s.ang || 0)); return f.length ? f : [it.shapes[0]]; }
+      return Ai.map(a => shapeFor(it, c, g, a));
     });
     let cols = Math.floor((rollPx - 2 * marginPx) / c);
     for (const s of shapes) {
@@ -1455,7 +1461,7 @@ const Grade = (() => {
       const sAtual = shapes[i].ang === pos[i].ang ? shapes[i] : (pos[i]._s || shapes[i]);
       rolo.marca(sAtual, Math.round((pos[i].x - marginPx) / c), Math.round((pos[i].y - marginPx) / c), 0);
       let melhor = null;
-      for (const a of ang) {
+      for (const a of angsDe(items[i], ang)) {
         const it = items[i], sh = a === 0 ? shapes[i] : (it['_shOrig' + a] && it['_shOrig' + a].c === c && it['_shOrig' + a].g === g ? it['_shOrig' + a].s : (it['_shOrig' + a] = { c, g, s: shapeFor(it, c, g, a) }).s);
         if (sh.cw > cols) continue;
         for (let X = 0; X + sh.cw <= cols; X++) for (let Y = 0; ; Y++) {
@@ -1642,7 +1648,13 @@ const Grade = (() => {
     if (salvo && (!blit || !blit(salvo))) return salvo;
     let gap = Math.round(st.gapMm / 25.4 * st.dpi), lay = null;
     for (let k = 0; k < 4; k++) {
-      lay = st.manterEncaixe ? layoutOriginal(items, rollPx, marginPx, gap, cell, angulos(st)) : layout(items, rollPx, marginPx, gap, cell, angulos(st), 2500, !!st.compactar);
+      if (st.manterEncaixe) {
+        // v57 (dono 16/11: "olha o tanto de espaço em branco"): monta como o original E monta solto (o melhor encaixe que
+        // achar, nos mesmos giros); fica com o original só se ele não gastar mais que 2% a mais de tecido
+        const a = layoutOriginal(items, rollPx, marginPx, gap, cell, angulos(st));
+        const b = layout(items, rollPx, marginPx, gap, cell, angulos(st), 1500, true);
+        lay = b && b.height < a.height * 0.98 ? b : a;
+      } else lay = layout(items, rollPx, marginPx, gap, cell, angulos(st), 2500, !!st.compactar);
       if (!blit || !blit(lay)) return lay;
       gap += Math.max(2, Math.round(2 / 25.4 * st.dpi));
     }

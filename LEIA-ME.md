@@ -341,3 +341,15 @@ Testado com os arquivos do designer (12A CONJUNTO MILENA BORDADO BRANCO.tif + PD
 - **Gerar:** no modo contorno o mapa leva o contorno novo até a beira de DENTRO da risca original (onde a estampa começa),
   então quase nenhum ponto cai em cima da risca e não precisa procurar em volta; a limpeza de manchinhas não cria mais
   lista por pixel; peça grande usa grade de 12 px no mapa; a risca reaproveita a mesma erosão. Mesmo resultado na tela.
+
+## v57 (16/11) — motor rápido de verdade, menos espaço em branco e viés/gola sem virar
+- **Prévia rápida:** o "Gerar grade" montava cada tamanho no dpi cheio (ex.: 300 dpi) só para mostrar uma miniatura de
+  700 px, e o TIFF era montado de novo ao baixar. Agora a grade da tela é montada numa cópia leve das peças (72 dpi, mesmo
+  molde, mesma regra, encaixe em cm) e o TIFF sai no dpi cheio ao baixar. CPEF RUN: 9 tamanhos em ~40–75 s no total
+  (antes ~1 min POR tamanho); Conjunto Milena: 7 tamanhos em ~20 s. Com troca de cor marcada na peça, segue no dpi cheio.
+- **Menos espaço em branco:** com "manter o encaixe do original" ligado, o motor monta também o encaixe solto (nos mesmos
+  giros) e fica com o mais curto, a não ser que o original gaste no máximo 2% a mais. CPEF GG: 141 → 90 cm; G3: 176 → 136 cm.
+- **Fio do tecido (viés, gola, alça, acabamento):** tira comprida (uma medida 4× a outra, ou peça do tipo viés) nunca
+  deita/levanta no encaixe: só 0° e 180°, mesmo com 90°/270° liberados para as outras peças.
+- **IA:** a folha que ela compara mostra original e gerada na MESMA escala (mm por mm); antes a peça pequena parecia ter a
+  borda de corte mais grossa.
