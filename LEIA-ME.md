@@ -333,3 +333,11 @@ Testado com os arquivos do designer (12A CONJUNTO MILENA BORDADO BRANCO.tif + PD
 - **v55 — Pontinhos na ponta da cava (PP do CPEF RUN):** no modo contorno, a passada extra da beira (que usa outro mapa) não roda
   mais, o ponto da peça original mais perto é o mais perto de verdade (não o primeiro do quadrado), e mancha de cor pequena
   e solta junto da beira vira a cor de volta dela (com a beira macia).
+
+## v56 (15/11) — motor mais leve para ler e gerar (dono: "está muito pesado")
+- **Ler o arquivo:** a conferência da leitura (refaz cada peça no tamanho base e compara com o original) passava pelo mapa
+  de contorno e pela procura de desenho em volta, que não servem para o mesmo tamanho. Agora no mesmo tamanho é cópia
+  direta. CPEF RUN: leitura de ~176 s (v53) para ~40 s no teste (igual à v51).
+- **Gerar:** no modo contorno o mapa leva o contorno novo até a beira de DENTRO da risca original (onde a estampa começa),
+  então quase nenhum ponto cai em cima da risca e não precisa procurar em volta; a limpeza de manchinhas não cria mais
+  lista por pixel; peça grande usa grade de 12 px no mapa; a risca reaproveita a mesma erosão. Mesmo resultado na tela.

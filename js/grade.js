@@ -284,15 +284,26 @@ const Grade = (() => {
     };
   }
   // mapa (de 6 em 6 px, interpolado) de cada pixel do molde novo para a peça original, alinhando os contornos
-  function mapaContorno(p, nm, Wt, Ht, sx, sy, N = 72, lam = 1e-3) {
-    const a = reamostrar(contornoExterno(nm, Wt, Ht), N), b0 = (p._contV53 && p._contV53.length === N) ? p._contV53 : (p._contV53 = reamostrar(contornoExterno(p.mask, p.w, p.h), N));
+  function mapaContorno(p, nm, Wt, Ht, sx, sy, N = 72, lam = 1e-3, dentroRisca = false) {
+    let b0;
+    if (dentroRisca) {
+      // v56: alvo = beira de DENTRO da risca original (onde a estampa começa); assim quase nenhum ponto cai em cima da
+      // risca e não precisa procurar o desenho em volta (era o que deixava a geração lenta)
+      if (!(p._contIn && p._contIn.length === N)) {
+        const m2 = U.box(p.mask, p.w, p.h, Math.max(1, Math.round(p.thick || 0) + 1), 'min');
+        p._contIn = reamostrar(contornoExterno(m2, p.w, p.h), N);
+      }
+      b0 = p._contIn;
+    } else b0 = (p._contV53 && p._contV53.length === N) ? p._contV53 : (p._contV53 = reamostrar(contornoExterno(p.mask, p.w, p.h), N));
+    const a = reamostrar(contornoExterno(nm, Wt, Ht), N);
     if (!a || !b0) return null;
     // alinha o começo dos dois contornos: o deslocamento que deixa os pontos mais perto (com a original na escala nova)
     let melhor = 0, dmin = Infinity;
     for (let sh = 0; sh < N; sh++) { let d = 0; for (let i = 0; i < N; i++) { const q = b0[(i + sh) % N]; d += (a[i][0] - q[0] * sx) ** 2 + (a[i][1] - q[1] * sy) ** 2; } if (d < dmin) { dmin = d; melhor = sh; } }
     const b = a.map((_, i) => b0[(i + melhor) % N]);
     const f = tps(a, b, lam * Wt * Ht); if (!f) return null;
-    const P = 6, gw = Math.ceil(Wt / P) + 1, gh = Math.ceil(Ht / P) + 1, GX = new Float32Array(gw * gh), GY = new Float32Array(gw * gh);
+    const P = Wt * Ht > 4e6 ? 12 : 6, gw = Math.ceil(Wt / P) + 1   // v56: peça grande, grade de 12 px (o mapa é suave; 4× menos conta)
+    , gh = Math.ceil(Ht / P) + 1, GX = new Float32Array(gw * gh), GY = new Float32Array(gw * gh);
     for (let j = 0; j < gh; j++) for (let i = 0; i < gw; i++) { const [X, Y] = f(i * P, j * P); GX[j * gw + i] = X; GY[j * gw + i] = Y; }
     return (x, y) => {
       const fx = x / P, fy = y / P, i = Math.min(gw - 2, fx | 0), j = Math.min(gh - 2, fy | 0), u = fx - i, v = fy - j, k = j * gw + i;
@@ -304,6 +315,9 @@ const Grade = (() => {
 
   function renderPiece(p, Wt, Ht, o) {
     const W = p.w, H = p.h, sx = Wt / W, sy = Ht / H, b = o.bleed | 0, OW = Wt + 2 * b, OH = Ht + 2 * b;
+    // v56 (dono 15/11, "motor muito pesado"): peça refeita no MESMO tamanho e sem molde do PDF (a conferência da leitura)
+    // não precisa de mapa de contorno nem de procura em volta: é o próprio original
+    const ident = !o.forma && Wt === W && Ht === H;
     const mapX = new Int32Array(Wt), mapY = new Int32Array(Ht);
     for (let x = 0; x < Wt; x++) mapX[x] = Math.min(W - 1, Math.floor((x + 0.5) / sx));
     for (let y = 0; y < Ht; y++) mapY[y] = Math.min(H - 1, Math.floor((y + 0.5) / sy));
@@ -377,7 +391,7 @@ const Grade = (() => {
         p._iou = uu ? ii / uu : 1; p._ringArt = 1 - (p._toca.cont.get(0) || 0) / (p._toca.tot || 1); p._altos = altos.size;
         // só peça com a beira quase toda desenhada (≥ 70%: ombros, faixas e barras chegando na beira, ou estampa corrida);
         // peça com fundo na beira (flores soltas, como o Vestido Antonella) continua como era
-        if (p._ringArt >= 0.7) modoContorno = mapaContorno(p, nm, Wt, Ht, sx, sy, 96, 2e-4);
+        if (p._ringArt >= 0.7) modoContorno = mapaContorno(p, nm, Wt, Ht, sx, sy, 96, 2e-4, true);
       }
       if (modoContorno) {
         const mc = modoContorno, okO = k => p.mask[k] && !(p.band && p.band[k]);
@@ -439,16 +453,18 @@ const Grade = (() => {
             if (!nm[s0] || mz[s0] || vis[s0]) continue;
             const k0 = cor(qOf(s0)); vis[s0] = 1;
             if (k0 === fundoK) continue;
+            // (sem criar lista nova por pixel: a versão anterior deixava a geração muito lenta)
             const comp = [s0], viz = new Map(); let solto = true;
+            const passo = (j) => {
+              if (!nm[j]) return;
+              const qj = qOf(j), kj = ((out[qj] >> 3) << 10) | ((out[qj + 1] >> 3) << 5) | (out[qj + 2] >> 3);
+              if (kj !== k0) { if (comp.length <= T) viz.set(kj, (viz.get(kj) || 0) + 1); return; }
+              if (mz[j]) { solto = false; return; }
+              if (vis[j]) return; vis[j] = 1; comp.push(j);
+            };
             for (let a = 0; a < comp.length; a++) {
-              const i = comp[a], x = i % Wt, y = (i / Wt) | 0;
-              for (const j of [x > 0 ? i - 1 : -1, x < Wt - 1 ? i + 1 : -1, y > 0 ? i - Wt : -1, y < Ht - 1 ? i + Wt : -1]) {
-                if (j < 0 || !nm[j]) continue;
-                const kj = cor(qOf(j));
-                if (kj !== k0) { if (comp.length <= T) viz.set(kj, (viz.get(kj) || 0) + 1); continue; }
-                if (mz[j]) { solto = false; continue; }   // a mancha continua para dentro: é faixa de verdade
-                if (vis[j]) continue; vis[j] = 1; comp.push(j);
-              }
+              const i = comp[a], x = i % Wt;
+              if (x > 0) passo(i - 1); if (x < Wt - 1) passo(i + 1); if (i >= Wt) passo(i - Wt); if (i + Wt < Wt * Ht) passo(i + Wt);
             }
             if (!solto || comp.length > T || comp.length < 20 || !viz.size) continue;
             let melhor = -1, nmax = 0; for (const [k, n] of viz) if (n > nmax) { nmax = n; melhor = k; }
@@ -498,7 +514,7 @@ const Grade = (() => {
         for (const e of E.lista) if (!soltos.has(e.id)) esperado += e.n * sx * sy;
       }
       if (!modoContorno && altos.size) {
-        const mc = mapaContorno(p, nm, Wt, Ht, sx, sy);
+        const mc = ident ? null : mapaContorno(p, nm, Wt, Ht, sx, sy);
         const rb = Math.max(4, Math.round(0.03 * Math.min(Wt, Ht))), dentro = U.box(nm, Wt, Ht, rb, 'min'), perto = i => !dentro[i];
         for (let y = 0; y < Ht; y++) for (let x = 0; x < Wt; x++) {
           const i = y * Wt + x; if (!nm[i]) continue;
@@ -512,7 +528,7 @@ const Grade = (() => {
           if (!altos.has(E.lab[kk]) || p.band[kk]) {
             // v54 (dono 15/11: "motor muito pesado"): a procura em volta só vale perto da beira; antes ela rodava em
             // todo pixel do miolo (até 440 testes por pixel) e deixava o tamanho 3 a 7 vezes mais lento
-            if (!perto(i)) continue;
+            if (ident || !perto(i)) continue;
             let ach = -1;
             for (let r = 1; r <= 10 && ach < 0; r++) for (let dy = -r; dy <= r && ach < 0; dy++) for (let dx = -r; dx <= r; dx++) {
               if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
@@ -611,7 +627,7 @@ const Grade = (() => {
       // do molde novo, o que ficou só com a cor do fundo pega a cor que a peça ORIGINAL tem no ponto correspondente da
       // beira dela (contorno novo → contorno original). Onde o original é azul até a beira (ombro, cava, decote), o azul
       // chega até a beira nova; onde o original tem fundo na beira, o fundo fica. O miolo (logos, desenhos) não muda.
-      if (!modoContorno) {   // (no modo contorno a peça inteira já veio pelo contorno)
+      if (!modoContorno && !ident) {   // (no modo contorno a peça inteira já veio pelo contorno; no mesmo tamanho não há o que preencher)
         const Bw = Math.max(6, Math.round(0.025 * Math.min(Wt, Ht))), miolo = U.box(nm, Wt, Ht, Bw, 'min');
         const ehFundoO = q => Math.abs(out[q] - br) + Math.abs(out[q + 1] - bgG) + Math.abs(out[q + 2] - bb) < 24;
         const mc = mapaContorno(p, nm, Wt, Ht, sx, sy);
@@ -667,12 +683,13 @@ const Grade = (() => {
       }
     }
 
+    let erRisca = null;
     // v50 (designer 14/11, "bugando" na beira): a estampa recolocada às vezes não chegava até a borda de corte nova e
     // ficava um fiozinho branco (cor do fundo) entre a borda preta e o desenho. Fecha só esse fio: pixel com a cor do
     // fundo, logo depois da borda, que tem desenho mais para DENTRO da peça a até ~4 px, pega a cor desse desenho.
     if (o.thick > 0) {
       const F = Math.max(3, Math.min(12, Math.round(o.thick * 0.15) + 2));
-      const e1 = U.box(nm, Wt, Ht, o.thick, 'min'), e2 = U.box(nm, Wt, Ht, o.thick + F, 'min');
+      const e1 = U.box(nm, Wt, Ht, o.thick, 'min'), e2 = U.box(nm, Wt, Ht, o.thick + F, 'min'); erRisca = e1;   // v56: a risca usa a mesma erosão
       const ehFundo = q => Math.abs(out[q] - br) + Math.abs(out[q + 1] - bgG) + Math.abs(out[q + 2] - bb) < 24;
       // só onde no ARQUIVO ORIGINAL o desenho encostava na borda (ex.: manga azul inteira): onde o original tinha fundo
       // junto da borda (flores soltas no fundo), o fundo fica — senão a cor das flores escorreria pela beira
@@ -713,7 +730,7 @@ const Grade = (() => {
     // nome e número do uniforme (por baixo da risca)
     for (const E of (o.persona || [])) pintaPersona(out, OW, b, nm, Wt, Ht, E);
     if (o.thick > 0) {
-      const er = U.box(nm, Wt, Ht, o.thick, 'min'), [r0, g0, b0] = o.outline;
+      const er = erRisca || U.box(nm, Wt, Ht, o.thick, 'min'), [r0, g0, b0] = o.outline;
       for (let y = 0; y < Ht; y++) for (let x = 0; x < Wt; x++) {
         const i = y * Wt + x;
         if (nm[i] && !er[i]) { const q = ((y + b) * OW + x + b) * 4; out[q] = r0; out[q + 1] = g0; out[q + 2] = b0; }
