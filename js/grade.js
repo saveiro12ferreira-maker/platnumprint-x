@@ -403,11 +403,14 @@ const Grade = (() => {
           const r = mc(x, y); let X = Math.max(0, Math.min(W - 1, Math.round(r[0]))), Y = Math.max(0, Math.min(H - 1, Math.round(r[1])));
           let kk = Y * W + X;
           if (!okO(kk)) {
-            let ach = -1;
-            for (let rr = 1; rr <= Rb && ach < 0; rr++) for (let dy = -rr; dy <= rr && ach < 0; dy++) for (let dx = -rr; dx <= rr; dx++) {
+            // o ponto da peça original MAIS PERTO de verdade (distância reta), não o primeiro achado no quadrado:
+            // o primeiro do quadrado fazia "degraus"/abinhas nas quinas da cava
+            let ach = -1, dm = Infinity;
+            for (let rr = 1; rr <= Rb && rr * rr < dm; rr++) for (let dy = -rr; dy <= rr; dy++) for (let dx = -rr; dx <= rr; dx++) {
               if (Math.max(Math.abs(dx), Math.abs(dy)) !== rr) continue;
+              const d2 = dx * dx + dy * dy; if (d2 >= dm) continue;
               const xx = X + dx, yy = Y + dy; if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue;
-              const k2 = yy * W + xx; if (okO(k2)) { ach = k2; break; }
+              const k2 = yy * W + xx; if (okO(k2)) { ach = k2; dm = d2; }
             }
             if (ach < 0) continue; kk = ach; X = kk % W; Y = (kk / W) | 0;
           }
@@ -422,6 +425,51 @@ const Grade = (() => {
           if (!art && trocou) { const s4 = kk * 4; out[q] = S[s4] + br - bg0[0]; out[q + 1] = S[s4 + 1] + bgG - bg0[1]; out[q + 2] = S[s4 + 2] + bb - bg0[2]; }
           else if (art) pintaArte(out, q, S, kk, alfa, o.bg, bg0 || o.bg, tr);
           if (art && !so) { pint[i] = 1; copied++; }
+        }
+        // v54b (dono 15/11: "corrija esses dois pontinhos"): na quina da cava/ombro o mapa do contorno pode deixar um
+        // pedacinho solto de uma faixa (ex.: bolinha azul na ponta da cava da frente do PP). Junto da beira, mancha de cor
+        // pequena e SOLTA (não continua para dentro da peça) vira a cor que está em volta dela.
+        {
+          const Bz = Math.max(8, Math.round(0.04 * Math.min(Wt, Ht))), mz = U.box(nm, Wt, Ht, Bz, 'min');
+          const T = Math.max(60, Math.round(0.0008 * Wt * Ht)), vis = new Uint8Array(Wt * Ht);
+          const cor = q => ((out[q] >> 3) << 10) | ((out[q + 1] >> 3) << 5) | (out[q + 2] >> 3);
+          const qOf = i => (((i / Wt) | 0) + b) * OW * 4 + ((i % Wt) + b) * 4;
+          const fundoK = ((br >> 3) << 10) | ((bgG >> 3) << 5) | (bb >> 3);
+          for (let s0 = 0; s0 < Wt * Ht; s0++) {
+            if (!nm[s0] || mz[s0] || vis[s0]) continue;
+            const k0 = cor(qOf(s0)); vis[s0] = 1;
+            if (k0 === fundoK) continue;
+            const comp = [s0], viz = new Map(); let solto = true;
+            for (let a = 0; a < comp.length; a++) {
+              const i = comp[a], x = i % Wt, y = (i / Wt) | 0;
+              for (const j of [x > 0 ? i - 1 : -1, x < Wt - 1 ? i + 1 : -1, y > 0 ? i - Wt : -1, y < Ht - 1 ? i + Wt : -1]) {
+                if (j < 0 || !nm[j]) continue;
+                const kj = cor(qOf(j));
+                if (kj !== k0) { if (comp.length <= T) viz.set(kj, (viz.get(kj) || 0) + 1); continue; }
+                if (mz[j]) { solto = false; continue; }   // a mancha continua para dentro: é faixa de verdade
+                if (vis[j]) continue; vis[j] = 1; comp.push(j);
+              }
+            }
+            if (!solto || comp.length > T || comp.length < 20 || !viz.size) continue;
+            let melhor = -1, nmax = 0; for (const [k, n] of viz) if (n > nmax) { nmax = n; melhor = k; }
+            // a cor de fora: um vizinho de verdade com essa cor (cor exata, não a arredondada)
+            let ref = -1;
+            for (const i of comp) { const x = i % Wt, y = (i / Wt) | 0; for (const j of [x > 0 ? i - 1 : -1, x < Wt - 1 ? i + 1 : -1, y > 0 ? i - Wt : -1, y < Ht - 1 ? i + Wt : -1]) if (j >= 0 && nm[j] && cor(qOf(j)) === melhor) { ref = qOf(j); break; } if (ref >= 0) break; }
+            if (ref < 0) continue;
+            const rr = out[ref], rg = out[ref + 1], rb2 = out[ref + 2], q0 = qOf(s0), c0 = [out[q0], out[q0 + 1], out[q0 + 2]];
+            const dd = (a1, a2, a3, b1, b2, b3) => Math.hypot(a1 - b1, a2 - b2, a3 - b3), d0 = dd(c0[0], c0[1], c0[2], rr, rg, rb2);
+            for (const i of comp) { const q = qOf(i); out[q] = rr; out[q + 1] = rg; out[q + 2] = rb2; }
+            // a beira macia em volta da mancha (mistura da mancha com a cor de fora) também some
+            for (const i of comp) {
+              const x = i % Wt, y = (i / Wt) | 0;
+              for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+                const xx = x + dx, yy = y + dy; if (xx < 0 || yy < 0 || xx >= Wt || yy >= Ht) continue;
+                const j = yy * Wt + xx; if (!nm[j]) continue; const q = qOf(j);
+                const da = dd(out[q], out[q + 1], out[q + 2], c0[0], c0[1], c0[2]), db = dd(out[q], out[q + 1], out[q + 2], rr, rg, rb2);
+                if (db > 0 && da + db < d0 * 1.15) { out[q] = rr; out[q + 1] = rg; out[q + 2] = rb2; }
+              }
+            }
+          }
         }
         // os desenhos soltos: mesmo tamanho proporcional (graduação), no ponto que corresponde ao centro deles
         for (const { e } of soltos.values()) {
@@ -563,7 +611,7 @@ const Grade = (() => {
       // do molde novo, o que ficou só com a cor do fundo pega a cor que a peça ORIGINAL tem no ponto correspondente da
       // beira dela (contorno novo → contorno original). Onde o original é azul até a beira (ombro, cava, decote), o azul
       // chega até a beira nova; onde o original tem fundo na beira, o fundo fica. O miolo (logos, desenhos) não muda.
-      if (W * H > 0) {
+      if (!modoContorno) {   // (no modo contorno a peça inteira já veio pelo contorno)
         const Bw = Math.max(6, Math.round(0.025 * Math.min(Wt, Ht))), miolo = U.box(nm, Wt, Ht, Bw, 'min');
         const ehFundoO = q => Math.abs(out[q] - br) + Math.abs(out[q + 1] - bgG) + Math.abs(out[q + 2] - bb) < 24;
         const mc = mapaContorno(p, nm, Wt, Ht, sx, sy);
