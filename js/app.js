@@ -773,7 +773,7 @@ const App = (() => {
     }
     const m = st.moldes;
     if (st.mode !== 'moldes' || !m) return;
-    const chave = JSON.stringify([st.dpi, m.casa, Object.keys(m.tams)]);
+    const chave = JSON.stringify([st.dpi, m.casa, Object.keys(m.tams), m.manualPeca || {}]);
     if (st.formasChave !== chave) { st.formas = {}; st.formasChave = chave; }
     for (const size of sizes) {
       // o tamanho base também sai em cima do PDF da modelista, quando ele foi enviado (a estampa do arquivo é só a base:
@@ -793,8 +793,26 @@ const App = (() => {
         });
         const raws = {};
         for (const j of cands) raws[j] = await Moldes.forma(doc, pz[j], st.dpi);
+        // v60 (IA 17/11: "frente e costas / as duas mangas espelhadas estão no mesmo molde"): molde escolhido para UMA peça
+        // do grupo (pelo designer ou pelo botão "Corrigir com a IA") vale só para ela
+        const mp = m.manualPeca || {};
+        for (const p of g.items) { const j = mp[p.n]; if (j != null && j >= 0 && j < pz.length && !raws[j]) raws[j] = await Moldes.forma(doc, pz[j], st.dpi); }
+        // v60: grupo com 2+ peças e moldes parecidos (ex.: M3 e M4 espelhados) — cada peça fica com um molde diferente,
+        // a menos que o molde do grupo seja "2X" (serve para as duas)
+        const qtdGrupo = pz[c.j] && pz[c.j].rotulo ? (pz[c.j].rotulo.qtd | 0) : 0, ehDoisX = qtdGrupo >= 2 || /(^|[^0-9])2\s*X\b/i.test((pz[c.j] && pz[c.j].rotulo && (pz[c.j].rotulo.texto || pz[c.j].rotulo.nome)) || '');
+        if (g.items.length >= 2 && g.items.length <= 4 && cands.length >= g.items.length && !ehDoisX && !g.items.some(p => mp[p.n] != null)) {
+          const F = g.items.map(p => cands.map(j => Moldes.orientar(raws[j], p.mask, p.w, p.h)));
+          let melhor = null;
+          const perm = (k, usadosP, soma, esc) => {
+            if (k === g.items.length) { if (!melhor || soma > melhor.soma) melhor = { soma, esc: esc.slice() }; return; }
+            for (let a = 0; a < cands.length; a++) { if (usadosP.has(a) || !F[k][a]) continue; usadosP.add(a); esc.push(a); perm(k + 1, usadosP, soma + F[k][a].sc + (cands[a] === c.j ? 0.01 : 0), esc); esc.pop(); usadosP.delete(a); }
+          };
+          perm(0, new Set(), 0, []);
+          if (melhor) { g.items.forEach((p, k) => { const a = melhor.esc[k], f = F[k][a]; fs[p.n] = f; if (f) f.j = cands[a]; }); continue; }
+        }
         const usados = new Set();
         for (const p of g.items) {
+          if (mp[p.n] != null && raws[mp[p.n]]) { const f = Moldes.orientar(raws[mp[p.n]], p.mask, p.w, p.h); fs[p.n] = f; if (f) f.j = mp[p.n]; usados.add(mp[p.n]); continue; }
           // o molde do grupo vale, a não ser que outro molde parecido coincida CLARAMENTE melhor com esta peça
           // (12/11: no tamanho 14 a frente pegava o molde da costas por uma diferença mínima)
           const fc = Moldes.orientar(raws[c.j], p.mask, p.w, p.h);
@@ -1488,14 +1506,16 @@ const App = (() => {
     const m = st.moldes, g = st.groups.find(x => x.id === pb.grupo); if (!g) return false;
     if (pb.acao === 'seguir_contorno') return g.items.some(p => !p.seguirContorno);
     const fr0 = (st.formas || {})[m && m.ref] || {}, jsDif = new Set(g.items.map(p => fr0[p.n] && fr0[p.n].j).filter(v => v != null)).size > 1;
+    if (pb.acao === 'trocar_molde' && pb.peca >= 1 && pb.peca <= g.items.length) return pb.molde >= 1 && !!(m && m.ref) && pb.molde <= m.tams[m.ref].pecas.length && (m.manualPeca || {})[g.items[pb.peca - 1].n] !== pb.molde - 1;
     if (pb.acao === 'trocar_molde') return !jsDif && pb.molde >= 1 && !!(m && m.ref) && pb.molde <= m.tams[m.ref].pecas.length;
     if (pb.acao === 'trocar_regra') return !!pb.regra && !(pb.regra === 'fundo' && g.items.some(p => p.artFrac >= 0.005)) && g.items.some(p => p.rule !== pb.regra);
     return false;
   }
-  const iaTextoAcao = pb => pb.acao === 'trocar_molde' ? `Aplicar: molde M${pb.molde}` : pb.acao === 'seguir_contorno' ? 'Aplicar: estampa segue o contorno' : `Aplicar: regra "${pb.regra}"`;
+  const iaTextoAcao = pb => pb.acao === 'trocar_molde' ? (pb.peca ? `Aplicar: peça ${pb.peca} no molde M${pb.molde}` : `Aplicar: molde M${pb.molde}`) : pb.acao === 'seguir_contorno' ? 'Aplicar: estampa segue o contorno' : `Aplicar: regra "${pb.regra}"`;
   function iaAplicar(pb) {
     const m = st.moldes, g = st.groups.find(x => x.id === pb.grupo); if (!g) return;
-    if (pb.acao === 'trocar_molde') { (m.manual = m.manual || {})[g.id] = pb.molde - 1; casarMoldes(); computeTargets(); renderGrade(); renderMoldes(); }
+    if (pb.acao === 'trocar_molde' && pb.peca >= 1 && pb.peca <= g.items.length) { (m.manualPeca = m.manualPeca || {})[g.items[pb.peca - 1].n] = pb.molde - 1; st.formas = {}; st.formasChave = null; renderMoldes(); }
+    else if (pb.acao === 'trocar_molde') { (m.manual = m.manual || {})[g.id] = pb.molde - 1; casarMoldes(); computeTargets(); renderGrade(); renderMoldes(); }
     else if (pb.acao === 'seguir_contorno') for (const p of g.items) p.seguirContorno = true;
     else for (const p of g.items) { p.rule = pb.regra; p.regraManual = true; }
     iaGuardarLicao(`${descGrupo(g)}: ${pb.problema} → ${pb.acao === 'trocar_molde' ? 'molde de ' + U.fmt(m.tams[m.ref].pecas[pb.molde - 1].w) + ' × ' + U.fmt(m.tams[m.ref].pecas[pb.molde - 1].h) + ' cm' : pb.acao === 'seguir_contorno' ? 'a estampa inteira segue o contorno do molde novo' : 'regra "' + pb.regra + '"'}.`);
@@ -1503,12 +1523,12 @@ const App = (() => {
   }
   // fotografia do que a correção pode mudar, para o botão "Desfazer"
   function iaFoto() {
-    return { manual: JSON.parse(JSON.stringify((st.moldes && st.moldes.manual) || {})),
+    return { manual: JSON.parse(JSON.stringify((st.moldes && st.moldes.manual) || {})), manualPeca: JSON.parse(JSON.stringify((st.moldes && st.moldes.manualPeca) || {})),
       pecas: st.pieces.map(p => ({ p, rule: p.rule, regraManual: p.regraManual, seguirContorno: p.seguirContorno })) };
   }
   function iaVoltarFoto(f) {
     for (const x of f.pecas) { x.p.rule = x.rule; x.p.regraManual = x.regraManual; x.p.seguirContorno = !!x.seguirContorno; }
-    if (st.moldes) { st.moldes.manual = f.manual; casarMoldes(); computeTargets(); renderGrade(); renderMoldes(); }
+    if (st.moldes) { st.moldes.manual = f.manual; st.moldes.manualPeca = f.manualPeca; st.formas = {}; st.formasChave = null; casarMoldes(); computeTargets(); renderGrade(); renderMoldes(); }
     renderPieces();
   }
   async function iaCorrigirTudo(lista, olhar, antes) {
@@ -1542,7 +1562,7 @@ const App = (() => {
       const m = st.moldes, texto = [`Compare a grade gerada com o arquivo original. Tamanho base ${st.base}; grade ${st.sizes.join(', ')}.`,
         'Confira PEÇA A PEÇA (original à esquerda, gerada à direita): todas as peças estão na grade (nenhuma sumiu, nenhuma a mais, nenhuma sem estampa)? Cada peça tem o formato do molde certo? A estampa ACOMPANHA O CONTORNO do molde novo (faixa do ombro chega no ombro e na cava, desenho do decote acompanha o decote, barra/bordado segue a barra)? Ficou faixa ou fio branco entre a borda e o desenho? Logo/texto cortado, esticado ou torto? A borda de corte tem a mesma grossura do original? Seja exigente: o tamanho gerado tem de parecer o original, só mudando de medida.',
         'Diga cada problema que vir, mesmo os de gravidade média: eles vão para o vigia, que conserta o motor.',
-        'Para cada problema escolha a ação que o motor consegue fazer sozinho quando o designer apertar "Corrigir com a IA": estampa que não chega na beira do molde novo (fresta/fio branco na borda, ombro, cava, decote ou barra que não acompanha) = "seguir_contorno"; molde errado = "trocar_molde"; regra errada = "trocar_regra"; o resto = "conferir".',
+        'Para cada problema escolha a ação que o motor consegue fazer sozinho quando o designer apertar "Corrigir com a IA": estampa que não chega na beira do molde novo (fresta/fio branco na borda, ombro, cava, decote ou barra que não acompanha) = "seguir_contorno"; molde errado = "trocar_molde" (se só UMA peça do grupo está no molde errado, como frente e costas ou as duas mangas espelhadas no mesmo molde, diga "peca" = o número da peça na folha e o molde certo dela); regra errada = "trocar_regra"; o resto = "conferir".',
         'GRUPOS (dentro do grupo, cada peça escolhe sozinha o molde de formato mais parecido — ex.: frente e costas do mesmo grupo vão em moldes diferentes; para essas use acao "conferir", não "trocar_molde"):',
         ...st.groups.map(g => { const c = m && m.casa[g.id] && m.casa[g.id][m.ref], fr = (st.formas || {})[m && m.ref] || {};
           const porPeca = g.items.map((p, k) => { const f = fr[p.n]; return `peça ${k + 1}: ${f && f.j != null ? 'M' + (f.j + 1) : c ? 'M' + (c.j + 1) : 'sem molde'}`; }).join(', ');
@@ -1563,8 +1583,12 @@ const App = (() => {
       });
       // v58 (dono 16/11: "a IA identificou os defeitos mas não aparece uma opção para eu apertar e ela corrigir"):
       // um botão aplica TODAS as correções que o motor sabe fazer, gera de novo e a IA confere outra vez
-      const btTudo = aplicaveis.length ? el('button', { type: 'button', class: 'primary', style: 'font-size:15px;padding:8px 16px;margin:6px 0',
-        text: `🛠 Corrigir com a IA (${aplicaveis.length} correç${aplicaveis.length > 1 ? 'ões' : 'ão'})`, onclick: () => iaCorrigirTudo(aplicaveis, olhar, probs.length) }) : null;
+      // v60 (dono 17/11: "ela vê o problema e não aparece a opção dela corrigir sozinha"): o botão aparece SEMPRE que há
+      // problema; o que o motor ainda não sabe corrigir sozinho já foi para o vigia, e o botão diz isso
+      const btTudo = !probs.length ? null : aplicaveis.length ? el('button', { type: 'button', class: 'primary', style: 'font-size:15px;padding:8px 16px;margin:6px 0',
+        text: `🛠 Corrigir com a IA (${aplicaveis.length} correç${aplicaveis.length > 1 ? 'ões' : 'ão'})`, onclick: () => iaCorrigirTudo(aplicaveis, olhar, probs.length) })
+        : el('button', { type: 'button', class: 'primary', style: 'font-size:15px;padding:8px 16px;margin:6px 0', text: '🛠 Corrigir com a IA',
+            onclick: e => { e.target.disabled = true; e.target.textContent = '🛠 Esses pontos o motor ainda não corrige sozinho: já foram para o vigia, que conserta o motor e avisa para publicar.'; } });
       res.replaceChildren(...(btTudo ? [btTudo] : []), ...itens);
     } catch (e) { info.textContent = '🧠 Não consegui falar com a IA: ' + e.message; }
     finally { iaOcupado = false; $('#iaGrade').disabled = false; }

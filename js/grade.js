@@ -29,6 +29,30 @@ const Grade = (() => {
     return (p._elem = { lab, lista });
   }
 
+  // v59 (designer 16/11, Conjunto Milena verde: "mesmo colocando fixar, continua torta a flor"): peça toda pintada (fundo
+  // verde/azul que cobre a peça inteira) virava UM elemento só, e a flor do meio deformava junto com o contorno. Aqui a cor
+  // que domina a peça conta como fundo dela: flor, renda, logo viram elementos separados (a flor solta só muda de tamanho,
+  // sem deformar; a renda que encosta na beira segue o contorno). Devolve null se a peça não tem uma cor dominante.
+  function elementosSobreFundo(p) {
+    if (p._elemB !== undefined) return p._elemB;
+    const W = p.w, H = p.h, S = p.rgba, M = p.mask, A = p.art, hist = new Map(); let nM = 0;
+    for (let i = 0; i < W * H; i += 3) { if (!M[i] || (p.band && p.band[i])) continue; nM++; if (!A[i]) continue; const q = i * 4, k = ((S[q] >> 4) << 8) | ((S[q + 1] >> 4) << 4) | (S[q + 2] >> 4); hist.set(k, (hist.get(k) || 0) + 1); }
+    let kd = -1, nd = 0; for (const [k, n] of hist) if (n > nd) { nd = n; kd = k; }
+    if (kd < 0 || nd < 0.4 * nM) return (p._elemB = null);
+    // cor média do grupo dominante
+    let r0 = 0, g0 = 0, b0 = 0, c = 0;
+    for (let i = 0; i < W * H; i += 3) { if (!M[i] || !A[i]) continue; const q = i * 4, k = ((S[q] >> 4) << 8) | ((S[q + 1] >> 4) << 4) | (S[q + 2] >> 4); if (k !== kd) continue; r0 += S[q]; g0 += S[q + 1]; b0 += S[q + 2]; c++; }
+    r0 /= c; g0 /= c; b0 /= c;
+    const artB = new Uint8Array(W * H);
+    for (let i = 0; i < W * H; i++) { if (!A[i]) continue; const q = i * 4, d = (S[q] - r0) ** 2 + (S[q + 1] - g0) ** 2 + (S[q + 2] - b0) ** 2; if (d > 4900) artB[i] = 1; }
+    const E = elementos({ w: W, h: H, art: artB, mask: M, band: p.band || new Uint8Array(W * H) });
+    // encosta na beira? (pixels do elemento na faixa de 2% junto do contorno)
+    const dentro = U.box(M, W, H, Math.max(3, Math.round(0.02 * Math.min(W, H))), 'min'), fora = new Map();
+    for (let i = 0; i < W * H; i++) { const l = E.lab[i]; if (l && artB[i] && !dentro[i]) fora.set(l, (fora.get(l) || 0) + 1); }
+    for (const e of E.lista) e.beira = (fora.get(e.id) || 0) / Math.max(1, e.n);
+    return (p._elemB = E);
+  }
+
   // Refaz uma peça com largura Wt e altura Ht (pixels, sem sangria).
   // Borda macia da estampa (vídeo/print 12/11: margaridas ganhavam contorno azul ao trocar o fundo para verde).
   // Na beira de cada desenho, o pixel é uma mistura da cor do desenho com o fundo antigo. Aqui guardamos quanto de
@@ -398,17 +422,18 @@ const Grade = (() => {
         const mc = modoContorno, okO = k => p.mask[k] && !(p.band && p.band[k]);
         const tot = p._toca.tot || 1;
         const soltos = new Map();
-        for (const e of E.lista) {
-          const toca = (p._toca.cont.get(e.id) || 0) / tot;
+        const EB = elementosSobreFundo(p), Ec = EB || E;
+        for (const e of Ec.lista) {
+          const toca = EB ? e.beira : (p._toca.cont.get(e.id) || 0) / tot;
           if (e.largo || toca > 0.01 || (e.y1 - e.y0) > H * 0.6 || (e.x1 - e.x0) > W * 0.6) continue;
           // o que fica atrás do desenho solto (fundo branco ou o azul da manga): a cor logo ao lado, linha por linha
           const lado = new Int32Array((e.y1 - e.y0 + 1) * 2).fill(-1);
           for (let y = e.y0; y <= e.y1; y++) {
             let xa = -1, xb = -1;
-            for (let x = e.x0; x <= e.x1; x++) if (E.lab[y * W + x] === e.id) { if (xa < 0) xa = x; xb = x; }
+            for (let x = e.x0; x <= e.x1; x++) if (Ec.lab[y * W + x] === e.id) { if (xa < 0) xa = x; xb = x; }
             if (xa < 0) continue;
-            for (let x = xa - 1; x >= 0; x--) { const k = y * W + x; if (!okO(k)) break; if (E.lab[k] !== e.id) { lado[(y - e.y0) * 2] = k; break; } }
-            for (let x = xb + 1; x < W; x++) { const k = y * W + x; if (!okO(k)) break; if (E.lab[k] !== e.id) { lado[(y - e.y0) * 2 + 1] = k; break; } }
+            for (let x = xa - 1; x >= 0; x--) { const k = y * W + x; if (!okO(k)) break; if (Ec.lab[k] !== e.id) { lado[(y - e.y0) * 2] = k; break; } }
+            for (let x = xb + 1; x < W; x++) { const k = y * W + x; if (!okO(k)) break; if (Ec.lab[k] !== e.id) { lado[(y - e.y0) * 2 + 1] = k; break; } }
           }
           soltos.set(e.id, { e, lado });
         }
@@ -429,7 +454,7 @@ const Grade = (() => {
             }
             if (ach < 0) continue; kk = ach; X = kk % W; Y = (kk / W) | 0;
           }
-          const so = soltos.get(E.lab[kk]);
+          const so = soltos.get(Ec.lab[kk]);
           if (so) {   // no lugar do desenho solto vai o que estava atrás dele (o desenho entra depois, sem deformar)
             const e = so.e, L = so.lado[(Y - e.y0) * 2], R = so.lado[(Y - e.y0) * 2 + 1];
             const kL = L >= 0 ? L : R, kR = R >= 0 ? R : L; if (kL < 0) continue;
@@ -502,7 +527,7 @@ const Grade = (() => {
             for (let x = Math.max(0, Math.floor(bx0 + dxs)); x <= Math.min(Wt - 1, Math.ceil(bx1 + dxs)); x++) {
               const i = y * Wt + x; if (!nm[i]) continue;
               const X = Math.round(e.cx + (x - xc) / s); if (X < 0 || X >= W) continue;
-              const k = Yr * W + X; if (E.lab[k] !== e.id || p.band[k]) continue;
+              const k = Yr * W + X; if (Ec.lab[k] !== e.id || p.band[k]) continue;
               const art = A[k]; if (!art && pint[i]) continue;
               const q = ((y + b) * OW + x + b) * 4;
               if (!art && trocou) { const s4 = k * 4; out[q] = S[s4] + br - bg0[0]; out[q + 1] = S[s4 + 1] + bgG - bg0[1]; out[q + 2] = S[s4 + 2] + bb - bg0[2]; }
@@ -512,7 +537,8 @@ const Grade = (() => {
           }
         }
         // o que veio pelo contorno conta como "coube" (a peça inteira foi recolocada)
-        for (const e of E.lista) if (!soltos.has(e.id)) esperado += e.n * sx * sy;
+        for (const e of E.lista) esperado += e.n * sx * sy;   // (v59: os soltos já foram contados dentro de Ec)
+        for (const { e } of soltos.values()) esperado -= e.n * s * s;
       }
       if (!modoContorno && altos.size) {
         const mc = ident ? null : mapaContorno(p, nm, Wt, Ht, sx, sy);
@@ -1630,7 +1656,8 @@ const Grade = (() => {
   // a estampa acompanha a graduação da peça (sem aviso para conferir).
   function drawSpec(sp) {
     let r = renderPiece(sp.p, sp.W, sp.H, sp.o);
-    if (r.kept < 0.97 && sp.o.rule !== 'fundo') {
+    // v59: regra escolhida à mão pelo designer (ex.: "fixa") vale como escolheu — não troca sozinho por "esticar" (deformava)
+    if (r.kept < 0.97 && sp.o.rule !== 'fundo' && !(sp.p && sp.p.regraManual)) {
       const tries = sp.o.rule === 'barra' ? ['barraEsc', 'esticar'] : sp.o.rule === 'fixa' ? ['esticar'] : [];
       for (const rule of tries) {
         const r2 = renderPiece(sp.p, sp.W, sp.H, { ...sp.o, rule });
@@ -1653,7 +1680,7 @@ const Grade = (() => {
         // v57 (dono 16/11: "olha o tanto de espaço em branco"): monta como o original E monta solto (o melhor encaixe que
         // achar, nos mesmos giros); fica com o original só se ele não gastar mais que 2% a mais de tecido
         const a = layoutOriginal(items, rollPx, marginPx, gap, cell, angulos(st));
-        const b = layout(items, rollPx, marginPx, gap, cell, angulos(st), 1500, true);
+        const b = layout(items, rollPx, marginPx, gap, cell, angulos(st), 700, false);
         lay = b && b.height < a.height * 0.98 ? b : a;
       } else lay = layout(items, rollPx, marginPx, gap, cell, angulos(st), 2500, !!st.compactar);
       if (!blit || !blit(lay)) return lay;

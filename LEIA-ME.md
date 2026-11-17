@@ -361,3 +361,19 @@ Testado com os arquivos do designer (12A CONJUNTO MILENA BORDADO BRANCO.tif + PD
   confere outra vez ("antes N pontos, agora M"). Tem **↩ Desfazer a correção da IA**, que volta exatamente como estava.
 - O que o motor não consegue corrigir sozinho aparece com "(foi para o vigia consertar no motor)" e entra na lista do
   vigia na nuvem.
+
+## v59 (16/11) — flor torta no Conjunto Milena (verde), mesmo com "fixa"
+- Peça toda pintada (fundo verde/azul cobrindo a peça) virava UM elemento só, e a flor do meio deformava junto com o
+  contorno do molde. Agora a cor que domina a peça conta como fundo dela: a flor/logo solto do meio só muda de tamanho,
+  sem deformar, no lugar certo; a renda que encosta na beira continua seguindo o contorno.
+- Regra escolhida à mão (ex.: **fixa**) vale exatamente como o designer escolheu: o motor não troca mais sozinho para
+  "esticar" quando um pedacinho do desenho passa da beira (era isso que deixava torto mesmo marcando fixa).
+- Encaixe: a comparação com o encaixe solto ficou mais rápida (Milena: 7 tamanhos em ~27 s no teste).
+
+## v60 (17/11) — botão "Corrigir com a IA" sempre aparece; molde por peça
+- O botão **🛠 Corrigir com a IA** aparece sempre que a IA acha problema. O que o motor sabe corrigir sozinho ele corrige;
+  o que ainda não sabe, o botão avisa que já foi para o vigia (antes o botão nem aparecia e parecia que não existia).
+- **Molde por peça:** a IA pode mandar trocar o molde de UMA peça do grupo (ex.: frente e costas, ou as duas mangas
+  espelhadas, que estavam as duas no mesmo molde). "Aplicar: peça 2 no molde M2". O Desfazer também volta isso.
+- **Automático:** grupo com 2 a 4 peças e moldes parecidos no PDF (ex.: M3 e M4 espelhados) — cada peça fica com um molde
+  diferente, o que encaixa melhor no formato dela. Se o molde do grupo é "2X" (serve para as duas), continua o mesmo.
