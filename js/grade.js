@@ -333,7 +333,9 @@ const Grade = (() => {
     const caixa = (m, w, h) => { let x0 = w, y0 = h, x1 = -1, y1 = -1; for (let y = 0; y < h; y++) { const r = y * w; for (let x = 0; x < w; x++) if (m[r + x]) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; } } return x1 < 0 ? null : { x0, y0, x1, y1, w: x1 - x0 + 1, h: y1 - y0 + 1, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2 }; };
     const a = caixa(nm, Wt, Ht), b = p._caixaMacro || (p._caixaMacro = caixa(p.mask, p.w, p.h));
     if (!a || !b) return null;
-    const k = Math.max(a.w / b.w, a.h / b.h);
+    // v69: correções da IA dentro da macro — caber inteiro (desenho cortado na beira: usa a MENOR proporção) e cobrir a
+    // beira (fresta: aumenta 2,5% por vez). Nada disso deforma: continua a mesma escala na largura e na altura.
+    const k = (p.macroCaber ? Math.min(a.w / b.w, a.h / b.h) : Math.max(a.w / b.w, a.h / b.h)) * (1 + 0.025 * (p.macroCobrir || 0));
     p._macroEsc = k;
     return (x, y) => [b.cx + (x - a.cx) / k, b.cy + (y - a.cy) / k];
   }
@@ -1709,7 +1711,7 @@ const Grade = (() => {
       for (const p of g.items) {
         // a estampa sempre acompanha a graduação (desenho diminui/aumenta com a peça), a menos que alguém tenha escolhido outra regra na mão
         const regra = !p.regraManual && (p.rule === 'fixa' || p.rule === 'barra' || p.rule === 'barraEsc') ? 'acompanha' : p.rule;
-        const o = { macro: st.macroCorel !== false && !p.seguirContorno, bg: st.bg, bg0: st.an && st.an.bg, cores: st.cores, thick: st.thickOverride != null ? st.thickOverride : p.thick, outline: st.outline, bleed: bleedPx, rule: regra, labels: labelsDe(p) }; o.label = o.labels[0] || null;
+        const o = { macro: st.macroCorel !== false, bg: st.bg, bg0: st.an && st.an.bg, cores: st.cores, thick: st.thickOverride != null ? st.thickOverride : p.thick, outline: st.outline, bleed: bleedPx, rule: regra, labels: labelsDe(p) }; o.label = o.labels[0] || null;
         // molde da modelista: a peça sai com o contorno do PDF e a medida real dele (a menos que tenham digitado a medida à mão)
         const F = (st.mode === 'moldes' || st.mode === 'tabela') && st.formas && st.formas[size] && st.formas[size][p.n];
         // peça girada de lado em relação à primeira do grupo: largura e altura trocam

@@ -1300,7 +1300,7 @@ const App = (() => {
       if (!trocou && st.groups.some(g => !(m.casa[g.id] && m.casa[g.id][m.ref]))) trocou = true;
       if (trocou) { casarMoldes(); computeTargets(); renderGrade(); }
       renderPieces(); desenharEtiquetas(); renderMoldes(); agendar();
-      if ($('#iaAuto') && $('#iaAuto').checked) iaConferirPecas().catch(e => console.error(e));
+      if (iaLigada() && $('#iaAuto') && $('#iaAuto').checked) iaConferirPecas().catch(e => console.error(e));
       info.textContent = txt0 + (n ? ` ✔ Nomes dos moldes copiados para ${n} peça(s).` : ' (Não consegui ler os nomes escritos nos moldes; escreva na peça com dois cliques.)');
     } catch (e) { console.error(e); info.textContent = txt0 + ' (Não consegui ler os nomes dos moldes: ' + e.message + ')'; vigia('erro', 'Nomes dos moldes: ' + e.message); }
     // depois de saber o nome de cada peça: o automático da casa aprende com este modelo (uma vez por modelo)
@@ -1575,6 +1575,13 @@ const App = (() => {
   // ---- correções que a IA pode mandar o motor fazer (v58) ----
   function iaPodeAplicar(pb) {
     const m = st.moldes, g = st.groups.find(x => x.id === pb.grupo); if (!g) return false;
+    // v69 (dono 17/11: "a IA vê os defeitos mas não corrige" / "funcione igual à macro"): no modo macro as correções
+    // agem DENTRO da macro (escala por igual + corte no molde); nunca voltam para o jeito antigo que deforma
+    if (macroOn() && pb.acao === 'seguir_contorno') pb.acao = 'cobrir_beira';
+    if (pb.acao === 'cobrir_beira') return g.items.some(p => (p.macroCobrir || 0) < 4);
+    if (pb.acao === 'caber_inteiro') return g.items.some(p => !p.macroCaber);
+    if (pb.acao === 'trocar_nome') return !!pb.nome && g.items.some(p => p.nome !== String(pb.nome).toUpperCase());
+    if (macroOn() && pb.acao === 'trocar_regra') return false;   // na macro a regra não muda o resultado
     if (pb.acao === 'seguir_contorno') return g.items.some(p => !p.seguirContorno);
     // v61 (vídeo 17/11): a IA diz "frente e costas / as duas mangas no MESMO molde" sem dizer a peça → cada peça no seu molde
     if (iaMesmoMolde(pb, g)) return true;
@@ -1588,28 +1595,33 @@ const App = (() => {
     return !!g && g.items.length >= 2 && !g.moldesDif && !(pb.acao === 'trocar_molde' && pb.peca) && (pb.acao === 'conferir' || pb.acao === 'moldes_diferentes' || pb.acao === 'trocar_molde')
       && (pb.acao === 'moldes_diferentes' || /mesmo molde|mesmos moldes|molde[s]? diferentes|cada uma com o seu|um para cada/i.test(pb.problema || ''));
   }
-  const iaTextoAcao = pb => iaMesmoMolde(pb, st.groups.find(x => x.id === pb.grupo)) ? 'Aplicar: cada peça no seu molde' : pb.acao === 'trocar_molde' ? (pb.peca ? `Aplicar: peça ${pb.peca} no molde M${pb.molde}` : `Aplicar: molde M${pb.molde}`) : pb.acao === 'seguir_contorno' ? 'Aplicar: estampa segue o contorno' : `Aplicar: regra "${pb.regra}"`;
+  const iaTextoAcao = pb => iaMesmoMolde(pb, st.groups.find(x => x.id === pb.grupo)) ? 'Aplicar: cada peça no seu molde' : pb.acao === 'trocar_molde' ? (pb.peca ? `Aplicar: peça ${pb.peca} no molde M${pb.molde}` : `Aplicar: molde M${pb.molde}`) : pb.acao === 'seguir_contorno' ? 'Aplicar: estampa segue o contorno' : pb.acao === 'caber_inteiro' ? 'Aplicar: diminuir a arte para caber inteira' : pb.acao === 'cobrir_beira' ? 'Aplicar: aumentar um pouco para cobrir a beira' : pb.acao === 'trocar_nome' ? `Aplicar: nome ${String(pb.nome || '').toUpperCase()}` : `Aplicar: regra "${pb.regra}"`;
   function iaAplicar(pb) {
     const m = st.moldes, g = st.groups.find(x => x.id === pb.grupo); if (!g) return;
     if (iaMesmoMolde(pb, g)) { g.moldesDif = true; st.formas = {}; st.formasChave = null; renderMoldes(); }
     else if (pb.acao === 'trocar_molde' && pb.peca >= 1 && pb.peca <= g.items.length) { (m.manualPeca = m.manualPeca || {})[g.items[pb.peca - 1].n] = pb.molde - 1; st.formas = {}; st.formasChave = null; renderMoldes(); }
     else if (pb.acao === 'trocar_molde') { (m.manual = m.manual || {})[g.id] = pb.molde - 1; casarMoldes(); computeTargets(); renderGrade(); renderMoldes(); }
+    else if (pb.acao === 'caber_inteiro') for (const p of g.items) p.macroCaber = true;
+    else if (pb.acao === 'cobrir_beira') for (const p of g.items) p.macroCobrir = Math.min(4, (p.macroCobrir || 0) + 1);
+    else if (pb.acao === 'trocar_nome') for (const p of g.items) { p.nome = String(pb.nome).toUpperCase().slice(0, 20); p.nomeManual = true; }
     else if (pb.acao === 'seguir_contorno') for (const p of g.items) p.seguirContorno = true;
     else for (const p of g.items) { p.rule = pb.regra; p.regraManual = true; }
-    iaGuardarLicao(`${descGrupo(g)}: ${pb.problema} → ${pb.acao === 'trocar_molde' ? 'molde de ' + U.fmt(m.tams[m.ref].pecas[pb.molde - 1].w) + ' × ' + U.fmt(m.tams[m.ref].pecas[pb.molde - 1].h) + ' cm' : pb.acao === 'seguir_contorno' ? 'a estampa inteira segue o contorno do molde novo' : 'regra "' + pb.regra + '"'}.`);
+    iaGuardarLicao(`${descGrupo(g)}: ${pb.problema} → ${pb.acao === 'trocar_molde' ? 'molde de ' + U.fmt(m.tams[m.ref].pecas[pb.molde - 1].w) + ' × ' + U.fmt(m.tams[m.ref].pecas[pb.molde - 1].h) + ' cm' : pb.acao === 'seguir_contorno' ? 'a estampa inteira segue o contorno do molde novo' : pb.acao === 'caber_inteiro' ? 'na macro, diminuir a arte da peça até caber inteira' : pb.acao === 'cobrir_beira' ? 'na macro, aumentar um pouco a arte para cobrir a beira' : pb.acao === 'trocar_nome' ? 'o nome certo é ' + String(pb.nome).toUpperCase() : 'regra "' + pb.regra + '"'}.`);
     renderPieces();
   }
   // fotografia do que a correção pode mudar, para o botão "Desfazer"
   function iaFoto() {
     return { manual: JSON.parse(JSON.stringify((st.moldes && st.moldes.manual) || {})), manualPeca: JSON.parse(JSON.stringify((st.moldes && st.moldes.manualPeca) || {})), dif: st.groups.filter(g => g.moldesDif).map(g => g.id),
-      pecas: st.pieces.map(p => ({ p, rule: p.rule, regraManual: p.regraManual, seguirContorno: p.seguirContorno })) };
+      pecas: st.pieces.map(p => ({ p, rule: p.rule, regraManual: p.regraManual, seguirContorno: p.seguirContorno, macroCaber: p.macroCaber, macroCobrir: p.macroCobrir, nome: p.nome, nomeManual: p.nomeManual })) };
   }
   function iaVoltarFoto(f) {
-    for (const x of f.pecas) { x.p.rule = x.rule; x.p.regraManual = x.regraManual; x.p.seguirContorno = !!x.seguirContorno; }
+    for (const x of f.pecas) { x.p.rule = x.rule; x.p.regraManual = x.regraManual; x.p.seguirContorno = !!x.seguirContorno; x.p.macroCaber = !!x.macroCaber; x.p.macroCobrir = x.macroCobrir || 0; x.p.nome = x.nome; x.p.nomeManual = x.nomeManual; }
     for (const g of st.groups) g.moldesDif = (f.dif || []).includes(g.id);
     if (st.moldes) { st.moldes.manual = f.manual; st.moldes.manualPeca = f.manualPeca; st.formas = {}; st.formasChave = null; casarMoldes(); computeTargets(); renderGrade(); renderMoldes(); }
     renderPieces();
   }
+  function iaLigada() { try { return localStorage.getItem('px_ia_mostrar') !== '0'; } catch (e) { return true; } }
+  const macroOn = () => st.macroCorel !== false;
   async function iaCorrigirTudo(lista, olhar, antes) {
     const info = $('#iaGradeInfo'), foto = iaFoto();
     for (const pb of lista) if (iaPodeAplicar(pb)) iaAplicar(pb);
@@ -1641,6 +1653,7 @@ const App = (() => {
       const m = st.moldes, texto = [`Compare a grade gerada com o arquivo original. Tamanho base ${st.base}; grade ${st.sizes.join(', ')}.`,
         'Confira PEÇA A PEÇA (original à esquerda, gerada à direita): todas as peças estão na grade (nenhuma sumiu, nenhuma a mais, nenhuma sem estampa)? Cada peça tem o formato do molde certo? A estampa ACOMPANHA O CONTORNO do molde novo (faixa do ombro chega no ombro e na cava, desenho do decote acompanha o decote, barra/bordado segue a barra)? Ficou faixa ou fio branco entre a borda e o desenho? Logo/texto cortado, esticado ou torto? A borda de corte tem a mesma grossura do original? Seja exigente: o tamanho gerado tem de parecer o original, só mudando de medida.',
         'Diga cada problema que vir, mesmo os de gravidade média: eles vão para o vigia, que conserta o motor.',
+        (macroOn() ? 'A grade foi feita IGUAL À MACRO DO COREL (como a Sublimacro): a arte de cada peça é a do tamanho base aumentada/diminuída POR IGUAL e cortada pelo molde do PDF (PowerClip). Isso é o certo: NÃO aponte como erro a arte estar um pouco maior/menor ou cortada em fundo/textura. Aponte só: desenho importante (logo, letreiro, número) cortado pela beira = "caber_inteiro"; fresta/fio branco/faixa sem estampa na beira = "cobrir_beira"; nome escrito errado na peça = "trocar_nome" com "nome"; peça no molde errado = "trocar_molde"; frente e costas ou mangas no mesmo molde = "moldes_diferentes". Nunca use "seguir_contorno" nem "trocar_regra". ' : '') +
         'Para cada problema escolha a ação que o motor consegue fazer sozinho quando o designer apertar "Corrigir com a IA": estampa que não chega na beira do molde novo (fresta/fio branco na borda, ombro, cava, decote ou barra que não acompanha) = "seguir_contorno"; molde errado = "trocar_molde" (se só UMA peça do grupo está no molde errado, como frente e costas ou as duas mangas espelhadas no mesmo molde, diga "peca" = o número da peça na folha e o molde certo dela); regra errada = "trocar_regra"; o resto = "conferir".',
         'GRUPOS (dentro do grupo, cada peça escolhe sozinha o molde de formato mais parecido — ex.: frente e costas do mesmo grupo vão em moldes diferentes; para essas use acao "conferir", não "trocar_molde"):',
         ...st.groups.map(g => { const c = m && m.casa[g.id] && m.casa[g.id][m.ref], fr = (st.formas || {})[m && m.ref] || {};
@@ -1676,6 +1689,9 @@ const App = (() => {
   function ligarIA() {
     $('#iaPecas').addEventListener('click', () => iaConferirPecas());
     $('#iaGrade').addEventListener('click', () => iaConferirGrade());
+    // v69 (dono 17/11): com o modo macro a IA não precisa mais conferir — fica escondida e sem gastar. Não foi apagada:
+    // para voltar, no console do navegador: localStorage.setItem('px_ia_mostrar','1') e recarregar.
+    if (!iaLigada()) document.querySelectorAll('.ia-box').forEach(b => { b.hidden = true; b.style.display = 'none'; });
     const a = $('#iaAuto'); try { a.checked = localStorage.getItem('px_ia_auto') !== '0'; } catch (e) { /* padrão: ligada */ }
     a.addEventListener('change', () => { try { localStorage.setItem('px_ia_auto', a.checked ? '1' : '0'); } catch (e) { /* nada */ } });
     $('#iaVerLicoes').addEventListener('click', () => { const b = $('#iaLicoesLista'); b.hidden = !b.hidden; });
@@ -2046,7 +2062,7 @@ const App = (() => {
         await U.tick();
       }
       $('#status5').textContent = `Grade completa: ${sizes.length} tamanhos em ${U.secs(U.now() - t0)}.` + (leveAtivo ? ` (Na tela é a prévia rápida; o TIFF sai em ${dpiCheio} dpi ao baixar.)` : '');
-      if ($('#iaAuto') && $('#iaAuto').checked) iaConferirGrade(sizes).catch(e => console.error(e));
+      if (iaLigada() && $('#iaAuto') && $('#iaAuto').checked) iaConferirGrade(sizes).catch(e => console.error(e));
       $('#btnTodos').disabled = false; $('#btnCorelTodos').disabled = false; $('#btnEncaixe').disabled = false;
       renderQtd();
     } catch (e) {
