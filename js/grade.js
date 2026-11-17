@@ -314,6 +314,29 @@ const Grade = (() => {
     };
   }
   // mapa (de 6 em 6 px, interpolado) de cada pixel do molde novo para a peça original, alinhando os contornos
+  // v65 (dono 17/11: "funciona como uma macro do CorelDRAW"): a arte da peça inteira é aumentada/diminuída POR IGUAL
+  // (mesma % na largura e na altura, nada estica nem entorta), centralizada no molde novo e cortada pelo contorno dele
+  // (PowerClip). Escala para COBRIR o molde (a maior das duas proporções), como a macro faz com a arte que sangra.
+  // ponto da arte original mais perto de cada pixel (mapa feito UMA vez por peça, em duas passadas): no modo macro
+  // a beira do molde novo que passa da arte puxa a cor mais perto sem procurar pixel por pixel (era 4× mais lento)
+  function pertoMacro(p, okO) {
+    if (p._pertoMacro && p._pertoMacro.length === p.w * p.h) return p._pertoMacro;
+    const W = p.w, H = p.h, n = new Int32Array(W * H).fill(-1);
+    for (let k = 0; k < W * H; k++) if (okO(k)) n[k] = k;
+    const d2 = (k, c) => { const dx = (k % W) - (c % W), dy = ((k / W) | 0) - ((c / W) | 0); return dx * dx + dy * dy; };
+    const tenta = (k, k2) => { const c = n[k2]; if (c >= 0 && (n[k] < 0 || d2(k, c) < d2(k, n[k]))) n[k] = c; };
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const k = y * W + x; if (x) tenta(k, k - 1); if (y) { tenta(k, k - W); if (x) tenta(k, k - W - 1); if (x < W - 1) tenta(k, k - W + 1); } }
+    for (let y = H - 1; y >= 0; y--) for (let x = W - 1; x >= 0; x--) { const k = y * W + x; if (x < W - 1) tenta(k, k + 1); if (y < H - 1) { tenta(k, k + W); if (x < W - 1) tenta(k, k + W + 1); if (x) tenta(k, k + W - 1); } }
+    return (p._pertoMacro = n);
+  }
+  function mapaMacro(p, nm, Wt, Ht) {
+    const caixa = (m, w, h) => { let x0 = w, y0 = h, x1 = -1, y1 = -1; for (let y = 0; y < h; y++) { const r = y * w; for (let x = 0; x < w; x++) if (m[r + x]) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; } } return x1 < 0 ? null : { x0, y0, x1, y1, w: x1 - x0 + 1, h: y1 - y0 + 1, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2 }; };
+    const a = caixa(nm, Wt, Ht), b = p._caixaMacro || (p._caixaMacro = caixa(p.mask, p.w, p.h));
+    if (!a || !b) return null;
+    const k = Math.max(a.w / b.w, a.h / b.h);
+    p._macroEsc = k;
+    return (x, y) => [b.cx + (x - a.cx) / k, b.cy + (y - a.cy) / k];
+  }
   function mapaContorno(p, nm, Wt, Ht, sx, sy, N = 72, lam = 1e-3, dentroRisca = false) {
     let b0, bD;
     if (dentroRisca) {
@@ -481,14 +504,15 @@ const Grade = (() => {
         // só peça com a beira quase toda desenhada (≥ 70%: ombros, faixas e barras chegando na beira, ou estampa corrida);
         // peça com fundo na beira (flores soltas, como o Vestido Antonella) continua como era
         // v58: ou quando a IA mandou ("Corrigir com a IA" → a estampa segue o contorno) nessa peça
-        if (p._ringArt >= 0.7 || p.seguirContorno) modoContorno = mapaContorno(p, nm, Wt, Ht, sx, sy, 96, 2e-4, true);
+        if (o.macro) modoContorno = mapaMacro(p, nm, Wt, Ht);
+        else if (p._ringArt >= 0.7 || p.seguirContorno) modoContorno = mapaContorno(p, nm, Wt, Ht, sx, sy, 96, 2e-4, true);
       }
       if (modoContorno) {
         const mc = modoContorno, okO = k => p.mask[k] && !(p.band && p.band[k]);
         const tot = p._toca.tot || 1;
         const soltos = new Map();
         const EB = elementosSobreFundo(p), Ec = EB || E;
-        for (const e of Ec.lista) {
+        for (const e of (o.macro ? [] : Ec.lista)) {
           const toca = EB ? e.beira : (p._toca.cont.get(e.id) || 0) / tot;
           if (e.largo || toca > 0.01 || (e.y1 - e.y0) > H * 0.6 || (e.x1 - e.x0) > W * 0.6) continue;
           // o que fica atrás do desenho solto (fundo branco ou o azul da manga): a cor logo ao lado, linha por linha
@@ -513,7 +537,8 @@ const Grade = (() => {
           const i = y * Wt + x; if (!nm[i]) continue;
           const r = mc(x, y); let X = Math.max(0, Math.min(W - 1, Math.round(r[0]))), Y = Math.max(0, Math.min(H - 1, Math.round(r[1])));
           let kk = Y * W + X;
-          if (!okO(kk)) {
+          if (o.macro && !okO(kk)) { const n2 = pertoMacro(p, okO)[kk]; if (n2 < 0) continue; kk = n2; X = kk % W; Y = (kk / W) | 0; }
+          else if (!okO(kk)) {
             // o ponto da peça original MAIS PERTO de verdade (distância reta), não o primeiro achado no quadrado:
             // o primeiro do quadrado fazia "degraus"/abinhas nas quinas da cava
             let ach = -1, dm = Infinity;
@@ -1612,7 +1637,7 @@ const Grade = (() => {
   }
 
   // O encaixe que já foi montado ao gerar a grade, se ainda vale (mesmas peças e mesma configuração).
-  function assinatura(st) { return JSON.stringify([st.rollCm, st.marginMm, st.gapMm, st.bleedMm, angulos(st), !!st.compactar, !!st.manterEncaixe, st.dpi]); }
+  function assinatura(st) { return JSON.stringify([st.rollCm, st.marginMm, st.gapMm, st.bleedMm, angulos(st), !!st.compactar, !!st.manterEncaixe, st.dpi, st.macroCorel !== false]); }
   function laySalvo(st, size, parts) {
     const s = st.results && st.results[size];
     if (!s || !s.pos || s.assin !== assinatura(st) || s.pos.length !== parts.length) return null;
@@ -1684,7 +1709,7 @@ const Grade = (() => {
       for (const p of g.items) {
         // a estampa sempre acompanha a graduação (desenho diminui/aumenta com a peça), a menos que alguém tenha escolhido outra regra na mão
         const regra = !p.regraManual && (p.rule === 'fixa' || p.rule === 'barra' || p.rule === 'barraEsc') ? 'acompanha' : p.rule;
-        const o = { bg: st.bg, bg0: st.an && st.an.bg, cores: st.cores, thick: st.thickOverride != null ? st.thickOverride : p.thick, outline: st.outline, bleed: bleedPx, rule: regra, labels: labelsDe(p) }; o.label = o.labels[0] || null;
+        const o = { macro: st.macroCorel !== false && !p.seguirContorno, bg: st.bg, bg0: st.an && st.an.bg, cores: st.cores, thick: st.thickOverride != null ? st.thickOverride : p.thick, outline: st.outline, bleed: bleedPx, rule: regra, labels: labelsDe(p) }; o.label = o.labels[0] || null;
         // molde da modelista: a peça sai com o contorno do PDF e a medida real dele (a menos que tenham digitado a medida à mão)
         const F = (st.mode === 'moldes' || st.mode === 'tabela') && st.formas && st.formas[size] && st.formas[size][p.n];
         // peça girada de lado em relação à primeira do grupo: largura e altura trocam

@@ -414,3 +414,8 @@ Testado com os arquivos do designer (12A CONJUNTO MILENA BORDADO BRANCO.tif + PD
   Uma vez por arquivo por dia. Assim o vigia (e o Claude) reproduz exatamente o que o designer viu e conserta, sem o dono
   precisar trazer PDF/TIFF.
 - Tudo fica numa pasta privada da nuvem (px-casos); só o servidor grava, e só o vigia baixa (com a chave do painel).
+
+## v65 / v66 (17/11) — SUCOLOG
+- Nome do PDF: o motor ignora "(1)", "(2)", "- Cópia" do Windows (antes P/M/G "(1)" viravam todos tamanho 1). Tamanho base sai do nome do TIFF ("GG - SUCOLOG"). PDF repetido no mesmo tamanho → aviso vermelho.
+- Peças do mesmo grupo mantêm a proporção própria (a frente não é mais esticada com a altura da costas).
+- v66: **Igual à macro do Corel** (ligado por padrão, aba Gerar): a arte de cada peça aumenta/diminui por igual, centralizada e cortada pelo molde da modelista (PowerClip). Nada estica nem entorta. Desmarcando, volta o jeito antigo (estampa acompanha a curva do molde). Grade do SUCOLOG: 25 s.

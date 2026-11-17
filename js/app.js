@@ -21,7 +21,7 @@ const App = (() => {
   const st = {
     file: null, sizes: [], base: 'M', dpi: 200, an: null, pieces: [], groups: [],
     bg: [255, 255, 255], thick: 4, outline: [26, 26, 26],
-    mode: 'moldes', mercado: JSON.parse(JSON.stringify(MERCADO)), marcarTamanho: true, labelMm: 4, allowRot: false, girosExtra: [], compactar: true, manterEncaixe: true, splitLong: true, autoPct: JSON.parse(JSON.stringify(PCT)), pdf: null, mapping: {}, overrides: {}, targets: {},
+    mode: 'moldes', mercado: JSON.parse(JSON.stringify(MERCADO)), marcarTamanho: true, labelMm: 4, allowRot: false, girosExtra: [], compactar: true, manterEncaixe: true, macroCorel: true, splitLong: true, autoPct: JSON.parse(JSON.stringify(PCT)), pdf: null, mapping: {}, overrides: {}, targets: {},
     rollCm: 150, marginMm: 10, gapMm: 10, bleedMm: 0, results: {},
     groupName: g => TYPES[g.type] + (g.letter ? ' ' + g.letter : ''),
   };
@@ -1668,7 +1668,7 @@ const App = (() => {
   }
 
   const nomeGrupo = g => (g.items[0] && g.items[0].nome) || st.groupName(g);
-  const CONF = ['roll', 'margin', 'gap', 'bordaMm', 'bleed', 'labelMm', 'girosExtra', 'labelCor', 'corelQualidade'], CONFCHK = ['marcarTam', 'marcarNome', 'allowRot', 'splitLong', 'compactar', 'manterEncaixe', 'labelCorAuto'];
+  const CONF = ['roll', 'margin', 'gap', 'bordaMm', 'bleed', 'labelMm', 'girosExtra', 'labelCor', 'corelQualidade'], CONFCHK = ['marcarTam', 'marcarNome', 'allowRot', 'splitLong', 'compactar', 'manterEncaixe', 'macroCorel', 'labelCorAuto'];
 
   function salvarGrade() {
     const nome = ($('#nomeGrade').value || '').trim();
@@ -1859,6 +1859,7 @@ const App = (() => {
     st.girosExtra = Grade.lerGiros($('#girosExtra').value);
     st.compactar = $('#compactar').checked;
     st.manterEncaixe = $('#manterEncaixe').checked;
+    st.macroCorel = !$('#macroCorel') || $('#macroCorel').checked;
     st.splitLong = $('#splitLong').checked;
     st.marcarTamanho = $('#marcarTam').checked;
     st.marcarNome = $('#marcarNome').checked;
@@ -2139,7 +2140,7 @@ const App = (() => {
     $('#btnCorelTodos').addEventListener('click', corelTodos);
     $('#btnEncaixe').addEventListener('click', () => trabalhando(montarEncaixe));
     // Qualquer opção do Gerar mudou: refaz sozinho (obedece o que está marcado).
-    ['#roll', '#margin', '#gap', '#bleed', '#allowRot', '#girosExtra', '#compactar', '#manterEncaixe', '#splitLong', '#incBase', '#marcarTam', '#marcarNome', '#labelMm', '#labelCor', '#labelCorAuto'].forEach(id => $(id).addEventListener('change', agendar));
+    ['#roll', '#margin', '#gap', '#bleed', '#allowRot', '#girosExtra', '#compactar', '#manterEncaixe', '#macroCorel', '#splitLong', '#incBase', '#marcarTam', '#marcarNome', '#labelMm', '#labelCor', '#labelCorAuto'].forEach(id => $(id).addEventListener('change', agendar));
     ['#marcarTam', '#marcarNome', '#labelMm'].forEach(id => $(id).addEventListener('change', () => { readOut(); desenharEtiquetas(); }));
     // v40 (vídeo 13/11): escolheu a cor dos nomes → vale a cor escolhida (desmarca "automática", que mandava no lugar dela)
     ['input', 'change'].forEach(ev => $('#labelCor').addEventListener(ev, () => { if ($('#labelCorAuto').checked) { $('#labelCorAuto').checked = false; agendar(); } }));
