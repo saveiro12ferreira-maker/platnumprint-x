@@ -38,6 +38,12 @@ const Grade = (() => {
     const W = p.w, H = p.h, S = p.rgba, M = p.mask, A = p.art, hist = new Map(); let nM = 0;
     for (let i = 0; i < W * H; i += 3) { if (!M[i] || (p.band && p.band[i])) continue; nM++; if (!A[i]) continue; const q = i * 4, k = ((S[q] >> 4) << 8) | ((S[q + 1] >> 4) << 4) | (S[q + 2] >> 4); hist.set(k, (hist.get(k) || 0) + 1); }
     let kd = -1, nd = 0; for (const [k, n] of hist) if (n > nd) { nd = n; kd = k; }
+    // v61: fundo texturizado (escuro com pontinhos/fios) não tem UMA cor com 40%: soma a cor dominante com as vizinhas
+    if (kd >= 0 && nd < 0.4 * nM) {
+      const r = kd >> 8, g = (kd >> 4) & 15, b = kd & 15; let viz = 0;
+      for (const [k, n] of hist) { const r2 = k >> 8, g2 = (k >> 4) & 15, b2 = k & 15; if (Math.abs(r - r2) <= 1 && Math.abs(g - g2) <= 1 && Math.abs(b - b2) <= 1) viz += n; }
+      if (viz >= 0.45 * nM) nd = viz;
+    }
     if (kd < 0 || nd < 0.4 * nM) return (p._elemB = null);
     // cor média do grupo dominante
     let r0 = 0, g0 = 0, b0 = 0, c = 0;
@@ -457,8 +463,15 @@ const Grade = (() => {
           const so = soltos.get(Ec.lab[kk]);
           if (so) {   // no lugar do desenho solto vai o que estava atrás dele (o desenho entra depois, sem deformar)
             const e = so.e, L = so.lado[(Y - e.y0) * 2], R = so.lado[(Y - e.y0) * 2 + 1];
-            const kL = L >= 0 ? L : R, kR = R >= 0 ? R : L; if (kL < 0) continue;
-            kk = (L >= 0 && R >= 0) ? (X - (L % W) <= (R % W) - X ? L : R) : kL;
+            const kL = L >= 0 ? L : R; if (kL < 0) continue;
+            // v61 (IA/designer 17/11: "retângulo escuro atrás do texto"): em vez de repetir UMA cor da linha (fazia um bloco
+            // liso no fundo texturizado), espelha o fundo que está do lado do desenho — a textura continua por trás
+            const usaL = L >= 0 && (R < 0 || X - (L % W) <= (R % W) - X), ref = usaL ? L : R, xr = ref % W, yr = (ref / W) | 0;
+            let xs = usaL ? xr - (X - xr - 1) : xr + (xr - X - 1);
+            xs = Math.max(0, Math.min(W - 1, xs));
+            let k2 = yr * W + xs;
+            if (!okO(k2) || Ec.lab[k2] === e.id) k2 = ref;
+            kk = k2;
             if (!A[kk]) continue;
           }
           const q = ((y + b) * OW + x + b) * 4, art = A[kk];

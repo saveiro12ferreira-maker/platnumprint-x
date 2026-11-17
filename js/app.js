@@ -773,7 +773,7 @@ const App = (() => {
     }
     const m = st.moldes;
     if (st.mode !== 'moldes' || !m) return;
-    const chave = JSON.stringify([st.dpi, m.casa, Object.keys(m.tams), m.manualPeca || {}]);
+    const chave = JSON.stringify([st.dpi, m.casa, Object.keys(m.tams), m.manualPeca || {}, st.groups.filter(g => g.moldesDif).map(g => g.id)]);
     if (st.formasChave !== chave) { st.formas = {}; st.formasChave = chave; }
     for (const size of sizes) {
       // o tamanho base também sai em cima do PDF da modelista, quando ele foi enviado (a estampa do arquivo é só a base:
@@ -788,7 +788,7 @@ const App = (() => {
         // peças do mesmo tamanho no PDF (ex.: frente e costas): cada peça do arquivo fica com o molde de formato mais parecido
         const pz = m.tams[size].pecas, pc = pz[c.j];
         const cands = pz.map((q, j) => j).filter(j => {
-          const q = pz[j], ok = (a, b) => Math.abs(a - b) / b < 0.06;
+          const q = pz[j], tol = g.moldesDif ? 0.3 : 0.06, ok = (a, b) => Math.abs(a - b) / b < tol;   // v61: "cada peça no seu molde" procura mais longe
           return j === c.j || (ok(q.w, pc.w) && ok(q.h, pc.h)) || (ok(q.w, pc.h) && ok(q.h, pc.w));
         });
         const raws = {};
@@ -800,7 +800,7 @@ const App = (() => {
         // v60: grupo com 2+ peças e moldes parecidos (ex.: M3 e M4 espelhados) — cada peça fica com um molde diferente,
         // a menos que o molde do grupo seja "2X" (serve para as duas)
         const qtdGrupo = pz[c.j] && pz[c.j].rotulo ? (pz[c.j].rotulo.qtd | 0) : 0, ehDoisX = qtdGrupo >= 2 || /(^|[^0-9])2\s*X\b/i.test((pz[c.j] && pz[c.j].rotulo && (pz[c.j].rotulo.texto || pz[c.j].rotulo.nome)) || '');
-        if (g.items.length >= 2 && g.items.length <= 4 && cands.length >= g.items.length && !ehDoisX && !g.items.some(p => mp[p.n] != null)) {
+        if (g.items.length >= 2 && g.items.length <= 4 && cands.length >= g.items.length && (!ehDoisX || g.moldesDif) && !g.items.some(p => mp[p.n] != null)) {
           const F = g.items.map(p => cands.map(j => Moldes.orientar(raws[j], p.mask, p.w, p.h)));
           let melhor = null;
           const perm = (k, usadosP, soma, esc) => {
@@ -1505,16 +1505,23 @@ const App = (() => {
   function iaPodeAplicar(pb) {
     const m = st.moldes, g = st.groups.find(x => x.id === pb.grupo); if (!g) return false;
     if (pb.acao === 'seguir_contorno') return g.items.some(p => !p.seguirContorno);
+    // v61 (vídeo 17/11): a IA diz "frente e costas / as duas mangas no MESMO molde" sem dizer a peça → cada peça no seu molde
+    if (iaMesmoMolde(pb, g)) return true;
     const fr0 = (st.formas || {})[m && m.ref] || {}, jsDif = new Set(g.items.map(p => fr0[p.n] && fr0[p.n].j).filter(v => v != null)).size > 1;
     if (pb.acao === 'trocar_molde' && pb.peca >= 1 && pb.peca <= g.items.length) return pb.molde >= 1 && !!(m && m.ref) && pb.molde <= m.tams[m.ref].pecas.length && (m.manualPeca || {})[g.items[pb.peca - 1].n] !== pb.molde - 1;
     if (pb.acao === 'trocar_molde') return !jsDif && pb.molde >= 1 && !!(m && m.ref) && pb.molde <= m.tams[m.ref].pecas.length;
     if (pb.acao === 'trocar_regra') return !!pb.regra && !(pb.regra === 'fundo' && g.items.some(p => p.artFrac >= 0.005)) && g.items.some(p => p.rule !== pb.regra);
     return false;
   }
-  const iaTextoAcao = pb => pb.acao === 'trocar_molde' ? (pb.peca ? `Aplicar: peça ${pb.peca} no molde M${pb.molde}` : `Aplicar: molde M${pb.molde}`) : pb.acao === 'seguir_contorno' ? 'Aplicar: estampa segue o contorno' : `Aplicar: regra "${pb.regra}"`;
+  function iaMesmoMolde(pb, g) {
+    return !!g && g.items.length >= 2 && !g.moldesDif && !(pb.acao === 'trocar_molde' && pb.peca) && (pb.acao === 'conferir' || pb.acao === 'moldes_diferentes' || pb.acao === 'trocar_molde')
+      && (pb.acao === 'moldes_diferentes' || /mesmo molde|mesmos moldes|molde[s]? diferentes|cada uma com o seu|um para cada/i.test(pb.problema || ''));
+  }
+  const iaTextoAcao = pb => iaMesmoMolde(pb, st.groups.find(x => x.id === pb.grupo)) ? 'Aplicar: cada peça no seu molde' : pb.acao === 'trocar_molde' ? (pb.peca ? `Aplicar: peça ${pb.peca} no molde M${pb.molde}` : `Aplicar: molde M${pb.molde}`) : pb.acao === 'seguir_contorno' ? 'Aplicar: estampa segue o contorno' : `Aplicar: regra "${pb.regra}"`;
   function iaAplicar(pb) {
     const m = st.moldes, g = st.groups.find(x => x.id === pb.grupo); if (!g) return;
-    if (pb.acao === 'trocar_molde' && pb.peca >= 1 && pb.peca <= g.items.length) { (m.manualPeca = m.manualPeca || {})[g.items[pb.peca - 1].n] = pb.molde - 1; st.formas = {}; st.formasChave = null; renderMoldes(); }
+    if (iaMesmoMolde(pb, g)) { g.moldesDif = true; st.formas = {}; st.formasChave = null; renderMoldes(); }
+    else if (pb.acao === 'trocar_molde' && pb.peca >= 1 && pb.peca <= g.items.length) { (m.manualPeca = m.manualPeca || {})[g.items[pb.peca - 1].n] = pb.molde - 1; st.formas = {}; st.formasChave = null; renderMoldes(); }
     else if (pb.acao === 'trocar_molde') { (m.manual = m.manual || {})[g.id] = pb.molde - 1; casarMoldes(); computeTargets(); renderGrade(); renderMoldes(); }
     else if (pb.acao === 'seguir_contorno') for (const p of g.items) p.seguirContorno = true;
     else for (const p of g.items) { p.rule = pb.regra; p.regraManual = true; }
@@ -1523,11 +1530,12 @@ const App = (() => {
   }
   // fotografia do que a correção pode mudar, para o botão "Desfazer"
   function iaFoto() {
-    return { manual: JSON.parse(JSON.stringify((st.moldes && st.moldes.manual) || {})), manualPeca: JSON.parse(JSON.stringify((st.moldes && st.moldes.manualPeca) || {})),
+    return { manual: JSON.parse(JSON.stringify((st.moldes && st.moldes.manual) || {})), manualPeca: JSON.parse(JSON.stringify((st.moldes && st.moldes.manualPeca) || {})), dif: st.groups.filter(g => g.moldesDif).map(g => g.id),
       pecas: st.pieces.map(p => ({ p, rule: p.rule, regraManual: p.regraManual, seguirContorno: p.seguirContorno })) };
   }
   function iaVoltarFoto(f) {
     for (const x of f.pecas) { x.p.rule = x.rule; x.p.regraManual = x.regraManual; x.p.seguirContorno = !!x.seguirContorno; }
+    for (const g of st.groups) g.moldesDif = (f.dif || []).includes(g.id);
     if (st.moldes) { st.moldes.manual = f.manual; st.moldes.manualPeca = f.manualPeca; st.formas = {}; st.formasChave = null; casarMoldes(); computeTargets(); renderGrade(); renderMoldes(); }
     renderPieces();
   }

@@ -377,3 +377,12 @@ Testado com os arquivos do designer (12A CONJUNTO MILENA BORDADO BRANCO.tif + PD
   espelhadas, que estavam as duas no mesmo molde). "Aplicar: peça 2 no molde M2". O Desfazer também volta isso.
 - **Automático:** grupo com 2 a 4 peças e moldes parecidos no PDF (ex.: M3 e M4 espelhados) — cada peça fica com um molde
   diferente, o que encaixa melhor no formato dela. Se o molde do grupo é "2X" (serve para as duas), continua o mesmo.
+
+## v61 (17/11) — "Corrigir com a IA" resolve "mesmo molde"; fundo texturizado
+- Quando a IA diz que **frente e costas** (ou **as duas mangas espelhadas**) estão no **mesmo molde**, o botão agora tem
+  "Aplicar: cada peça no seu molde": o motor procura os moldes do PDF de formato parecido (até 30% de diferença) e põe cada
+  peça no que encaixa melhor no formato dela, uma em cada molde. O Desfazer volta.
+- **Fundo texturizado** (escuro com fios/pontinhos, como o SUCALOG): o motor reconhece o fundo da peça mesmo sem uma cor
+  única, então texto e logo do meio só mudam de tamanho (não deitam/entortam junto com o contorno).
+- Atrás do texto/logo, o fundo é preenchido espelhando a textura do lado (antes repetia uma cor só e aparecia um
+  **retângulo escuro** atrás de "MESMA FORÇA SEMPRE JUNTOS").
