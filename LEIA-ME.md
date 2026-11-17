@@ -406,3 +406,11 @@ Testado com os arquivos do designer (12A CONJUNTO MILENA BORDADO BRANCO.tif + PD
   fica de cabeça para baixo à toa). CPEF: 13 → 4 peças giradas nos 9 tamanhos, encaixe total +0,56%.
 - Revisão independente (agente revisor) + aprovação (agente aprovador): vigia 20/20; CPEF PP/P/G3 sem defeito novo e
   melhor que v62 (UNINTER limpo, patrocinadores alinhados); Milena 14 igual (8 px).
+
+## v64 (17/11) — o motor manda o caso sozinho para o vigia (sem ninguém trazer arquivo)
+- Quando a IA confere a grade e acha problema (médio ou grave), o motor manda sozinho para a nuvem (ConfexConect): o
+  arquivo da estampa (TIFF; se passar de 45 MB, uma cópia PNG reduzida), os PDFs da modelista e o que estava escolhido
+  (tamanho base, tamanhos, rolo/margem/espaço/giros, regras e moldes de cada grupo, e os problemas que a IA achou).
+  Uma vez por arquivo por dia. Assim o vigia (e o Claude) reproduz exatamente o que o designer viu e conserta, sem o dono
+  precisar trazer PDF/TIFF.
+- Tudo fica numa pasta privada da nuvem (px-casos); só o servidor grava, e só o vigia baixa (com a chave do painel).

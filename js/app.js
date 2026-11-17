@@ -1322,6 +1322,53 @@ const App = (() => {
     const j = await r.json().catch(() => ({})); if (!r.ok || !j.ok) throw new Error(j.erro || `erro ${r.status}`);
     iaNuvem = j.licoes || []; iaMostrarLicoes(); return iaNuvem;
   }
+  // v64 (dono 17/11: "o ruim é que vou ter que toda vida trazer os PDFs pra você"): quando a IA acha problema na grade,
+  // o motor manda SOZINHO o caso para a nuvem — o arquivo da estampa, os PDFs da modelista e o que estava escolhido — para
+  // o vigia reproduzir e consertar sem ninguém trazer arquivo. Uma vez por arquivo (mesmo nome e tamanho) por dia.
+  // Arquivo da estampa maior que 45 MB vai como PNG reduzido (o servidor pode não aceitar o original inteiro).
+  async function vigiaEnviarCaso(probs) {
+    try {
+      if (!st.file || !st.pieces.length) return;
+      const chave = 'px_caso_' + st.file.name + '_' + st.file.size + '_' + new Date().toISOString().slice(0, 10);
+      if (localStorage.getItem(chave)) return;
+      localStorage.setItem(chave, '1');
+      let base = st.file;
+      if (base.size > 45 * 1048576) {
+        const im = await Tiff.readImage(st.file), k = Math.min(1, Math.sqrt(24e6 / (im.width * im.height)));
+        const W = Math.max(1, Math.round(im.width * k)), H = Math.max(1, Math.round(im.height * k));
+        const src = document.createElement('canvas'); src.width = im.width; src.height = im.height;
+        src.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(im.data.buffer, im.data.byteOffset, im.width * im.height * 4), im.width, im.height), 0, 0);
+        im.data = null;
+        const cv = document.createElement('canvas'); cv.width = W; cv.height = H; cv.getContext('2d').drawImage(src, 0, 0, W, H);
+        src.width = src.height = 1;
+        const blob = await new Promise(ok => cv.toBlob(ok, 'image/png'));
+        if (blob) base = new File([blob], st.file.name.replace(/\.[^.]+$/, '') + `__reduzido_${Math.round((st.dpi || 300) * k)}dpi.png`, { type: 'image/png' });
+      }
+      const arqs = [base, ...pdfsArquivos];
+      const ver = (document.querySelector('.versao') || {}).textContent || '';
+      const r = await fetch(IA_URL, { method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ acao: 'caso_url', arquivo: st.file.name, versao: ver, arquivos: arqs.map(f => ({ nome: f.name, bytes: f.size })) }) });
+      const j = await r.json().catch(() => ({})); if (!r.ok || !j.ok) return;
+      const limpa = n => String(n).replace(/[^\w.\- ()À-ú]/g, '_').slice(0, 120);
+      const enviados = [];
+      for (const f of arqs) {
+        const url = j.urls && j.urls[limpa(f.name)]; if (!url) continue;
+        const up = await fetch(url, { method: 'PUT', headers: { 'content-type': f.type || 'application/octet-stream' }, body: f }).catch(() => null);
+        if (up && up.ok) enviados.push(limpa(f.name));
+      }
+      readOut();
+      const meta = {
+        base: st.base, tamanhos: st.sizes, dpi: st.dpi, arquivoOriginal: { nome: st.file.name, bytes: st.file.size }, reduzido: base !== st.file,
+        opcoes: { rollCm: st.rollCm, marginMm: st.marginMm, gapMm: st.gapMm, bleedMm: st.bleedMm, allowRot: st.allowRot, girosExtra: st.girosExtra,
+          compactar: st.compactar, manterEncaixe: st.manterEncaixe, splitLong: st.splitLong, bordaMm: st.bordaMm },
+        grupos: st.groups.map(g => ({ id: g.id, itens: g.items.map(p => ({ n: p.n, regra: p.rule, regraManual: !!p.regraManual, seguirContorno: !!p.seguirContorno })), moldesDif: !!g.moldesDif })),
+        moldes: st.moldes ? { manual: st.moldes.manual || {}, manualPeca: st.moldes.manualPeca || {}, casa: st.moldes.casa } : null,
+        problemas: (probs || []).slice(0, 20), quando: new Date().toISOString()
+      };
+      await fetch(IA_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ acao: 'caso_salvar', caso: j.caso, meta, enviados }) });
+      st.casoNuvem = j.caso;
+    } catch (e) { /* o caso é um extra: o motor segue normal */ }
+  }
   async function iaSubirPendentes() {
     const pend = iaPendentes(); if (!pend.length) return;
     const fica = [];
@@ -1581,6 +1628,7 @@ const App = (() => {
       probs.filter(pb => pb.gravidade !== 'baixa').forEach(pb => vigia('ia', `${pb.grupo || ''}: ${pb.problema}`, { gravidade: pb.gravidade, acao: pb.acao, molde: pb.molde, regra: pb.regra, olhou: olhar }));
       info.textContent = r.ok && !probs.length ? `🧠 A IA conferiu ${olhar.join(' e ')}: a grade está boa para produzir.` : `🧠 A IA achou ${probs.length} ponto(s) para olhar em ${olhar.join(' e ')}:`;
       st.iaUltima = { probs, olhar };
+      if (probs.some(pb => pb.gravidade !== 'baixa')) vigiaEnviarCaso(probs);   // v64: o caso vai sozinho para o vigia
       const aplicaveis = probs.filter(pb => iaPodeAplicar(pb));
       const itens = probs.map(pb => {
         const g = st.groups.find(x => x.id === pb.grupo), pode = iaPodeAplicar(pb);
