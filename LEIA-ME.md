@@ -420,3 +420,4 @@ Testado com os arquivos do designer (12A CONJUNTO MILENA BORDADO BRANCO.tif + PD
 - Peças do mesmo grupo mantêm a proporção própria (a frente não é mais esticada com a altura da costas).
 - v66: **Igual à macro do Corel** (ligado por padrão, aba Gerar): a arte de cada peça aumenta/diminui por igual, centralizada e cortada pelo molde da modelista (PowerClip). Nada estica nem entorta. Desmarcando, volta o jeito antigo (estampa acompanha a curva do molde). Grade do SUCOLOG: 25 s.
 - v67: **Automático igual à macro** (ligado por padrão): escolheu o TIFF (com o tamanho no nome, ex.: "GG - SUCOLOG.tif") e os PDFs, o motor lê e gera a grade sozinho, sem clicar. SUCOLOG: 24 s do arquivo escolhido até a grade pronta. Arquivo novo escolhido lê de novo sozinho.
+- v68: o automático só LÊ e para nas Peças (para conferir/trocar os nomes); botão verde "⚡ Gerar a grade (macro)" no topo das Peças gera. "Gerar logo depois de ler" voltou a ser opcional (desmarcado).

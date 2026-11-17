@@ -126,14 +126,14 @@ const App = (() => {
   let autoTimer = 0;
   function autoMacro() {
     clearTimeout(autoTimer);
-    if (!$('#autoGerar') || !$('#autoGerar').checked || busy || !st.file) return;
+    if (!$('#autoLer') || !$('#autoLer').checked || busy || !st.file) return;
     if (st.an && st.lidoDe === st.file.name + '|' + st.file.size) return;   // esse arquivo já foi lido (arquivo novo lê de novo sozinho)
     const temPdf = (moldesPendentes && moldesPendentes.length) || (st.moldes && Object.keys(st.moldes.tams || {}).length);
-    if (!temPdf) { $('#status1').textContent = 'Arquivo da estampa pronto. Agora escolha os PDFs da modelista: o motor lê e gera sozinho.'; return; }
+    if (!temPdf) { $('#status1').textContent = 'Arquivo da estampa pronto. Agora escolha os PDFs da modelista: o motor lê sozinho.'; return; }
     const base = Moldes.tamDoArquivoBase(st.file.name) || '';
     if (!base || !st.sizes.includes(base)) { $('#status1').textContent = 'Não achei o tamanho no nome do arquivo da estampa: escolha em "Este arquivo é o tamanho" e clique em "Ler arquivo".'; return; }
     $('#baseSize').value = base; st.base = base;
-    $('#status1').textContent = `Tudo pronto (estampa no tamanho ${base} + PDFs): lendo e gerando a grade sozinho…`;
+    $('#status1').textContent = `Tudo pronto (estampa no tamanho ${base} + PDFs): lendo sozinho…`;
     autoTimer = setTimeout(() => trabalhando(ler), 400);
   }
   async function ler() {
@@ -2152,6 +2152,7 @@ const App = (() => {
     renderSalvas();
     $('#btnLimpar').addEventListener('click', () => { st.overrides = {}; computeTargets(); renderGrade(); });
     $('#btnGerar').addEventListener('click', gerar);
+    $('#btnGerarPecas').addEventListener('click', () => { showTab('gerar'); gerar(); });
     $('#btnTodos').addEventListener('click', baixarTodos);
     $('#btnCorelTodos').addEventListener('click', corelTodos);
     $('#btnEncaixe').addEventListener('click', () => trabalhando(montarEncaixe));

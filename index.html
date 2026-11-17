@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400&family=Orbitron:wght@600;700&display=swap">
-<link rel="stylesheet" href="css/app.css?v=67">
+<link rel="stylesheet" href="css/app.css?v=68">
 <script src="https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
@@ -24,7 +24,7 @@
 </div>
 <header class="top">
   <div class="top-in">
-    <div class="brand"><b>PLATNUMPRINT-X</b><span>motor de grade</span><span class="versao" title="Versão do motor carregada neste navegador">v67</span><span class="user"><span id="quem"></span><button type="button" id="btnSair" class="ghost">Sair</button></span></div>
+    <div class="brand"><b>PLATNUMPRINT-X</b><span>motor de grade</span><span class="versao" title="Versão do motor carregada neste navegador">v68</span><span class="user"><span id="quem"></span><button type="button" id="btnSair" class="ghost">Sair</button></span></div>
     <nav class="tabs" id="tabs" role="tablist">
       <button class="tab on" data-tab="arquivo" role="tab"><span class="n">1</span>Arquivo</button>
       <button class="tab locked" data-tab="pecas" role="tab"><span class="n">2</span>Peças</button>
@@ -57,7 +57,8 @@
         <label>Resolução <input id="dpi" type="number" min="50" max="1200" step="1" value="200" style="width:80px"> dpi</label>
       </div>
       <div class="row">
-        <label><input type="checkbox" id="autoGerar" checked> ⚡ Automático igual à macro: escolheu o arquivo e os PDFs, o motor lê e gera a grade sozinho</label>
+        <label><input type="checkbox" id="autoLer" checked> ⚡ Ler sozinho igual à macro: escolheu o arquivo e os PDFs, o motor lê e para nas Peças para vocês conferirem os nomes</label>
+        <label><input type="checkbox" id="autoGerar"> Gerar a grade completa logo depois de ler (sem parar nas Peças)</label>
       </div>
       <div class="row">
         <button id="btnLer" class="primary" disabled>Ler arquivo</button>
@@ -103,7 +104,8 @@
   <section class="panel" data-panel="pecas">
     <div class="card">
       <h2>Peças reconhecidas</h2>
-      <p class="hint">Confira se cada peça foi reconhecida certo. Se o tipo ou a regra estiverem errados, corrija aqui antes de gerar.</p>
+      <p class="hint">Confira se cada peça foi reconhecida certo e ajuste os nomes. Depois aperte o botão verde para gerar a grade.</p>
+      <button type="button" id="btnGerarPecas" class="primary" style="background:#1a9e3f;border-color:#137a30;font-size:18px;padding:12px 22px;margin:6px 0 12px">⚡ Gerar a grade (macro)</button>
       <div id="check" class="check"></div>
       <div class="ia-box">
         <div class="row" style="margin:0;align-items:center">
@@ -408,17 +410,17 @@
   </section>
 </main>
 
-<script src="js/acesso.js?v=67"></script>
-<script src="js/util.js?v=67"></script>
-<script src="js/tiff.js?v=67"></script>
-<script src="js/analyze.js?v=67"></script>
-<script src="js/corel.js?v=67"></script>
-<script src="js/grade.js?v=67"></script>
-<script src="js/pdfgrade.js?v=67"></script>
-<script src="js/moldes.js?v=67"></script>
-<script src="js/regras.js?v=67"></script>
-<script src="js/app.js?v=67"></script>
-<script src="js/montar.js?v=67"></script>
-<script src="js/provador.js?v=67"></script>
+<script src="js/acesso.js?v=68"></script>
+<script src="js/util.js?v=68"></script>
+<script src="js/tiff.js?v=68"></script>
+<script src="js/analyze.js?v=68"></script>
+<script src="js/corel.js?v=68"></script>
+<script src="js/grade.js?v=68"></script>
+<script src="js/pdfgrade.js?v=68"></script>
+<script src="js/moldes.js?v=68"></script>
+<script src="js/regras.js?v=68"></script>
+<script src="js/app.js?v=68"></script>
+<script src="js/montar.js?v=68"></script>
+<script src="js/provador.js?v=68"></script>
 </body>
 </html>
