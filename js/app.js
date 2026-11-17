@@ -57,6 +57,9 @@ const App = (() => {
     if (file) {
       chip.className = 'chip';
       chip.replaceChildren(`${file.name} · ${U.fmt(file.size / 1048576)} MB`, el('button', { class: 'x', type: 'button', title: 'Remover arquivo', text: '✕ Remover', onclick: removeFile }));
+      // v65: o tamanho do arquivo da estampa sai do nome ("GG - SUCOLOG.tif" → GG) e já fica escolhido como base
+      const tb = Moldes.tamDoArquivoBase(file.name);
+      if (tb) { if (!st.sizes.includes(tb)) { $('#sizes').value = [...st.sizes, tb].sort((a, b) => ordemTam(a) - ordemTam(b)).join(', '); } $('#baseSize').value = tb; readSizes(); $('#baseSize').value = tb; st.base = tb; }
     } else {
       chip.className = 'chip empty';
       chip.textContent = 'Nenhum arquivo escolhido';
@@ -1084,6 +1087,11 @@ const App = (() => {
     pdfsArquivos = files.slice();
     const info = $('#moldesInfo');
     $('#moldesNome').className = 'chip'; $('#moldesNome').textContent = `${files.length} PDF(s): ${files.map(f => Moldes.tamDoNome(f.name) || '?').join(', ')}`;
+    // v65: dois PDFs no mesmo tamanho = um molde ia por cima do outro sem ninguém ver. Agora avisa em vermelho e fica o primeiro.
+    const vistos = {}, repetidos = [];
+    files = files.filter(f => { const t = Moldes.tamDoNome(f.name); if (!t) return true; if (vistos[t]) { repetidos.push(`${f.name} e ${vistos[t]} são os dois do tamanho ${t}`); return false; } vistos[t] = f.name; return true; });
+    if (repetidos.length) { $('#moldesNome').className = 'chip erro'; $('#moldesNome').textContent += ' — ⚠ ' + repetidos.join('; ') + ' (usei só o primeiro; renomeie o outro)'; }
+    pdfsArquivos = files.slice();
     // os tamanhos da grade passam a ser os dos PDFs (mais o tamanho do arquivo da estampa)
     const tams = files.map(f => Moldes.tamDoNome(f.name)).filter(Boolean);
     if (tams.length) {

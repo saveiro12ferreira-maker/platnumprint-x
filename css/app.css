@@ -255,3 +255,4 @@ table.regras tr.sel td { background: rgba(245, 158, 11, .18); }
 .ia-item.av { border-color: #eab308; background: rgba(234, 179, 8, .10); }
 .ia-item.ruim { border-color: #dc2626; background: rgba(220, 38, 38, .10); }
 .ia-item button { margin-left: 8px; }
+.chip.erro{background:#fde2e2;color:#a40000;border:2px solid #d00;font-weight:700}

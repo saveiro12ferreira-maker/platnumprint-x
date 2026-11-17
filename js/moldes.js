@@ -6,12 +6,33 @@ const Moldes = (() => {
   const TAM = '(\\d{1,2}|PP|P|M|G|GG|XG|XGG|EG|EGG|G[1-5])';
 
   // "Vestido_Antonella_6.pdf" → tamanho 6, modelo "Vestido Antonella"
+  // v65: tira o que o Windows/navegador acrescenta quando o arquivo é copiado ou baixado de novo:
+  // "PP (2).pdf", "G - Cópia.pdf", "G2 - Copia (3).pdf" e as mesmas formas com "_" no lugar de espaço e parênteses
+  // ("PP_2", "G2_-_Copia"). Antes disso "P (1)", "M (1)" e "G (1)" viravam todos o tamanho 1 e o GG sumia da lista.
+  const LETRA = '(?:PP|P|M|G|GG|XG|XGG|EG|EGG|G[1-5])';
+  function limparNome(nome) {
+    let n = String(nome || '').normalize('NFC').replace(/\.(pdf|tiff?|png|jpe?g)$/i, '').trim(), ant;
+    do {
+      ant = n;
+      n = n.replace(/[\s_]*\(\s*\d+\s*\)$/, '')                                     // "(2)"
+        .replace(/[\s_\-.]*(?:c[oó]pia|copy)(?:[\s_\-]*(?:de|of))?(?:[\s_\-]*\(?\d+\)?)?$/i, '')   // "- Cópia", "_-_Copia", "Copy 2"
+        .replace(new RegExp('((?:^|[_\\s\\-.])' + LETRA + ')[_\\s]+\\d{1,2}$', 'i'), '$1')   // "PP_2" (cópia do "PP (2)") → PP
+        .replace(/[\s_\-.]+$/, '');
+    } while (n !== ant);
+    return n;
+  }
   function tamDoNome(nome) {
-    const m = nome.replace(/\.pdf$/i, '').match(new RegExp('(?:^|[_\\s\\-.])' + TAM + '(?:\\s*anos?)?$', 'i'));
+    const m = limparNome(nome).match(new RegExp('(?:^|[_\\s\\-.])' + TAM + '(?:\\s*anos?)?$', 'i'));
+    return m ? m[1].toUpperCase() : '';
+  }
+  // arquivo da estampa costuma vir com o tamanho NA FRENTE: "GG - SUCOLOG.tif", "12A - CONJUNTO MILENA.tif"
+  function tamDoArquivoBase(nome) {
+    const fim = tamDoNome(nome); if (fim) return fim;
+    const m = limparNome(nome).match(new RegExp('^' + TAM + '(?:\\s*anos?|A)?(?=[_\\s\\-.])', 'i'));
     return m ? m[1].toUpperCase() : '';
   }
   function modeloDoNome(nome) {
-    return nome.replace(/\.pdf$/i, '').replace(new RegExp('[_\\s\\-.]+' + TAM + '(?:\\s*anos?)?$', 'i'), '').replace(/[_]+/g, ' ').trim();
+    return limparNome(nome).replace(new RegExp('[_\\s\\-.]+' + TAM + '(?:\\s*anos?)?$', 'i'), '').replace(/[_]+/g, ' ').trim();
   }
 
   // Lê o PDF e devolve as peças (largura × altura em cm), maior primeiro.
@@ -375,5 +396,5 @@ const Moldes = (() => {
     gravar(l); return n;
   }
 
-  return { ler, forma, lerNome, nomeDoRotulo, orientar, casar, assinatura, interpolar, tamDoNome, modeloDoNome, lista, salvar, excluir, importar };
+  return { ler, forma, lerNome, nomeDoRotulo, orientar, casar, assinatura, interpolar, tamDoNome, tamDoArquivoBase, limparNome, modeloDoNome, lista, salvar, excluir, importar };
 })();

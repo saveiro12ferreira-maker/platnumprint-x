@@ -315,16 +315,20 @@ const Grade = (() => {
   }
   // mapa (de 6 em 6 px, interpolado) de cada pixel do molde novo para a peça original, alinhando os contornos
   function mapaContorno(p, nm, Wt, Ht, sx, sy, N = 72, lam = 1e-3, dentroRisca = false) {
-    let b0;
+    let b0, bD;
     if (dentroRisca) {
       // v56: alvo = beira de DENTRO da risca original (onde a estampa começa); assim quase nenhum ponto cai em cima da
       // risca e não precisa procurar o desenho em volta (era o que deixava a geração lenta)
-      if (!(p._contIn && p._contIn.length === N)) {
+      if (!(p._contIn && p._contIn.length === N && p._contInD)) {
         const m2 = U.box(p.mask, p.w, p.h, Math.max(1, Math.round(p.thick || 0) + 1), 'min');
-        p._contIn = reamostrar(contornoExterno(m2, p.w, p.h), N);
+        const c2 = contornoExterno(m2, p.w, p.h);
+        p._contIn = reamostrar(c2, N); p._contInD = reamostrar(c2, N * 8);
       }
-      b0 = p._contIn;
-    } else b0 = (p._contV53 && p._contV53.length === N) ? p._contV53 : (p._contV53 = reamostrar(contornoExterno(p.mask, p.w, p.h), N));
+      b0 = p._contIn; bD = p._contInD;
+    } else {
+      if (!(p._contV53 && p._contV53.length === N && p._contV53D)) { const c0 = contornoExterno(p.mask, p.w, p.h); p._contV53 = reamostrar(c0, N); p._contV53D = reamostrar(c0, N * 8); }
+      b0 = p._contV53; bD = p._contV53D;
+    }
     const a = reamostrar(contornoExterno(nm, Wt, Ht), N);
     if (!a || !b0) return null;
     // v62 (dono 17/11: "em algum momento as estampas estão ficando tortas"): o molde novo é a MESMA peça em outro tamanho.
@@ -348,6 +352,36 @@ const Grade = (() => {
     let melhor = 0, dmin = Infinity;
     for (let sh = 0; sh < N; sh++) { let d = 0; for (let i = 0; i < N; i++) { const q = b0[(i + sh) % N]; d += (aR[i][0] - (q[0] - eb.cx)) ** 2 + (aR[i][1] - (q[1] - eb.cy)) ** 2; } if (d < dmin) { dmin = d; melhor = sh; } }
     const b = a.map((_, i) => b0[(i + melhor) % N]);
+    // v65 (SUCOLOG 17/11, "a corda não bate"): os pontos eram casados só pelo comprimento do contorno. Quando a modelista
+    // muda a proporção do decote/cava de um tamanho para outro, os pontos escorregavam ao longo da lateral (1 ponto ≈ 4 cm
+    // de contorno) e a estampa subia/descia até 2 cm na costura — a corda da costas não encontrava a da frente. Agora cada
+    // ponto escorrega pelo contorno original até a posição PROPORCIONAL na peça (ajuste afim + ponto mais perto, 3 voltas,
+    // só andando para a frente e no máximo 1/6 do contorno): a costura de 54 cm no GG cai na costura de 53 cm no PP
+    // na mesma proporção, igual na frente e na costas.
+    if (bD && bD.length === N * 8) {
+      const ND = N * 8, idx = a.map((_, i) => (i + melhor) * 8), J = Math.round(ND / 6);   // índices sem dar a volta: a ordem vale também na emenda
+      for (let volta = 0; volta < 3; volta++) {
+        // afim de a (molde novo) para b (original) por mínimos quadrados
+        let Sxx = 0, Sxy = 0, Sx = 0, Syy = 0, Sy = 0, n = 0, SXx = 0, SXy = 0, SX = 0, SYx = 0, SYy = 0, SY = 0;
+        for (let i = 0; i < N; i++) { const x = a[i][0], y = a[i][1], X = b[i][0], Y = b[i][1]; Sxx += x * x; Sxy += x * y; Sx += x; Syy += y * y; Sy += y; n++; SXx += X * x; SXy += X * y; SX += X; SYx += Y * x; SYy += Y * y; SY += Y; }
+        const M = [[Sxx, Sxy, Sx], [Sxy, Syy, Sy], [Sx, Sy, n]];
+        const resolve = (r) => { const m = M.map((l, k) => [...l, r[k]]); for (let c = 0; c < 3; c++) { let pv = c; for (let k = c + 1; k < 3; k++) if (Math.abs(m[k][c]) > Math.abs(m[pv][c])) pv = k; [m[c], m[pv]] = [m[pv], m[c]]; if (Math.abs(m[c][c]) < 1e-9) return null; for (let k = 0; k < 3; k++) if (k !== c) { const f = m[k][c] / m[c][c]; for (let q = c; q < 4; q++) m[k][q] -= f * m[c][q]; } } return [m[0][3] / m[0][0], m[1][3] / m[1][1], m[2][3] / m[2][2]]; };
+        const cX = resolve([SXx, SXy, SX]), cY = resolve([SYx, SYy, SY]); if (!cX || !cY) break;
+        let mudou = 0;
+        for (let i = 0; i < N; i++) {
+          const px = cX[0] * a[i][0] + cX[1] * a[i][1] + cX[2], py = cY[0] * a[i][0] + cY[1] * a[i][1] + cY[2];
+          const ant = i ? idx[i - 1] : idx[N - 1] - ND, dep = i === N - 1 ? idx[0] + ND : Infinity;   // não passa do vizinho (nem na emenda)
+          let bk = idx[i], bd = Infinity;
+          for (let d = -J; d <= J; d++) {
+            const k = idx[i] + d; if (k <= ant || k >= dep) continue;
+            const q = bD[((k % ND) + ND) % ND], dd = (q[0] - px) ** 2 + (q[1] - py) ** 2; if (dd < bd) { bd = dd; bk = k; }
+          }
+          if (bk !== idx[i]) mudou++;
+          idx[i] = bk; b[i] = bD[((bk % ND) + ND) % ND];
+        }
+        if (!mudou) break;
+      }
+    }
     {
       let s00 = 0, s01 = 0, s10 = 0, s11 = 0;
       for (let i = 0; i < N; i++) { const u = a[i][0] / sx - ea.cx, v = a[i][1] / sy - ea.cy, U2 = b[i][0] - eb.cx, V2 = b[i][1] - eb.cy; s00 += u * U2; s01 += u * V2; s10 += v * U2; s11 += v * V2; }
@@ -1656,6 +1690,12 @@ const Grade = (() => {
         // peça girada de lado em relação à primeira do grupo: largura e altura trocam
         const deLado = ((p.t || 0) & 3) % 2 === 1;
         let W = deLado ? alvo.H : alvo.W, H = deLado ? alvo.W : alvo.H;
+        // v65: peças do mesmo grupo podem ter medida um pouco diferente (SUCOLOG: frente 2 cm mais baixa que a costas, decote
+        // mais fundo). Antes todas saíam com a medida da primeira do grupo — no próprio tamanho base a frente era esticada
+        // e a corda/linhas não encontravam na costura. Agora cada peça mantém a proporção dela em relação à do grupo.
+        { const rw = p.w / (deLado ? g.h : g.w), rh = p.h / (deLado ? g.w : g.h);
+          if (rw !== 1) W = Math.max(1, Math.round(W * rw));
+          if (rh !== 1) H = Math.max(1, Math.round(H * rh)); }
         if (F) {
           // a borda preta (contorno de corte, ex.: 3 mm) fica DA RISCA DA MODELAGEM PARA FORA: a peça cresce a borda
           // para cada lado e o laser corta no lado de dentro da borda, exatamente na risca (pedido 12/11)
