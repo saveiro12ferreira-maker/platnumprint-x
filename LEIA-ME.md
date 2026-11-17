@@ -419,3 +419,4 @@ Testado com os arquivos do designer (12A CONJUNTO MILENA BORDADO BRANCO.tif + PD
 - Nome do PDF: o motor ignora "(1)", "(2)", "- Cópia" do Windows (antes P/M/G "(1)" viravam todos tamanho 1). Tamanho base sai do nome do TIFF ("GG - SUCOLOG"). PDF repetido no mesmo tamanho → aviso vermelho.
 - Peças do mesmo grupo mantêm a proporção própria (a frente não é mais esticada com a altura da costas).
 - v66: **Igual à macro do Corel** (ligado por padrão, aba Gerar): a arte de cada peça aumenta/diminui por igual, centralizada e cortada pelo molde da modelista (PowerClip). Nada estica nem entorta. Desmarcando, volta o jeito antigo (estampa acompanha a curva do molde). Grade do SUCOLOG: 25 s.
+- v67: **Automático igual à macro** (ligado por padrão): escolheu o TIFF (com o tamanho no nome, ex.: "GG - SUCOLOG.tif") e os PDFs, o motor lê e gera a grade sozinho, sem clicar. SUCOLOG: 24 s do arquivo escolhido até a grade pronta. Arquivo novo escolhido lê de novo sozinho.

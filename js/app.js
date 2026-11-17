@@ -60,6 +60,7 @@ const App = (() => {
       // v65: o tamanho do arquivo da estampa sai do nome ("GG - SUCOLOG.tif" → GG) e já fica escolhido como base
       const tb = Moldes.tamDoArquivoBase(file.name);
       if (tb) { if (!st.sizes.includes(tb)) { $('#sizes').value = [...st.sizes, tb].sort((a, b) => ordemTam(a) - ordemTam(b)).join(', '); } $('#baseSize').value = tb; readSizes(); $('#baseSize').value = tb; st.base = tb; }
+      setTimeout(autoMacro, 0);
     } else {
       chip.className = 'chip empty';
       chip.textContent = 'Nenhum arquivo escolhido';
@@ -120,6 +121,21 @@ const App = (() => {
     setFile({ name: nome, size: img.data.length });
     await ler();
   }
+  // v67 (dono 17/11: "a macro é para ler automático"): com o automático ligado, assim que tiver o arquivo da estampa, os PDFs
+  // e o tamanho do arquivo (tirado do nome, ex.: "GG - SUCOLOG.tif"), o motor lê e gera a grade sozinho — sem clicar em nada.
+  let autoTimer = 0;
+  function autoMacro() {
+    clearTimeout(autoTimer);
+    if (!$('#autoGerar') || !$('#autoGerar').checked || busy || !st.file) return;
+    if (st.an && st.lidoDe === st.file.name + '|' + st.file.size) return;   // esse arquivo já foi lido (arquivo novo lê de novo sozinho)
+    const temPdf = (moldesPendentes && moldesPendentes.length) || (st.moldes && Object.keys(st.moldes.tams || {}).length);
+    if (!temPdf) { $('#status1').textContent = 'Arquivo da estampa pronto. Agora escolha os PDFs da modelista: o motor lê e gera sozinho.'; return; }
+    const base = Moldes.tamDoArquivoBase(st.file.name) || '';
+    if (!base || !st.sizes.includes(base)) { $('#status1').textContent = 'Não achei o tamanho no nome do arquivo da estampa: escolha em "Este arquivo é o tamanho" e clique em "Ler arquivo".'; return; }
+    $('#baseSize').value = base; st.base = base;
+    $('#status1').textContent = `Tudo pronto (estampa no tamanho ${base} + PDFs): lendo e gerando a grade sozinho…`;
+    autoTimer = setTimeout(() => trabalhando(ler), 400);
+  }
   async function ler() {
     if (busy) return;
     busy = true;
@@ -137,7 +153,7 @@ const App = (() => {
       logStep(`Arquivo aberto: ${img.width} × ${img.height} px, ${st.dpi} dpi = ${U.fmt(U.cm(img.width, st.dpi))} × ${U.fmt(U.cm(img.height, st.dpi))} cm`);
       const an = await Analyze.run(img, st.dpi, logStep);
       img.data = null;
-      st.an = an; st.pieces = an.pieces; st.bg = an.bg; st.thick = an.thick; st.outline = an.outline;
+      st.lidoDe = st.file ? st.file.name + '|' + st.file.size : ''; st.an = an; st.pieces = an.pieces; st.bg = an.bg; st.thick = an.thick; st.outline = an.outline;
       st.arteBase = null; st.corNova = null;
       if ($('#novaCorNome')) { $('#novaCorNome').textContent = 'Nenhuma cor nova (usando a arte do arquivo base)'; $('#novaCorVoltar').hidden = true; $('#novaCorInfo').textContent = ''; }
       logStep(`${an.pieces.length} peças encontradas` + (an.ignored ? ` (${an.ignored} marcas pequenas ignoradas, como textos)` : ''));
@@ -1104,7 +1120,7 @@ const App = (() => {
       if (todos.includes(base)) { $('#baseSize').value = base; st.base = base; }
       if (st.an) { computeTargets(); renderGrade(); renderMercado(); renderQtd(); }
     }
-    if (!st.an) { moldesPendentes = files; info.textContent = 'PDFs guardados: são lidos assim que você clicar em "Ler arquivo".'; $('#status1').textContent = `${files.length} PDF(s) da modelista prontos — escolha o tamanho do arquivo da estampa e clique em "Ler arquivo".`; return; }
+    if (!st.an) { moldesPendentes = files; setTimeout(autoMacro, 0); info.textContent = 'PDFs guardados: são lidos assim que você clicar em "Ler arquivo".'; $('#status1').textContent = `${files.length} PDF(s) da modelista prontos — escolha o tamanho do arquivo da estampa e clique em "Ler arquivo".`; return; }
     st.moldes = st.moldes || { tams: {}, manual: {} };
     const semTam = [];
     for (const f of files) {
