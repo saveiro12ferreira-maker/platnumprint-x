@@ -468,6 +468,12 @@ const Grade = (() => {
           }
           soltos.set(e.id, { e, lado });
         }
+        // (revisão v63) zona de cada desenho solto: o rótulo dele + o FUNDO vazado dentro da caixa dele (letra vazada no
+        // azul = buraco na arte). Sem isso a letra vazada ficava no lugar do contorno e o desenho ia para o lugar do bloco.
+        const zona = new Int32Array(W * H);
+        for (const { e } of soltos.values()) for (let y = e.y0; y <= e.y1; y++) for (let x = e.x0; x <= e.x1; x++) {
+          const k = y * W + x; if (Ec.lab[k] === e.id || (!zona[k] && !Ec.lab[k] && !A[k] && okO(k))) zona[k] = e.id;
+        }
         const Rb = 40;
         for (let y = 0; y < Ht; y++) for (let x = 0; x < Wt; x++) {
           const i = y * Wt + x; if (!nm[i]) continue;
@@ -485,7 +491,7 @@ const Grade = (() => {
             }
             if (ach < 0) continue; kk = ach; X = kk % W; Y = (kk / W) | 0;
           }
-          const so = soltos.get(Ec.lab[kk]);
+          const so = soltos.get(zona[kk]);
           if (so) {   // no lugar do desenho solto vai o que estava atrás dele (o desenho entra depois, sem deformar)
             const e = so.e, L = so.lado[(Y - e.y0) * 2], R = so.lado[(Y - e.y0) * 2 + 1];
             const kL = L >= 0 ? L : R; if (kL < 0) continue;
@@ -495,7 +501,7 @@ const Grade = (() => {
             let xs = usaL ? xr - (X - xr - 1) : xr + (xr - X - 1);
             xs = Math.max(0, Math.min(W - 1, xs));
             let k2 = yr * W + xs;
-            if (!okO(k2) || Ec.lab[k2] === e.id) k2 = ref;
+            if (!okO(k2) || Ec.lab[k2] !== 0 || zona[k2]) k2 = ref;   // espelho só no fundo puro
             kk = k2;
             if (!A[kk]) continue;
           }
@@ -552,9 +558,35 @@ const Grade = (() => {
           }
         }
         // os desenhos soltos: mesmo tamanho proporcional (graduação), no ponto que corresponde ao centro deles
+        // v63 (vídeo 17/11, "MESMA FORÇA SEMPRE JUNTOS" com as linhas encavaladas): letras/linhas de um mesmo texto e partes
+        // de um mesmo logo são desenhos soltos separados. Cada um ia para o seu ponto pelo mapa do contorno (que aperta mais
+        // na altura que na largura) mas mantinha o tamanho proporcional → as linhas encostavam umas nas outras. Agora os
+        // soltos próximos formam um BLOCO: o bloco vai para o ponto certo e, dentro dele, cada parte fica na mesma posição
+        // relativa (tudo na mesma proporção), como um texto só.
+        const lsol = [...soltos.values()].map(x => x.e), pai = new Map(lsol.map(e => [e.id, e.id]));
+        const raiz = id => { while (pai.get(id) !== id) { pai.set(id, pai.get(pai.get(id))); id = pai.get(id); } return id; };
+        const folga = Math.max(4, Math.round(0.035 * Math.min(W, H))), nMin = Math.max(30, Math.round(0.0004 * W * H));
+        for (let i = 0; i < lsol.length; i++) for (let j = i + 1; j < lsol.length; j++) {
+          const a = lsol[i], c2 = lsol[j];
+          // pontinho da textura (muito pequeno) não liga blocos: senão a peça inteira virava um bloco só (revisão v63)
+          if (a.n < nMin || c2.n < nMin) continue;
+          if (a.x0 - folga <= c2.x1 && c2.x0 - folga <= a.x1 && a.y0 - folga <= c2.y1 && c2.y0 - folga <= a.y1) pai.set(raiz(a.id), raiz(c2.id));
+        }
+        const blocos = new Map();
+        for (const e of lsol) { const r = raiz(e.id); const bl = blocos.get(r) || { n: 0, cx: 0, cy: 0, x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity }; bl.n += e.n; bl.cx += e.cx * e.n; bl.cy += e.cy * e.n; bl.x0 = Math.min(bl.x0, e.x0); bl.y0 = Math.min(bl.y0, e.y0); bl.x1 = Math.max(bl.x1, e.x1); bl.y1 = Math.max(bl.y1, e.y1); blocos.set(r, bl); }
+        for (const bl of blocos.values()) {
+          bl.cx /= bl.n; bl.cy /= bl.n;
+          let xc = bl.cx * sx, yc = bl.cy * sy;
+          for (let it = 0; it < 12; it++) { const r = mc(Math.max(0, Math.min(Wt - 1, xc)), Math.max(0, Math.min(Ht - 1, yc))); xc += (bl.cx - r[0]) * sx * 0.8; yc += (bl.cy - r[1]) * sy * 0.8; }
+          // o bloco inteiro cabe na peça: o ajuste na beira move o bloco todo junto (revisão v63)
+          const bx0 = xc + (bl.x0 - bl.cx) * s, bx1 = xc + (bl.x1 - bl.cx) * s, by0 = yc + (bl.y0 - bl.cy) * s, by1 = yc + (bl.y1 - bl.cy) * s;
+          if (bx0 < 0) xc -= bx0; else if (bx1 > Wt - 1) xc += Wt - 1 - bx1;
+          if (by0 < 0) yc -= by0; else if (by1 > Ht - 1) yc += Ht - 1 - by1;
+          bl.xn = xc; bl.yn = yc;
+        }
         for (const { e } of soltos.values()) {
-          let xc = e.cx * sx, yc = e.cy * sy;
-          for (let it = 0; it < 12; it++) { const r = mc(Math.max(0, Math.min(Wt - 1, xc)), Math.max(0, Math.min(Ht - 1, yc))); xc += (e.cx - r[0]) * sx * 0.8; yc += (e.cy - r[1]) * sy * 0.8; }
+          const bl = blocos.get(raiz(e.id));
+          let xc = bl.xn + (e.cx - bl.cx) * s, yc = bl.yn + (e.cy - bl.cy) * s;
           let bx0 = xc + (e.x0 - e.cx) * s, bx1 = xc + (e.x1 - e.cx) * s, by0 = yc + (e.y0 - e.cy) * s, by1 = yc + (e.y1 - e.cy) * s;
           let dxs = 0, dys = 0;
           if (bx0 < 0) dxs = -bx0; else if (bx1 > Wt - 1) dxs = Wt - 1 - bx1;
@@ -565,7 +597,7 @@ const Grade = (() => {
             for (let x = Math.max(0, Math.floor(bx0 + dxs)); x <= Math.min(Wt - 1, Math.ceil(bx1 + dxs)); x++) {
               const i = y * Wt + x; if (!nm[i]) continue;
               const X = Math.round(e.cx + (x - xc) / s); if (X < 0 || X >= W) continue;
-              const k = Yr * W + X; if (Ec.lab[k] !== e.id || p.band[k]) continue;
+              const k = Yr * W + X; if (zona[k] !== e.id || p.band[k]) continue;
               const art = A[k]; if (!art && pint[i]) continue;
               const q = ((y + b) * OW + x + b) * 4;
               if (!art && trocou) { const s4 = k * 4; out[q] = S[s4] + br - bg0[0]; out[q + 1] = S[s4 + 1] + bgG - bg0[1]; out[q + 2] = S[s4 + 2] + bb - bg0[2]; }
@@ -1721,6 +1753,17 @@ const Grade = (() => {
         const b = layout(items, rollPx, marginPx, gap, cell, angulos(st), 700, false);
         lay = b && b.height < a.height * 0.98 ? b : a;
       } else lay = layout(items, rollPx, marginPx, gap, cell, angulos(st), 2500, !!st.compactar);
+      // v63 (vídeo 17/11: "SUCALOG de cabeça para baixo", "nome bugado"): peça girada 180° deixa o texto de ponta-cabeça
+      // na tela. Com o giro de 180° liberado, monta também SEM girar nenhuma peça e fica sem giro, a menos que girar
+      // economize mais de 3% de tecido.
+      const angs = angulos(st);
+      if (angs.includes(180) && lay && (lay.pos || []).some(q => (((q.ang || 0) % 360) + 360) % 360 === 180)) {
+        const semGiro = angs.filter(g => g !== 180);
+        const c = st.manterEncaixe
+          ? (() => { const a2 = layoutOriginal(items, rollPx, marginPx, gap, cell, semGiro), b2 = layout(items, rollPx, marginPx, gap, cell, semGiro, 700, false); return b2 && b2.height < a2.height * 0.98 ? b2 : a2; })()
+          : layout(items, rollPx, marginPx, gap, cell, semGiro, 1500, !!st.compactar);
+        if (c && c.height <= lay.height * 1.03) lay = c;
+      }
       if (!blit || !blit(lay)) return lay;
       gap += Math.max(2, Math.round(2 / 25.4 * st.dpi));
     }

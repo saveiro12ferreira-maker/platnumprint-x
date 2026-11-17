@@ -394,3 +394,15 @@ Testado com os arquivos do designer (12A CONJUNTO MILENA BORDADO BRANCO.tif + PD
   a tira da saia do Milena, 10°) e o molde do PDF está em pé, a estampa acompanha a peça; se não, o giro tem que ser ~0.
   Se o mapa sair girado mais de 3° do esperado, ele não é usado e a peça vai pelo jeito normal (sem girar nada).
 - Conferido: CPEF RUN e Conjunto Milena saem iguais à v61 (giros medidos de −1,5° a +1,7°, peça inclinada 10° mantida).
+
+## v63 (17/11) — texto encavalado, "UNINTER" fantasma e SUCALOG de cabeça para baixo (feito → revisado → aprovado)
+- **Texto/logo em bloco:** linhas de um mesmo texto ("MESMA FORÇA SEMPRE JUNTOS") e partes de um mesmo logo andam juntas
+  como um bloco só: o bloco vai para o lugar certo no molde novo e, dentro dele, cada linha fica na mesma posição relativa
+  (antes as linhas encavalavam quando a peça ficava mais baixa). Pontinhos de textura não juntam blocos; o ajuste na beira
+  move o bloco inteiro.
+- **Letra vazada** (ex.: UNINTER: letra = fundo que aparece pela arte azul) vai junto com o desenho — sem fantasma; o
+  fundo espelhado atrás do desenho só copia fundo puro (sem riscos debaixo dos logos dos patrocinadores).
+- **Giro de 180°:** com o giro liberado, monta também sem girar e só gira se economizar mais de 3% de tecido (texto não
+  fica de cabeça para baixo à toa). CPEF: 13 → 4 peças giradas nos 9 tamanhos, encaixe total +0,56%.
+- Revisão independente (agente revisor) + aprovação (agente aprovador): vigia 20/20; CPEF PP/P/G3 sem defeito novo e
+  melhor que v62 (UNINTER limpo, patrocinadores alinhados); Milena 14 igual (8 px).
