@@ -386,3 +386,11 @@ Testado com os arquivos do designer (12A CONJUNTO MILENA BORDADO BRANCO.tif + PD
   única, então texto e logo do meio só mudam de tamanho (não deitam/entortam junto com o contorno).
 - Atrás do texto/logo, o fundo é preenchido espelhando a textura do lado (antes repetia uma cor só e aparecia um
   **retângulo escuro** atrás de "MESMA FORÇA SEMPRE JUNTOS").
+
+## v62 (17/11) — estampa torta: o mapa do contorno não pode girar a estampa
+- O mapa que leva a estampa até o contorno do molde novo casava o começo dos dois contornos só pela distância; em peça
+  arredondada o casamento podia escorregar e o mapa girava a estampa alguns graus ("torta").
+- Agora o motor mede a inclinação de cada contorno: se a peça estava desenhada **inclinada** no arquivo (mais de 5°, ex.:
+  a tira da saia do Milena, 10°) e o molde do PDF está em pé, a estampa acompanha a peça; se não, o giro tem que ser ~0.
+  Se o mapa sair girado mais de 3° do esperado, ele não é usado e a peça vai pelo jeito normal (sem girar nada).
+- Conferido: CPEF RUN e Conjunto Milena saem iguais à v61 (giros medidos de −1,5° a +1,7°, peça inclinada 10° mantida).

@@ -327,10 +327,35 @@ const Grade = (() => {
     } else b0 = (p._contV53 && p._contV53.length === N) ? p._contV53 : (p._contV53 = reamostrar(contornoExterno(p.mask, p.w, p.h), N));
     const a = reamostrar(contornoExterno(nm, Wt, Ht), N);
     if (!a || !b0) return null;
-    // alinha o começo dos dois contornos: o deslocamento que deixa os pontos mais perto (com a original na escala nova)
+    // v62 (dono 17/11: "em algum momento as estampas estão ficando tortas"): o molde novo é a MESMA peça em outro tamanho.
+    // Só pode girar o quanto a peça já estava inclinada no arquivo (ex.: peça desenhada deitada/inclinada e molde do PDF
+    // em pé). Antes o começo dos dois contornos era casado só pela distância, e em peça arredondada o casamento escorregava
+    // alguns pontos — o mapa girava a estampa uns graus ("torta"). Agora: mede a inclinação de cada contorno (eixo
+    // principal), casa o começo já descontando a inclinação certa, e se mesmo assim o giro do mapa fugir dela, não usa o mapa.
+    const eixo = (P, kx, ky) => {
+      let cx = 0, cy = 0; for (const q of P) { cx += q[0] * kx; cy += q[1] * ky; } cx /= P.length; cy /= P.length;
+      let xx = 0, yy = 0, xy = 0; for (const q of P) { const u = q[0] * kx - cx, v = q[1] * ky - cy; xx += u * u; yy += v * v; xy += u * v; }
+      const ang = 0.5 * Math.atan2(2 * xy, xx - yy), tr = xx + yy, det = xx * yy - xy * xy, l1 = tr / 2 + Math.sqrt(Math.max(0, tr * tr / 4 - det)), l2 = tr / 2 - Math.sqrt(Math.max(0, tr * tr / 4 - det));
+      return { cx, cy, ang, aniso: l2 > 0 ? l1 / l2 : 99 };
+    };
+    const ea = eixo(a, 1 / sx, 1 / sy), eb = eixo(b0, 1, 1);
+    let giro = 0;
+    if (ea.aniso > 1.3 && eb.aniso > 1.3) { giro = eb.ang - ea.ang; while (giro > Math.PI / 2) giro -= Math.PI; while (giro < -Math.PI / 2) giro += Math.PI; }
+    // a graduação muda a proporção da peça e o eixo varia uns 2°: só conta como inclinação de verdade acima de 5°
+    if (Math.abs(giro) < 5 * Math.PI / 180) giro = 0;
+    const cg = Math.cos(giro), sg = Math.sin(giro);
+    const aR = a.map(q => { const u = q[0] / sx - ea.cx, v = q[1] / sy - ea.cy; return [u * cg - v * sg, u * sg + v * cg]; });
     let melhor = 0, dmin = Infinity;
-    for (let sh = 0; sh < N; sh++) { let d = 0; for (let i = 0; i < N; i++) { const q = b0[(i + sh) % N]; d += (a[i][0] - q[0] * sx) ** 2 + (a[i][1] - q[1] * sy) ** 2; } if (d < dmin) { dmin = d; melhor = sh; } }
+    for (let sh = 0; sh < N; sh++) { let d = 0; for (let i = 0; i < N; i++) { const q = b0[(i + sh) % N]; d += (aR[i][0] - (q[0] - eb.cx)) ** 2 + (aR[i][1] - (q[1] - eb.cy)) ** 2; } if (d < dmin) { dmin = d; melhor = sh; } }
     const b = a.map((_, i) => b0[(i + melhor) % N]);
+    {
+      let s00 = 0, s01 = 0, s10 = 0, s11 = 0;
+      for (let i = 0; i < N; i++) { const u = a[i][0] / sx - ea.cx, v = a[i][1] / sy - ea.cy, U2 = b[i][0] - eb.cx, V2 = b[i][1] - eb.cy; s00 += u * U2; s01 += u * V2; s10 += v * U2; s11 += v * V2; }
+      const ang = Math.atan2(s01 - s10, s00 + s11);
+      p._mapaGiro = ang * 180 / Math.PI; p._mapaEsperado = giro * 180 / Math.PI;
+      let d = ang - giro; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI;
+      if (Math.abs(d) * 180 / Math.PI > 3) return null;
+    }
     const f = tps(a, b, lam * Wt * Ht); if (!f) return null;
     const P = Wt * Ht > 4e6 ? 12 : 6, gw = Math.ceil(Wt / P) + 1   // v56: peça grande, grade de 12 px (o mapa é suave; 4× menos conta)
     , gh = Math.ceil(Ht / P) + 1, GX = new Float32Array(gw * gh), GY = new Float32Array(gw * gh);
