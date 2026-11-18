@@ -329,15 +329,51 @@ const Grade = (() => {
     for (let y = H - 1; y >= 0; y--) for (let x = W - 1; x >= 0; x--) { const k = y * W + x; if (x < W - 1) tenta(k, k + 1); if (y < H - 1) { tenta(k, k + W); if (x < W - 1) tenta(k, k + W + 1); if (x) tenta(k, k + W - 1); } }
     return (p._pertoMacro = n);
   }
-  function mapaMacro(p, nm, Wt, Ht) {
+  function mapaMacro(p, nm, Wt, Ht, sx, sy, beira = false) {
     const caixa = (m, w, h) => { let x0 = w, y0 = h, x1 = -1, y1 = -1; for (let y = 0; y < h; y++) { const r = y * w; for (let x = 0; x < w; x++) if (m[r + x]) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; } } return x1 < 0 ? null : { x0, y0, x1, y1, w: x1 - x0 + 1, h: y1 - y0 + 1, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2 }; };
     const a = caixa(nm, Wt, Ht), b = p._caixaMacro || (p._caixaMacro = caixa(p.mask, p.w, p.h));
     if (!a || !b) return null;
     // v69: correções da IA dentro da macro — caber inteiro (desenho cortado na beira: usa a MENOR proporção) e cobrir a
     // beira (fresta: aumenta 2,5% por vez). Nada disso deforma: continua a mesma escala na largura e na altura.
-    const k = (p.macroCaber ? Math.min(a.w / b.w, a.h / b.h) : Math.max(a.w / b.w, a.h / b.h)) * (1 + 0.025 * (p.macroCobrir || 0));
+    // v71 (dono 18/11: "no PP não acompanha o contorno do PDF"): com a beira acompanhando o contorno, o miolo usa a escala
+    // MÉDIA (nem corta nem sobra) — a faixa da beira é que encosta no molde novo
+    const kBase = p.macroCaber ? Math.min(a.w / b.w, a.h / b.h) : beira ? Math.sqrt((a.w / b.w) * (a.h / b.h)) : Math.max(a.w / b.w, a.h / b.h);
+    const k = kBase * (1 + 0.025 * (p.macroCobrir || 0));
     p._macroEsc = k;
-    return (x, y) => [b.cx + (x - a.cx) / k, b.cy + (y - a.cy) / k];
+    const meio = (x, y) => [b.cx + (x - a.cx) / k, b.cy + (y - a.cy) / k];
+    if (!beira) return meio;
+    // v71: MIOLO igual à macro (escala por igual: texto, logo, desenho não deformam) + FAIXA DA BEIRA (≈3 cm) que acompanha o
+    // contorno do PDF (tiras de ombro/cava, costura, barra encostam no molde novo). Entre os dois a passagem é suave.
+    const cont = mapaContorno(p, nm, Wt, Ht, sx, sy, 96, 2e-4, true);
+    if (!cont) return meio;
+    // largura da faixa: no mínimo 7% da peça; onde o molde novo foge muito do antigo (PP com cava mais rasa e ombro mais
+    // largo), a faixa cresce até 1,8× o quanto a beira tem que andar (máx. 18%), para a passagem não amassar a tira do ombro
+    let anda = 0;
+    { const passo = Math.max(1, Math.round(Math.min(Wt, Ht) / 300));
+      for (let y = 1; y < Ht - 1; y += passo) for (let x = 1; x < Wt - 1; x += passo) {
+        const k0 = y * Wt + x; if (!nm[k0] || (nm[k0 - 1] && nm[k0 + 1] && nm[k0 - Wt] && nm[k0 + Wt])) continue;
+        const c = cont(x, y), m = meio(x, y), v = Math.hypot(c[0] - m[0], c[1] - m[1]) * k; if (v > anda) anda = v; } }
+    const mn = Math.min(a.w, a.h), D = Math.max(8, Math.round(Math.min(0.18 * mn, Math.max(0.07 * mn, 1.8 * anda))));
+    p._macroFaixa = D;
+    const dist = distBeira(nm, Wt, Ht, D);
+    return (x, y) => {
+      const d = dist[(y | 0) * Wt + (x | 0)];
+      if (d >= D) return meio(x, y);
+      const c = cont(x, y);
+      if (d <= 0) return c;
+      const t = d / D, w = t * t * (3 - 2 * t), m = meio(x, y);   // 0 na beira (contorno) → 1 no miolo (macro)
+      return [c[0] + (m[0] - c[0]) * w, c[1] + (m[1] - c[1]) * w];
+    };
+  }
+  // distância (px) de cada pixel do molde até a beira dele, só até D (chanfro 3-4 em duas passadas)
+  function distBeira(nm, W, H, D) {
+    const L = Math.min(65535, D * 3 + 3), d = new Uint16Array(W * H);
+    for (let k = 0; k < W * H; k++) d[k] = nm[k] ? L : 0;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const k = y * W + x; if (!d[k]) continue; let v = d[k];
+      if (x) v = Math.min(v, d[k - 1] + 3); else v = 3; if (y) { v = Math.min(v, d[k - W] + 3); if (x) v = Math.min(v, d[k - W - 1] + 4); if (x < W - 1) v = Math.min(v, d[k - W + 1] + 4); } else v = Math.min(v, 3); d[k] = v; }
+    for (let y = H - 1; y >= 0; y--) for (let x = W - 1; x >= 0; x--) { const k = y * W + x; if (!d[k]) continue; let v = d[k];
+      if (x < W - 1) v = Math.min(v, d[k + 1] + 3); else v = Math.min(v, 3); if (y < H - 1) { v = Math.min(v, d[k + W] + 3); if (x < W - 1) v = Math.min(v, d[k + W + 1] + 4); if (x) v = Math.min(v, d[k + W - 1] + 4); } else v = Math.min(v, 3); d[k] = v; }
+    const f = new Float32Array(W * H); for (let k = 0; k < W * H; k++) f[k] = d[k] / 3; return f;
   }
   function mapaContorno(p, nm, Wt, Ht, sx, sy, N = 72, lam = 1e-3, dentroRisca = false) {
     let b0, bD;
@@ -506,7 +542,7 @@ const Grade = (() => {
         // só peça com a beira quase toda desenhada (≥ 70%: ombros, faixas e barras chegando na beira, ou estampa corrida);
         // peça com fundo na beira (flores soltas, como o Vestido Antonella) continua como era
         // v58: ou quando a IA mandou ("Corrigir com a IA" → a estampa segue o contorno) nessa peça
-        if (o.macro) modoContorno = mapaMacro(p, nm, Wt, Ht);
+        if (o.macro) modoContorno = mapaMacro(p, nm, Wt, Ht, sx, sy, o.macroBeira !== false);
         else if (p._ringArt >= 0.7 || p.seguirContorno) modoContorno = mapaContorno(p, nm, Wt, Ht, sx, sy, 96, 2e-4, true);
       }
       if (modoContorno) {
