@@ -423,3 +423,16 @@ Testado com os arquivos do designer (12A CONJUNTO MILENA BORDADO BRANCO.tif + PD
 - v68: o automático só LÊ e para nas Peças (para conferir/trocar os nomes); botão verde "⚡ Gerar a grade (macro)" no topo das Peças gera. "Gerar logo depois de ler" voltou a ser opcional (desmarcado).
 - v70: pesquisa Sublimacro ("Montagem": arte do molde referência transferida com tamanho proporcional para os outros tamanhos, dentro do Corel) = o modo macro. A IA confere a grade da macro e corrige DENTRO dela: caber_inteiro (desenho cortado → diminui a arte da peça), cobrir_beira (fresta → aumenta 2,5%), trocar_nome, trocar_molde, moldes_diferentes. Nunca volta para o jeito antigo que deforma. Desfazer volta tudo.
 - v71 (18/11, PP do SUCOLOG): o PDF do PP é OUTRA modelagem (cava rasa, ombro largo). Agora: MIOLO igual à macro (escala média por igual: texto/logo/desenho não deformam) + FAIXA DA BEIRA que acompanha o contorno do PDF (tiras de ombro/cava, costura, barra). A faixa tem no mínimo 7% da peça e cresce sozinha (até 18%) onde o molde mudou muito, para não amassar. Grade SUCOLOG 27 s; vigia 20 ok.
+
+## v72 (18/11) — vigia: a IA acusava "frente e costas / mangas no mesmo molde" que não existia (SUCOLOG)
+- Ocorrências #171, #179, #175 (v70, gravidade alta, repetidas): "peito-0: costas e frente no mesmo molde M1"; "saia-0: as
+  duas mangas no mesmo molde M3". Reproduzido com o CPEF RUN (mesma montagem do SUCOLOG: base GG, PDFs sem o GG): a grade
+  JÁ saía certa — costas no M1, frente no M2 (decote fundo), mangas no M3 e M4 (espelhada).
+- Causa: a geração roda na cópia leve (comLeve) e, ao terminar, devolve o estado sem os moldes de cada peça; o texto que vai
+  para a IA então mostrava o molde do GRUPO para as duas peças ("peça 1: M1, peça 2: M1") e a IA acreditava nele.
+- Correção (só app.js): antes de conferir, o motor pega os moldes que a geração usou de verdade no PDF de referência
+  (iaFormasRef) e manda "peça 1: M1, peça 2: M2". Se o grupo já está em moldes diferentes, "cada peça no seu molde" não
+  mexe em nada. Nada da geração mudou. Vigia: 20 ok.
+
+## v73 (18/11) — vídeo do G1 "bugado"
+- Tamanho que está na lista mas SEM PDF (ex.: G1) também vai pela macro (molde = o original ampliado/reduzido). Antes caía no jeito antigo: letreiro ondulado e 11 s para montar. Agora 4 s, texto reto. Só grade.js; o app.js da v72 (vigia) ficou igual. Vigia: 20 ok.

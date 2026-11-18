@@ -1585,14 +1585,27 @@ const App = (() => {
     if (pb.acao === 'seguir_contorno') return g.items.some(p => !p.seguirContorno);
     // v61 (vídeo 17/11): a IA diz "frente e costas / as duas mangas no MESMO molde" sem dizer a peça → cada peça no seu molde
     if (iaMesmoMolde(pb, g)) return true;
-    const fr0 = (st.formas || {})[m && m.ref] || {}, jsDif = new Set(g.items.map(p => fr0[p.n] && fr0[p.n].j).filter(v => v != null)).size > 1;
+    const fr0 = st.iaFormasRef || (st.formas || {})[m && m.ref] || {}, jsDif = new Set(g.items.map(p => fr0[p.n] && fr0[p.n].j).filter(v => v != null)).size > 1;
     if (pb.acao === 'trocar_molde' && pb.peca >= 1 && pb.peca <= g.items.length) return pb.molde >= 1 && !!(m && m.ref) && pb.molde <= m.tams[m.ref].pecas.length && (m.manualPeca || {})[g.items[pb.peca - 1].n] !== pb.molde - 1;
     if (pb.acao === 'trocar_molde') return !jsDif && pb.molde >= 1 && !!(m && m.ref) && pb.molde <= m.tams[m.ref].pecas.length;
     if (pb.acao === 'trocar_regra') return !!pb.regra && !(pb.regra === 'fundo' && g.items.some(p => p.artFrac >= 0.005)) && g.items.some(p => p.rule !== pb.regra);
     return false;
   }
+  // v71 (vigia 18/11, SUCOLOG): o molde de cada peça vem do que a geração usou de verdade. A geração roda na cópia leve
+  // (comLeve), então st.formas ficava vazio depois de gerar e a IA lia "peça 1: M1, peça 2: M1" (o molde do grupo) para a
+  // frente e a costas — e acusava "mesmo molde" (alta) que não existia (a frente já estava no M2, a manga 2 no M4).
+  async function iaFormasRef() {
+    const m = st.moldes; if (!m || !m.ref || st.mode !== 'moldes' || !m.tams[m.ref]) return null;
+    let F = null;
+    try { await comLeve(async () => { await prepararFormas([m.ref]); F = st.formas; }); } catch (e) { F = null; }
+    return (F && F[m.ref]) || null;
+  }
+  function iaJaDiferentes(g) {
+    const fr = st.iaFormasRef; if (!fr || !g) return false;
+    return new Set(g.items.map(p => fr[p.n] && fr[p.n].j).filter(v => v != null)).size >= Math.min(2, g.items.length);
+  }
   function iaMesmoMolde(pb, g) {
-    return !!g && g.items.length >= 2 && !g.moldesDif && !(pb.acao === 'trocar_molde' && pb.peca) && (pb.acao === 'conferir' || pb.acao === 'moldes_diferentes' || pb.acao === 'trocar_molde')
+    return !!g && g.items.length >= 2 && !g.moldesDif && !iaJaDiferentes(g) && !(pb.acao === 'trocar_molde' && pb.peca) && (pb.acao === 'conferir' || pb.acao === 'moldes_diferentes' || pb.acao === 'trocar_molde')
       && (pb.acao === 'moldes_diferentes' || /mesmo molde|mesmos moldes|molde[s]? diferentes|cada uma com o seu|um para cada/i.test(pb.problema || ''));
   }
   const iaTextoAcao = pb => iaMesmoMolde(pb, st.groups.find(x => x.id === pb.grupo)) ? 'Aplicar: cada peça no seu molde' : pb.acao === 'trocar_molde' ? (pb.peca ? `Aplicar: peça ${pb.peca} no molde M${pb.molde}` : `Aplicar: molde M${pb.molde}`) : pb.acao === 'seguir_contorno' ? 'Aplicar: estampa segue o contorno' : pb.acao === 'caber_inteiro' ? 'Aplicar: diminuir a arte para caber inteira' : pb.acao === 'cobrir_beira' ? 'Aplicar: aumentar um pouco para cobrir a beira' : pb.acao === 'trocar_nome' ? `Aplicar: nome ${String(pb.nome || '').toUpperCase()}` : `Aplicar: regra "${pb.regra}"`;
@@ -1650,13 +1663,14 @@ const App = (() => {
         if (fl) imgs.push({ rotulo: `Tamanho ${t}: cada peça ORIGINAL (esquerda) × GERADA (direita), na mesma escala de tela (a gerada pode estar girada no rolo)`, ...iaImg(fl, 1600, 0.85) });
       }
       if (st.moldes && st.moldes.ref) imgs.push({ rotulo: 'Moldes do PDF da modelista (M1, M2…)', ...iaImg(await iaMoldes(), 1200) });
+      st.iaFormasRef = await iaFormasRef();
       const m = st.moldes, texto = [`Compare a grade gerada com o arquivo original. Tamanho base ${st.base}; grade ${st.sizes.join(', ')}.`,
         'Confira PEÇA A PEÇA (original à esquerda, gerada à direita): todas as peças estão na grade (nenhuma sumiu, nenhuma a mais, nenhuma sem estampa)? Cada peça tem o formato do molde certo? A estampa ACOMPANHA O CONTORNO do molde novo (faixa do ombro chega no ombro e na cava, desenho do decote acompanha o decote, barra/bordado segue a barra)? Ficou faixa ou fio branco entre a borda e o desenho? Logo/texto cortado, esticado ou torto? A borda de corte tem a mesma grossura do original? Seja exigente: o tamanho gerado tem de parecer o original, só mudando de medida.',
         'Diga cada problema que vir, mesmo os de gravidade média: eles vão para o vigia, que conserta o motor.',
         (macroOn() ? 'A grade foi feita IGUAL À MACRO DO COREL (como a Sublimacro): a arte de cada peça é a do tamanho base aumentada/diminuída POR IGUAL e cortada pelo molde do PDF (PowerClip). Isso é o certo: NÃO aponte como erro a arte estar um pouco maior/menor ou cortada em fundo/textura. Aponte só: desenho importante (logo, letreiro, número) cortado pela beira = "caber_inteiro"; fresta/fio branco/faixa sem estampa na beira = "cobrir_beira"; nome escrito errado na peça = "trocar_nome" com "nome"; peça no molde errado = "trocar_molde"; frente e costas ou mangas no mesmo molde = "moldes_diferentes". Nunca use "seguir_contorno" nem "trocar_regra". ' : '') +
         'Para cada problema escolha a ação que o motor consegue fazer sozinho quando o designer apertar "Corrigir com a IA": estampa que não chega na beira do molde novo (fresta/fio branco na borda, ombro, cava, decote ou barra que não acompanha) = "seguir_contorno"; molde errado = "trocar_molde" (se só UMA peça do grupo está no molde errado, como frente e costas ou as duas mangas espelhadas no mesmo molde, diga "peca" = o número da peça na folha e o molde certo dela); regra errada = "trocar_regra"; o resto = "conferir".',
         'GRUPOS (dentro do grupo, cada peça escolhe sozinha o molde de formato mais parecido — ex.: frente e costas do mesmo grupo vão em moldes diferentes; para essas use acao "conferir", não "trocar_molde"):',
-        ...st.groups.map(g => { const c = m && m.casa[g.id] && m.casa[g.id][m.ref], fr = (st.formas || {})[m && m.ref] || {};
+        ...st.groups.map(g => { const c = m && m.casa[g.id] && m.casa[g.id][m.ref], fr = st.iaFormasRef || (st.formas || {})[m && m.ref] || {};
           const porPeca = g.items.map((p, k) => { const f = fr[p.n]; return `peça ${k + 1}: ${f && f.j != null ? 'M' + (f.j + 1) : c ? 'M' + (c.j + 1) : 'sem molde'}`; }).join(', ');
           return `- ${g.id}: ${nomeGrupo(g)}, ${g.items.length} peça(s), regra "${g.items[0].rule}" — ${porPeca}`; })].join('\n');
       const r = await iaPedir('grade', imgs, texto);

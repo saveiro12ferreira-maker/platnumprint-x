@@ -535,7 +535,9 @@ const Grade = (() => {
       // tamanho sem deformar, no lugar correspondente. Antes, parte ia pelo contorno e parte pela caixa, e no encontro
       // dos dois apareciam riscos brancos no ombro e chamas laranja na lateral.
       let modoContorno = null;
-      if (o.forma) {
+      // v72 (dono 18/11, vídeo: "o G1 ficou bugado" — letreiro ondulado): tamanho SEM PDF (só na lista de tamanhos) também
+      // vai pela macro (molde = o original ampliado/reduzido); antes caía no jeito antigo que deforma texto
+      if (o.forma || (o.macro && !ident)) {
         let ii = 0, uu = 0;
         for (let y = 0; y < Ht; y += 2) { const sr = mapY[y] * W, r = y * Wt; for (let x = 0; x < Wt; x += 2) { const a1 = nm[r + x], b1 = p.mask[sr + mapX[x]]; if (a1 && b1) ii++; if (a1 || b1) uu++; } }
         p._iou = uu ? ii / uu : 1; p._ringArt = 1 - (p._toca.cont.get(0) || 0) / (p._toca.tot || 1); p._altos = altos.size;
@@ -543,7 +545,7 @@ const Grade = (() => {
         // peça com fundo na beira (flores soltas, como o Vestido Antonella) continua como era
         // v58: ou quando a IA mandou ("Corrigir com a IA" → a estampa segue o contorno) nessa peça
         if (o.macro) modoContorno = mapaMacro(p, nm, Wt, Ht, sx, sy, o.macroBeira !== false);
-        else if (p._ringArt >= 0.7 || p.seguirContorno) modoContorno = mapaContorno(p, nm, Wt, Ht, sx, sy, 96, 2e-4, true);
+        else if (o.forma && (p._ringArt >= 0.7 || p.seguirContorno)) modoContorno = mapaContorno(p, nm, Wt, Ht, sx, sy, 96, 2e-4, true);
       }
       if (modoContorno) {
         const mc = modoContorno, okO = k => p.mask[k] && !(p.band && p.band[k]);
